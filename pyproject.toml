@@ -16,3 +16,8 @@ dependencies = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["shared*", "zone_a*", "zone_b*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that call external APIs (LLM, Daytona, Tavily)",
+]
