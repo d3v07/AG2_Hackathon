@@ -1,8 +1,8 @@
 import asyncio
 import json
-from autogen.beta import Agent
+from autogen import ConversableAgent, UserProxyAgent
 from shared.models import RunTrace, ContextSnapshot, Violation
-from zone_b.config import get_config
+from zone_b.config import get_llm_config
 
 
 CONTRACTS = [
@@ -33,32 +33,44 @@ CONTRACTS = [
 
 
 def _find_failed_step(run_trace: RunTrace, agent_name: str) -> int:
-    """Return step number of the first event for the given agent."""
     for e in run_trace.events:
         if e.agent == agent_name:
             return e.step
     return -1
 
 
-async def _generate_violation_text(contract: dict, run_trace: RunTrace, snap: ContextSnapshot) -> tuple[str, str]:
-    """Use LLM to generate human-readable expected and observed strings."""
-    agent = Agent(config=get_config(), name="ContractCheckerAgent")
+def _generate_violation_text(contract: dict, run_trace: RunTrace, snap: ContextSnapshot) -> tuple[str, str]:
+    """Use ConversableAgent to generate human-readable expected/observed strings."""
+    checker = ConversableAgent(
+        name="ContractCheckerAgent",
+        llm_config=get_llm_config(),
+        system_message=(
+            "You are a contract violation analyst for AG2 multi-agent workflows. "
+            "When given a contract violation, return ONLY a JSON object with keys "
+            "'expected' and 'observed' — one sentence each. No other text."
+        ),
+        human_input_mode="NEVER",
+        max_consecutive_auto_reply=1,
+    )
+    user = UserProxyAgent(
+        name="ContractCheckerProxy",
+        llm_config=False,
+        human_input_mode="NEVER",
+        is_termination_msg=lambda x: True,
+        max_consecutive_auto_reply=0,
+        code_execution_config=False,
+    )
     prompt = (
-        f"A contract violation was detected.\n"
         f"Contract type: {contract['type']}\n"
         f"Rule: {contract['rule']}\n"
         f"Context: verified_sources_count={snap.verified_sources_count}, "
         f"approval_status={snap.approval_status}, "
-        f"handoff_path={[e.agent for e in run_trace.events]}\n\n"
-        f"Reply with a JSON object with exactly two keys:\n"
-        f"  \"expected\": one sentence describing what should have happened\n"
-        f"  \"observed\": one sentence describing what actually happened\n"
-        f"Reply with only the JSON object, no other text."
+        f"handoff_path={[e.agent for e in run_trace.events]}\n"
+        f"Return JSON with 'expected' and 'observed' keys only."
     )
-    reply = await agent.ask(prompt)
+    result = user.initiate_chat(checker, message=prompt, max_turns=1)
     try:
-        body = reply.body.strip()
-        # strip markdown code fences if present
+        body = result.chat_history[-1]["content"].strip()
         if body.startswith("```"):
             body = body.split("```")[1]
             if body.startswith("json"):
@@ -69,14 +81,14 @@ async def _generate_violation_text(contract: dict, run_trace: RunTrace, snap: Co
         return contract["rule"], "contract check failed"
 
 
-async def run_contract_checker(run_trace: RunTrace, context_snapshot: ContextSnapshot) -> dict:
+def run_contract_checker(run_trace: RunTrace, context_snapshot: ContextSnapshot) -> dict:
     """Check all contracts and return list of Violation objects."""
     violations: list[Violation] = []
 
     for contract in CONTRACTS:
         passed = contract["check"](run_trace, context_snapshot)
         if not passed:
-            expected, observed = await _generate_violation_text(contract, run_trace, context_snapshot)
+            expected, observed = _generate_violation_text(contract, run_trace, context_snapshot)
             failed_step = _find_failed_step(run_trace, contract["failed_agent"])
             violations.append(Violation(
                 contract_type=contract["type"],
@@ -108,11 +120,9 @@ if __name__ == "__main__":
 
     async def _test():
         collected = await run_trace_collector(raw)
-        result = await run_contract_checker(collected["run_trace"], collected["context_snapshot"])
+        result = run_contract_checker(collected["run_trace"], collected["context_snapshot"])
         print(f"Violations found: {result['violation_count']}")
         for v in result["violations"]:
             print(f"  [{v.severity.upper()}] {v.contract_type}: {v.rule}")
-            print(f"    expected : {v.expected}")
-            print(f"    observed : {v.observed}")
 
     asyncio.run(_test())

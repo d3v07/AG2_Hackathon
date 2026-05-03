@@ -11,7 +11,7 @@ async def main():
     collected = await run_trace_collector(raw)
     print(f"Trace: {collected['summary']}")
 
-    checked = await run_contract_checker(collected["run_trace"], collected["context_snapshot"])
+    checked = run_contract_checker(collected["run_trace"], collected["context_snapshot"])
     print(f"\nViolations found: {checked['violation_count']}")
     for v in checked["violations"]:
         print(f"  [{v.severity.upper()}] {v.contract_type}: {v.rule}")
