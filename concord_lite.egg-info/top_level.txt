@@ -1,0 +1,2 @@
+shared
+zone_b
