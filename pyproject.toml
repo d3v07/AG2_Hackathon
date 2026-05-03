@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "concord-lite"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "ag2>=0.12",
+    "python-dotenv",
+    "tavily-python",
+    "daytona-sdk",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["shared*", "zone_a*", "zone_b*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that call external APIs (LLM, Daytona, Tavily)",
+]
