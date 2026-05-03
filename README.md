@@ -8,6 +8,7 @@ Concord Lite monitors a multi-agent workflow run, detects when agents violate th
 > **Pipeline (CLI):** `python run_all.py --fixture`
 > **Architecture & Q&A doc:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 > **Demo script & cue cards:** [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)
+> **Deep Q&A reference (70 questions):** [`docs/QA_DEEP.md`](docs/QA_DEEP.md)
 
 ---
 
