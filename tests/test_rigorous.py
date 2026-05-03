@@ -486,8 +486,8 @@ class TestRunAllErrorHandling:
              "import argparse; "
              "import unittest.mock as m; "
              "zone_a_called = [False]; "
-             "original = run_all._run_zone_a; "
-             "run_all._run_zone_a = lambda: zone_a_called.__setitem__(0, True); "
+             "original = run_all._run_zone_a_legacy; "
+             "run_all._run_zone_a_legacy = lambda: zone_a_called.__setitem__(0, True); "
              "sys.argv = ['run_all.py', '--fixture']; "
              # Don't actually run — just verify the logic path
              "args = argparse.Namespace(fixture=True); "
