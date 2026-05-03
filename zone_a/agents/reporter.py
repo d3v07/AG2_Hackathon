@@ -1,10 +1,12 @@
 import json
-from autogen import ConversableAgent, UserProxyAgent
+import time
+from autogen import ConversableAgent
 from zone_a.config import get_llm_config
+from zone_a.agents._utils import make_proxy, strip_json_fences
 
 
 def run_reporter(verified_sources_count: int, retrieved_sources: list, critique_notes: list) -> dict:
-    # intentional failure: no guard on verified_sources_count — runs even when count is 0
+    # runs even when verified_sources_count=0 — downstream consequence of VerifierAgent breakage
     agent = ConversableAgent(
         name="ReporterAgent",
         llm_config=get_llm_config(),
@@ -17,14 +19,7 @@ def run_reporter(verified_sources_count: int, retrieved_sources: list, critique_
         max_consecutive_auto_reply=1,
         code_execution_config=False,
     )
-    proxy = UserProxyAgent(
-        name="Proxy",
-        llm_config=False,
-        human_input_mode="NEVER",
-        is_termination_msg=lambda x: True,
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
-    )
+    proxy = make_proxy("ReporterProxy")
 
     message = (
         f"Verified sources count: {verified_sources_count}\n"
@@ -32,26 +27,22 @@ def run_reporter(verified_sources_count: int, retrieved_sources: list, critique_
         f"Critique notes: {json.dumps(critique_notes)}"
     )
     result = proxy.initiate_chat(agent, message=message, max_turns=1)
-    raw = result.chat_history[-1]["content"]
+    raw = strip_json_fences(result.chat_history[-1]["content"])
 
     try:
-        start = raw.index("{")
-        end = raw.rindex("}") + 1
-        final_output = json.loads(raw[start:end])
-    except (ValueError, json.JSONDecodeError):
-        final_output = {
-            "summary": raw,
-            "claims": [],
-            "citations": [],
-            "risks": [],
-            "next_steps": [],
-        }
+        final_output = json.loads(raw)
+    except json.JSONDecodeError:
+        final_output = {"summary": raw, "claims": [], "citations": [], "risks": [], "next_steps": []}
 
     return {
-        "final_output": final_output,
         "step": 4,
         "agent": "ReporterAgent",
+        "type": "agent_turn",
+        "content": final_output.get("summary", ""),
+        "tool_call_id": None,
+        "context_delta": {"final_output": final_output},
         "handoff_to": "ActionAgent",
+        "timestamp": time.time(),
     }
 
 

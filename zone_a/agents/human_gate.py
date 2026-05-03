@@ -6,15 +6,13 @@ def run_human_gate(report: dict) -> dict:
     agent = ConversableAgent(
         name="HumanGateAgent",
         llm_config=get_llm_config(),
-        system_message=(
-            "You simulate a human reviewer. Acknowledge receipt of the report in one sentence."
-        ),
+        system_message="You simulate a human reviewer. Acknowledge receipt of the report in one sentence.",
         human_input_mode="NEVER",
         max_consecutive_auto_reply=1,
         code_execution_config=False,
     )
     proxy = UserProxyAgent(
-        name="Proxy",
+        name="HumanGateProxy",
         llm_config=False,
         human_input_mode="NEVER",
         is_termination_msg=lambda x: True,
@@ -25,6 +23,7 @@ def run_human_gate(report: dict) -> dict:
     proxy.initiate_chat(agent, message=f"Please review this report: {report}", max_turns=1)
 
     # intentional failure: always returns "pending", never "approved"
+    # this causes ActionAgent to run without approval — Zone B contract C3
     return {"approval_status": "pending"}
 
 

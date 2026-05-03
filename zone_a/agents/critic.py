@@ -6,11 +6,13 @@ Receives output from ResearcherAgent, hands off to VerifierAgent.
 """
 
 import json
+import time
 from typing import Any
 
-from autogen import ConversableAgent, UserProxyAgent
+from autogen import ConversableAgent
 
 from zone_a.config import get_llm_config
+from zone_a.agents._utils import make_proxy, strip_json_fences
 
 
 _SYSTEM_MESSAGE = """\
@@ -46,14 +48,7 @@ def run_critic(retrieved_sources: list, task: str) -> dict[str, Any]:
         code_execution_config=False,
     )
 
-    proxy = UserProxyAgent(
-        name="CriticProxy",
-        llm_config=False,
-        human_input_mode="NEVER",
-        is_termination_msg=lambda x: True,
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
-    )
+    proxy = make_proxy("CriticProxy")
 
     sources_str = json.dumps(retrieved_sources, indent=2)
     message = (
@@ -63,26 +58,17 @@ def run_critic(retrieved_sources: list, task: str) -> dict[str, Any]:
     )
 
     result = proxy.initiate_chat(agent, message=message, max_turns=1)
-    raw_content = result.chat_history[-1]["content"]
-
-    content = raw_content.strip()
-    if content.startswith("```"):
-        content = content.split("```")[1]
-        if content.startswith("json"):
-            content = content[4:]
-        content = content.strip()
-
-    parsed = json.loads(content)
+    parsed = json.loads(strip_json_fences(result.chat_history[-1]["content"]))
 
     return {
         "step": 2,
         "agent": "CriticAgent",
         "type": "agent_turn",
-        "critique_notes": parsed["critique_notes"],
-        "risk_flags": parsed["risk_flags"],
-        "summary": parsed["summary"],
+        "content": parsed["summary"],
         "tool_call_id": None,
+        "context_delta": {},
         "handoff_to": "VerifierAgent",
+        "timestamp": time.time(),
     }
 
 

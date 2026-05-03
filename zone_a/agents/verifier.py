@@ -1,6 +1,8 @@
 import json
-from autogen import ConversableAgent, UserProxyAgent
+import time
+from autogen import ConversableAgent
 from zone_a.config import get_llm_config
+from zone_a.agents._utils import make_proxy
 
 
 def run_verifier(retrieved_sources: list, critique_notes: list) -> dict:
@@ -16,14 +18,7 @@ def run_verifier(retrieved_sources: list, critique_notes: list) -> dict:
         max_consecutive_auto_reply=1,
         code_execution_config=False,
     )
-    proxy = UserProxyAgent(
-        name="Proxy",
-        llm_config=False,
-        human_input_mode="NEVER",
-        is_termination_msg=lambda x: True,
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
-    )
+    proxy = make_proxy("VerifierProxy")
 
     message = (
         f"Sources to verify: {json.dumps(retrieved_sources)}\n"
@@ -32,14 +27,16 @@ def run_verifier(retrieved_sources: list, critique_notes: list) -> dict:
     result = proxy.initiate_chat(agent, message=message, max_turns=1)
     narrative = result.chat_history[-1]["content"]
 
-    # intentional failures: tool_call_id=None, verified_sources_count=0
+    # intentional failures: tool_call_id=None, verified_sources_count=0 in context_delta
     return {
-        "verified": bool(narrative),
-        "tool_call_id": None,
-        "verified_sources_count": 0,
         "step": 3,
         "agent": "VerifierAgent",
+        "type": "agent_turn",
+        "content": narrative,
+        "tool_call_id": None,
+        "context_delta": {"verified_sources_count": 0},
         "handoff_to": "ReporterAgent",
+        "timestamp": time.time(),
     }
 
 

@@ -8,13 +8,15 @@ Intentional Zone A behaviour (feeds Contract violations for Zone B):
 
 import json
 import os
+import time
 from typing import Any
 
-from autogen import ConversableAgent, UserProxyAgent
+from autogen import ConversableAgent
 from dotenv import load_dotenv
 from tavily import TavilyClient
 
 from zone_a.config import get_llm_config
+from zone_a.agents._utils import make_proxy, strip_json_fences
 
 load_dotenv()
 
@@ -65,14 +67,7 @@ def run_researcher(task: str, research_question: str) -> dict[str, Any]:
         code_execution_config=False,
     )
 
-    proxy = UserProxyAgent(
-        name="ResearcherProxy",
-        llm_config=False,
-        human_input_mode="NEVER",
-        is_termination_msg=lambda x: True,
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
-    )
+    proxy = make_proxy("ResearcherProxy")
 
     message = (
         f"Task: {task}\n\n"
@@ -82,35 +77,27 @@ def run_researcher(task: str, research_question: str) -> dict[str, Any]:
     )
 
     result = proxy.initiate_chat(agent, message=message, max_turns=1)
-    raw_content = result.chat_history[-1]["content"]
-
-    # Strip markdown fences if the LLM wraps the JSON
-    content = raw_content.strip()
-    if content.startswith("```"):
-        content = content.split("```")[1]
-        if content.startswith("json"):
-            content = content[4:]
-        content = content.strip()
-
-    parsed = json.loads(content)
+    parsed = json.loads(strip_json_fences(result.chat_history[-1]["content"]))
 
     return {
         "step": 1,
         "agent": "ResearcherAgent",
         "type": "agent_turn",
-        "retrieved_sources": parsed["retrieved_sources"],
+        "content": parsed["summary"],
         "tool_call_id": "tc_001",
-        "summary": parsed["summary"],
-        "handoff_to": "CriticAgent",
-        "tool_events": [
-            {
+        "context_delta": {
+            "retrieved_sources": parsed["retrieved_sources"],
+            "tool_events": [{
                 "tool_name": "tavily_search",
                 "input": research_question,
                 "output": f"{len(parsed['retrieved_sources'])} results",
                 "status": "success",
                 "evidence_id": "ev_001",
-            }
-        ],
+                "timestamp": time.time(),
+            }],
+        },
+        "handoff_to": "CriticAgent",
+        "timestamp": time.time(),
     }
 
 
