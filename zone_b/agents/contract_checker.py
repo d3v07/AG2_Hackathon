@@ -52,7 +52,6 @@ def _generate_violation_text(contract: dict, run_trace: RunTrace, snap: ContextS
         ),
         human_input_mode="NEVER",
         max_consecutive_auto_reply=1,
-        code_execution_config=False,
     )
     user = _make_proxy("ContractCheckerProxy")
     prompt = (
