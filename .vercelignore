@@ -1,0 +1,20 @@
+.venv
+.git
+.gitignore
+.DS_Store
+**/.DS_Store
+**/__pycache__
+**/*.pyc
+zone_a
+zone_b
+shared
+tests
+docs
+concord_lite.egg-info
+AG2 continued
+concord-lite.html
+run_all.py
+README.md
+pyproject.toml
+.claude
+node_modules
