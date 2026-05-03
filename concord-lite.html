@@ -1,0 +1,2044 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>Concord Lite — Contract-to-Repair for AG2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <style>
+/* ============================================================
+   DESIGN TOKENS
+============================================================ */
+:root {
+  --ink-1: #14161c;
+  --ink-2: #3b424d;
+  --ink-3: #6b7280;
+  --ink-4: #9aa3ad;
+  --line: #e6e8ec;
+  --line-2: #eef0f3;
+  --bg: #f7f8fa;
+  --bg-2: #ffffff;
+  --bg-soft: #fbfbfc;
+
+  --brand: #3358e6;
+  --brand-ink: #1f3bb5;
+  --brand-soft: #eaf0ff;
+
+  --agent: #6446c6;
+  --agent-soft: #efeafd;
+
+  --warn: #b86509;
+  --warn-soft: #fdf3e3;
+
+  --danger: #c82a2a;
+  --danger-ink: #8a1f1f;
+  --danger-soft: #fbeaea;
+
+  --success: #0f7a4a;
+  --success-soft: #e6f3ec;
+
+  --human: #0a7882;
+  --human-soft: #def0f2;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow-1: 0 1px 0 rgba(20,22,28,.04), 0 1px 2px rgba(20,22,28,.04);
+  --shadow-2: 0 1px 0 rgba(20,22,28,.05), 0 6px 24px -10px rgba(20,22,28,.12);
+}
+
+/* ============================================================
+   RESET + BASE
+============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink-1);
+  font: 14px/1.45 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+button { font-family: inherit; cursor: pointer; }
+textarea { font-family: inherit; }
+a { color: var(--brand); }
+
+/* ============================================================
+   APP SHELL
+============================================================ */
+.app {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 52px 1fr 40px;
+}
+.app.density-compact .page { padding: 12px 16px; }
+
+/* ============================================================
+   TOP BAR
+============================================================ */
+.top {
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 260px 1fr auto;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  position: sticky; top: 0; z-index: 100;
+}
+.brand-mark { display: flex; gap: 10px; align-items: center; }
+.logo {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: #14161c;
+  color: white; display: grid; place-items: center;
+  font-size: 15px; flex-shrink: 0;
+}
+.brand-text .name { font-weight: 600; font-size: 14.5px; letter-spacing: -0.01em; line-height: 1.2; }
+.brand-text .name .lite { color: var(--ink-3); font-weight: 400; }
+.brand-text .tagline { font-size: 10.5px; color: var(--ink-4); letter-spacing: 0.02em; margin-top: 1px; }
+
+.screen-nav {
+  display: flex; gap: 2px; justify-self: center;
+  background: var(--bg); padding: 3px; border-radius: 8px;
+  border: 1px solid var(--line);
+}
+.screen-tab {
+  display: flex; align-items: center; gap: 5px;
+  background: transparent; border: 0; padding: 4px 9px; border-radius: 6px;
+  color: var(--ink-3); font-size: 12px; white-space: nowrap;
+}
+.screen-tab .num { font-size: 10px; font-family: 'JetBrains Mono', monospace; opacity: 0.6; }
+.screen-tab:hover { color: var(--ink-1); background: var(--bg-soft); }
+.screen-tab.active { background: white; color: var(--ink-1); box-shadow: var(--shadow-1); font-weight: 500; }
+
+.top-actions { display: flex; gap: 8px; align-items: center; }
+.avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--agent); color: white;
+  display: grid; place-items: center; font-size: 11px; font-weight: 600; flex-shrink: 0;
+}
+.density-btn {
+  background: transparent; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 3px 8px; font-size: 11px; color: var(--ink-3);
+}
+.density-btn:hover { background: var(--bg); }
+
+/* ============================================================
+   TRANSPORT BAR
+============================================================ */
+.transport {
+  background: var(--bg-2); border-bottom: 1px solid var(--line);
+  display: flex; gap: 10px; align-items: center; padding: 0 20px;
+  font-size: 12px; height: 44px;
+}
+.play-btn {
+  width: 28px; height: 28px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg-2);
+  display: grid; place-items: center; font-size: 11px;
+  color: var(--ink-1);
+}
+.play-btn:hover { background: var(--bg); }
+.t-cur { font-family: 'JetBrains Mono', monospace; font-size: 12px; min-width: 44px; color: var(--ink-2); }
+.bar {
+  flex: 1; height: 6px; background: var(--line-2); border-radius: 3px;
+  position: relative; cursor: pointer;
+}
+.bar-fill { height: 100%; background: var(--brand); border-radius: 3px; transition: width 0.1s linear; }
+.bar-marker {
+  position: absolute; top: -3px; width: 2px; height: 12px;
+  background: var(--danger); border-radius: 1px; transform: translateX(-1px);
+}
+.bar-marker.warn-marker { background: var(--warn); }
+.t-tot { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-4); }
+.speed { display: flex; gap: 2px; }
+.sp-btn {
+  background: transparent; border: 1px solid var(--line); border-radius: 4px;
+  padding: 2px 6px; font-size: 11px; color: var(--ink-3);
+}
+.sp-btn.active { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
+.sp-btn:hover { background: var(--bg); }
+.reset-btn {
+  background: transparent; border: 1px solid var(--line); border-radius: 4px;
+  padding: 2px 7px; font-size: 11px; color: var(--ink-3);
+}
+.reset-btn:hover { background: var(--bg); }
+
+/* ============================================================
+   FLOW RAIL
+============================================================ */
+.foot {
+  background: var(--bg-2); border-top: 1px solid var(--line);
+  display: flex; align-items: center; padding: 0 20px;
+  position: sticky; bottom: 0; z-index: 50;
+}
+.flow-rail { display: flex; align-items: center; gap: 0; width: 100%; }
+.rail-step {
+  display: flex; align-items: center; gap: 5px;
+  background: transparent; border: 0; padding: 4px 8px; border-radius: var(--radius-sm);
+  color: var(--ink-4); font-size: 11px; white-space: nowrap;
+}
+.rail-step .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--line); flex-shrink: 0;
+}
+.rail-step.reached .dot { background: var(--brand); }
+.rail-step.reached { color: var(--ink-2); }
+.rail-step.current .dot {
+  background: var(--brand);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+.rail-step.current { color: var(--brand); font-weight: 500; }
+.rail-step:hover { background: var(--bg); }
+.rail-gap { flex: 1; height: 1px; background: var(--line-2); max-width: 24px; }
+.rail-gap.reached { background: var(--brand-soft); }
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.5; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+/* ============================================================
+   MAIN CONTENT
+============================================================ */
+.main { overflow-y: auto; }
+.page { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.page-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding-bottom: 16px; border-bottom: 1px solid var(--line);
+}
+.crumbs { font-size: 11px; color: var(--ink-4); margin-bottom: 6px; letter-spacing: 0.01em; }
+.crumbs .sep { margin: 0 4px; }
+h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+h3 { font-size: 14px; font-weight: 600; }
+.eyebrow {
+  font-size: 10.5px; font-weight: 500; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--ink-4); margin-bottom: 4px;
+}
+
+/* ============================================================
+   CARDS
+============================================================ */
+.card {
+  background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-1);
+  display: flex; flex-direction: column;
+}
+.card-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; border-bottom: 1px solid var(--line-2);
+}
+.card-body { padding: 16px; flex: 1; }
+.card-body.tight { padding: 12px; }
+.card-foot {
+  padding: 10px 16px; border-top: 1px solid var(--line-2);
+  background: var(--bg-soft); border-radius: 0 0 var(--radius) var(--radius);
+}
+.col { display: flex; flex-direction: column; gap: 12px; }
+
+/* ============================================================
+   GRID LAYOUTS
+============================================================ */
+.grid { display: grid; gap: 12px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row.tight { gap: 6px; }
+.row.between { justify-content: space-between; }
+.mt-4 { margin-top: 4px; }
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.w-full { width: 100%; }
+
+/* ============================================================
+   PILLS + TAGS
+============================================================ */
+.pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 100px; font-size: 11px; font-weight: 500;
+  background: var(--line-2); color: var(--ink-2); white-space: nowrap;
+  border: 1px solid transparent;
+}
+.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.brand { background: var(--brand-soft); color: var(--brand-ink); }
+.pill.agent { background: var(--agent-soft); color: var(--agent); }
+.pill.danger { background: var(--danger-soft); color: var(--danger-ink); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.ok, .pill.success { background: var(--success-soft); color: var(--success); }
+.pill.human { background: var(--human-soft); color: var(--human); }
+.pill.live { background: var(--brand-soft); color: var(--brand); }
+.pill.live .dot { animation: pulse-dot 1s ease-in-out infinite; }
+.sev-high { background: var(--danger-soft); color: var(--danger-ink); }
+.sev-medium { background: var(--warn-soft); color: var(--warn); }
+.sev-low { background: var(--line-2); color: var(--ink-3); }
+
+.tag {
+  display: inline-flex; align-items: center;
+  padding: 2px 7px; border-radius: var(--radius-sm); font-size: 11px;
+  background: var(--bg); color: var(--ink-3); border: 1px solid var(--line);
+}
+
+/* ============================================================
+   METRICS
+============================================================ */
+.metric {
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 2px;
+}
+.metric .k { font-size: 10.5px; color: var(--ink-4); text-transform: uppercase; letter-spacing: 0.05em; }
+.metric .v { font-size: 22px; font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; }
+.metric .v.sm { font-size: 15px; }
+.metric .x { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+.metric.fail { border-color: var(--danger); background: var(--danger-soft); }
+.metric.fail .v { color: var(--danger-ink); }
+.metric.warn { border-color: #e8b36a; background: var(--warn-soft); }
+.metric.warn .v { color: var(--warn); }
+.metric.ok { border-color: #7dd4ac; background: var(--success-soft); }
+.metric.ok .v { color: var(--success); }
+.metric.brand { border-color: #a8b8f8; background: var(--brand-soft); }
+.metric.brand .v { color: var(--brand-ink); }
+.metric.human { border-color: #8dd4d8; background: var(--human-soft); }
+.metric.human .v { color: var(--human); }
+
+/* ============================================================
+   FRAMES
+============================================================ */
+.frame {
+  background: var(--bg-soft); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+}
+.frame.expected { background: var(--success-soft); border-color: #9dd4b8; }
+.frame.observed { background: var(--danger-soft); border-color: #e8a8a8; }
+
+/* ============================================================
+   BANNER
+============================================================ */
+.banner {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 16px; border-radius: var(--radius); border: 1px solid;
+}
+.banner.danger { background: var(--danger-soft); border-color: #e8a8a8; }
+.banner.warn { background: var(--warn-soft); border-color: #e8c88a; }
+.banner-ic {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 13px;
+  font-weight: 700; flex-shrink: 0;
+}
+.banner.danger .banner-ic { background: var(--danger); color: white; }
+.banner.warn .banner-ic { background: var(--warn); color: white; }
+.banner-text { flex: 1; }
+.banner-text .t { font-weight: 600; font-size: 13.5px; }
+.banner-text .s { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; }
+
+/* ============================================================
+   BUTTONS
+============================================================ */
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 12px; border-radius: var(--radius-sm); font-size: 13px;
+  border: 1px solid var(--line); background: var(--bg-2); color: var(--ink-1);
+  font-weight: 500; white-space: nowrap; transition: background 0.1s;
+}
+.btn:hover { background: var(--bg); }
+.btn.brand { background: var(--brand); border-color: var(--brand); color: white; }
+.btn.brand:hover { background: var(--brand-ink); }
+.btn.success { background: var(--success); border-color: var(--success); color: white; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: white; }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--ink-3); }
+.btn.ghost:hover { background: var(--bg); }
+.btn.sm { padding: 4px 9px; font-size: 12px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ============================================================
+   CODE BLOCKS + DIFF
+============================================================ */
+.code {
+  background: #1a1d24; border-radius: var(--radius-sm);
+  padding: 12px; font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; line-height: 1.6; display: flex; flex-direction: column;
+  overflow-x: auto;
+}
+.code span { display: block; }
+.code .ctx { color: #8892a4; }
+.code .hi { color: #c8d8ff; background: rgba(51,88,230,0.15); padding: 0 4px; margin: 0 -4px; border-radius: 2px; }
+.code .add { color: #7dd4ac; background: rgba(15,122,74,0.15); padding: 0 4px; margin: 0 -4px; border-radius: 2px; }
+.code .del { color: #f08080; background: rgba(200,42,42,0.15); padding: 0 4px; margin: 0 -4px; border-radius: 2px; }
+
+/* ============================================================
+   TRACE LIST
+============================================================ */
+.trace { display: flex; flex-direction: column; gap: 1px; }
+.trace-row {
+  display: grid; grid-template-columns: 48px 64px 130px 1fr;
+  gap: 8px; align-items: center; padding: 5px 8px; border-radius: 4px;
+  font-size: 12px;
+}
+.trace-row:hover { background: var(--bg); }
+.trace-row .t { font-family: 'JetBrains Mono', monospace; color: var(--ink-4); font-size: 11px; }
+.trace-row .who { font-weight: 500; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trace-row .msg { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trace-row.row-violation { background: var(--danger-soft); }
+.trace-row.row-violation .msg { color: var(--danger-ink); }
+.trace-row.row-tool { background: var(--brand-soft); }
+.trace-row.row-handoff { background: var(--agent-soft); }
+.trace-row.row-diag { background: var(--brand-soft); }
+.trace-row.row-guard, .trace-row.row-block, .trace-row.row-term { background: var(--warn-soft); }
+.trace-row.pending { opacity: 0.5; }
+.cursor { animation: blink 1s step-end infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ============================================================
+   CTX VARS
+============================================================ */
+.ctx-grid { display: flex; flex-direction: column; gap: 2px; }
+.ctx-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 8px; border-radius: 4px; font-size: 12px;
+}
+.ctx-row .k { font-family: 'JetBrains Mono', monospace; color: var(--ink-3); font-size: 11px; }
+.ctx-row .v { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; }
+.ctx-row.bad { background: var(--danger-soft); }
+.ctx-row.bad .v { color: var(--danger-ink); }
+.ctx-row.ok { background: var(--success-soft); }
+.ctx-row.ok .v { color: var(--success); }
+.ctx-row.warn { background: var(--warn-soft); }
+.ctx-row.warn .v { color: var(--warn); }
+
+/* ============================================================
+   VIOLATIONS LIST
+============================================================ */
+.violations { display: flex; flex-direction: column; gap: 6px; }
+.violation-row {
+  background: var(--bg-soft); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 10px 12px; text-align: left; width: 100%;
+  cursor: pointer; transition: border-color 0.1s;
+}
+.violation-row:hover:not(:disabled) { border-color: var(--brand); }
+.violation-row.selected { border-color: var(--brand); background: var(--brand-soft); }
+.violation-row:disabled { cursor: default; opacity: 0.5; }
+.violation-row .vid { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-4); }
+.violation-row .vt { font-size: 12.5px; font-weight: 500; color: var(--ink-1); }
+
+/* ============================================================
+   SPEC LISTS
+============================================================ */
+.spec { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.spec li { font-size: 12.5px; padding-left: 16px; position: relative; color: var(--ink-2); }
+.spec li::before { content: "·"; position: absolute; left: 4px; color: var(--ink-4); }
+.spec li.dot::before { content: "✓"; color: var(--success); }
+.spec li.x::before { content: "✕"; color: var(--danger); }
+.spec li.q::before { content: "○"; color: var(--warn); }
+
+/* ============================================================
+   TYPOGRAPHY HELPERS
+============================================================ */
+.muted { color: var(--ink-3); }
+.small { font-size: 12.5px; }
+.tiny { font-size: 11px; }
+b { font-weight: 600; }
+.label-cap {
+  font-size: 10.5px; font-weight: 500; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--ink-4); display: block; margin-bottom: 4px;
+}
+
+/* ============================================================
+   SPONSORS
+============================================================ */
+.sponsors { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sp {
+  font-size: 10.5px; font-weight: 500; padding: 2px 7px;
+  border: 1px solid var(--line); border-radius: 4px;
+  color: var(--ink-3); background: var(--bg-2);
+}
+
+/* ============================================================
+   WORKFLOW NODE (rounded rect, agent tokens)
+============================================================ */
+.wf-node-rect {
+  fill: var(--agent-soft); stroke: var(--agent); stroke-width: 1.5;
+}
+.wf-node-rect.active-node {
+  stroke: var(--agent);
+  animation: node-pulse-agent 1.4s ease-in-out infinite;
+}
+.wf-node-rect.done-node { fill: var(--success-soft); stroke: #7dd4ac; stroke-width: 1; }
+.wf-node-rect.failed-node { fill: var(--danger-soft); stroke: var(--danger); }
+.wf-node-rect.skipped-node { fill: var(--bg); stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 3; }
+.wf-node-rect.idle-node { fill: var(--bg-soft); stroke: var(--line); stroke-width: 1; }
+.wf-node-rect.human-node { fill: var(--human-soft); stroke: var(--human); stroke-width: 1.5; }
+@keyframes node-pulse-agent {
+  0%, 100% { stroke-opacity: 0.5; }
+  50% { stroke-opacity: 1; }
+}
+
+/* ============================================================
+   DIAGNOSTIC NODE (pill, brand tokens)
+============================================================ */
+.diag-node-pill {
+  fill: var(--brand-soft); stroke: var(--brand); stroke-width: 1.5;
+}
+.diag-node-pill.active-diag {
+  animation: node-pulse-brand 1.4s ease-in-out infinite;
+}
+@keyframes node-pulse-brand {
+  0%, 100% { stroke-opacity: 0.5; }
+  50% { stroke-opacity: 1; }
+}
+
+/* ============================================================
+   OBSERVED RUN FRAME
+============================================================ */
+.observed-run-frame {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg-soft); padding: 8px;
+}
+.observed-run-eyebrow {
+  font-size: 10px; font-weight: 500; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--agent); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.observed-run-eyebrow::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--agent); flex-shrink: 0;
+}
+
+/* ============================================================
+   DIAGNOSTIC SESSION EYEBROW (floats above, not in a frame)
+============================================================ */
+.diagnostic-eyebrow {
+  font-size: 10px; font-weight: 500; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--brand); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.diagnostic-eyebrow::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--brand);
+  flex-shrink: 0; animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+/* ============================================================
+   SVG GRAPH WRAPPERS
+============================================================ */
+.wf-wrap { width: 100%; overflow-x: auto; }
+.wf-svg { width: 100%; height: auto; display: block; }
+
+/* ============================================================
+   FLOW STRIP (overview)
+============================================================ */
+.flow-strip { display: flex; align-items: center; gap: 0; flex-wrap: wrap; row-gap: 8px; }
+.flow-beat {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--bg-2); font-size: 12px;
+}
+.flow-beat .n {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--brand-soft);
+  color: var(--brand); font-size: 10px; font-weight: 600;
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.flow-arrow { padding: 0 3px; color: var(--ink-4); font-size: 12px; }
+
+/* ============================================================
+   APPROVE ROW
+============================================================ */
+.approve-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ============================================================
+   MISC
+============================================================ */
+pre { margin: 0; white-space: pre-wrap; }
+hr { border: 0; border-top: 1px solid var(--line); }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+/* ============================================================
+   DATA FIXTURES (spec-canonical)
+============================================================ */
+const WORKFLOW = {
+  id: "lit-review-assistant",
+  name: "Literature Review Assistant",
+  runId: "run_041",
+  zoneAAgents: [
+    { n: 1, name: "Researcher",   role: "Collects candidate sources",       icon: "⌕", inputs: ["topic"],            outputs: ["source_candidates"], contracts: ["tool","evidence"] },
+    { n: 2, name: "Critic",       role: "Challenges relevance and coverage", icon: "!", inputs: ["source_candidates"], outputs: ["critique"],           contracts: ["routing"] },
+    { n: 3, name: "Verifier",     role: "Checks source validity using tools", icon: "✓", inputs: ["critique"],          outputs: ["verified_sources"],   contracts: ["tool","evidence"] },
+    { n: 4, name: "Reporter",     role: "Writes final review",               icon: "✎", inputs: ["verified_sources"],   outputs: ["final_output"],       contracts: ["evidence","schema"] },
+    { n: 5, name: "ActionAgent",  role: "Sends final artifact",              icon: "⚡", inputs: ["approved_report"],    outputs: ["side_effect"],         contracts: ["approval"] },
+  ],
+  zoneBAgents: [
+    { n: 1, name: "Trace Collector",   role: "Reads AG2 run trace" },
+    { n: 2, name: "Contract Checker",  role: "Flags broken contracts" },
+    { n: 3, name: "Attribution",       role: "Finds failed agent and step" },
+    { n: 4, name: "Repair",            role: "Suggests AG2-native patch" },
+    { n: 5, name: "Regression Test",   role: "Generates pytest coverage" },
+    { n: 6, name: "Reporter",          role: "Writes diagnostic report" },
+  ],
+  humanGate: { name: "UserProxyAgent / HumanGate", before: "ActionAgent" }
+};
+
+const CONTRACT = {
+  evidence: "Reporter requires verified_sources_count >= 2 before final_output.",
+  tool: "Any claim of source checking must map to a Tavily or Daytona tool event.",
+  routing: "Critic must hand off to Verifier before Reporter.",
+  approval: "ActionAgent is unreachable unless approval_status === 'approved'.",
+  schema: "Final output must include title, claims[], citations[], limitations, and confidence."
+};
+
+const TRACE = [
+  { id: "e01", t: 0.00, agent: "System",      type: "run.start",        text: "run_041 started for Literature Review Assistant", ctx: { approval_status: "pending", verified_sources_count: 0 } },
+  { id: "e02", t: 0.38, agent: "Researcher",  type: "agent.message",    text: "Researcher collected 6 candidate papers for agentic workflow repair.", ctx: { current_agent: "Researcher" } },
+  { id: "e03", t: 0.91, agent: "Critic",      type: "agent.message",    text: "Critic requested verification before report.", ctx: { current_agent: "Critic", last_handoff: "Researcher → Critic" } },
+  { id: "e04", t: 1.24, agent: "Router",      type: "handoff",          text: "Router selected handoff Critic → Reporter.", violationId: "v03", ctx: { last_handoff: "Critic → Reporter" } },
+  { id: "e05", t: 1.72, agent: "Verifier",    type: "agent.message",    text: "Verifier said sources were checked.", violationId: "v02", ctx: { current_agent: "Verifier", tool_events_seen: 0 } },
+  { id: "e06", t: 2.10, agent: "Reporter",    type: "agent.message",    text: "Reporter wrote final output at t=2.10.", violationId: "v01", ctx: { current_agent: "Reporter", verified_sources_count: 0 } },
+  { id: "e07", t: 2.82, agent: "ActionAgent", type: "action.reachable", text: "ActionAgent became reachable while approval_status was pending.", violationId: "v04", ctx: { approval_status: "pending" } },
+  { id: "e08", t: 4.22, agent: "System",      type: "run.end",          text: "run_041 completed with contract violations.", ctx: { final_output_status: "unsafe" } },
+];
+
+const VIOLATIONS = [
+  { id: "v01", title: "Missing evidence before report",      severity: "high",   agent: "Reporter",     step: "e06", appearsAt: 2.10, contract: "Evidence",  expected: "Reporter may run only when verified_sources_count >= 2.", observed: "Reporter ran with verified_sources_count = 0.", evidence_event_ids: ["e06"], confidence: 0.94 },
+  { id: "v02", title: "Tool claim without tool event",       severity: "high",   agent: "Verifier",     step: "e05", appearsAt: 1.72, contract: "Tool",       expected: "A claim of source checking must map to a Tavily or Daytona event.", observed: "Verifier said sources were checked, but tool_events_seen = 0.", evidence_event_ids: ["e05"], confidence: 0.91 },
+  { id: "v03", title: "Skipped verifier route",              severity: "medium", agent: "Router",       step: "e04", appearsAt: 1.24, contract: "Routing",    expected: "Critic → Verifier → Reporter.", observed: "Critic → Reporter.", evidence_event_ids: ["e03","e04"], confidence: 0.88 },
+  { id: "v04", title: "Side effect reachable without approval", severity: "high", agent: "ActionAgent", step: "e07", appearsAt: 2.82, contract: "Approval",   expected: "ActionAgent is unreachable until approval_status = approved.", observed: "ActionAgent reachable while approval_status = pending.", evidence_event_ids: ["e07"], confidence: 0.96 },
+];
+
+const REPAIR = {
+  primitive: "OnContextCondition + HumanGate + Guardrail",
+  summary: "Patch routing so Critic must pass through Verifier, Reporter requires evidence, and ActionAgent is gated by approval.",
+  diff: [
+    "- handoff(Critic, Reporter)",
+    "+ handoff(Critic, Verifier)",
+    "+ handoff(Verifier, Reporter, condition: verified_sources_count >= 2)",
+    "+ guardrail(Reporter, requires: citations.length >= 2)",
+    "- allow(ActionAgent)",
+    "+ allow(ActionAgent, condition: approval_status === 'approved')"
+  ],
+  expectedImpact: "Prevents premature reports, unsupported verifier claims, skipped verification, and side effects before human approval."
+};
+
+const TEST = {
+  name: "test_lit_review_contract_repair_run_041",
+  status: "pass",
+  code: `def test_lit_review_contract_repair_run_041(trace, contract):
+    assert route_contains(trace, ["Critic", "Verifier", "Reporter"])
+    assert reporter_context(trace)["verified_sources_count"] >= 2
+    assert verifier_tool_claims_have_events(trace, tools=["Tavily", "Daytona"])
+    assert not action_reachable(trace, when={"approval_status": "pending"})`,
+  assertions: [
+    "Route includes Critic → Verifier → Reporter",
+    "Reporter requires verified_sources_count >= 2",
+    "Verifier tool claims require Tavily or Daytona events",
+    "ActionAgent blocked while approval_status is pending",
+  ],
+  daytona_stdout: [
+    "$ pytest tests/test_run_041_contract.py -q",
+    "collected 1 item",
+    "tests/test_run_041_contract.py .",
+    "1 passed in 0.41s",
+  ]
+};
+
+const TOTAL_T = 10.5;
+
+/* ============================================================
+   DEMO CLOCK HOOK
+============================================================ */
+const { useState, useEffect, useRef } = React;
+
+function useDemoClock() {
+  const [tNow, setT] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [speed, setSpeed] = useState(1);
+  const raf = useRef();
+  const last = useRef(performance.now());
+
+  useEffect(() => {
+    function tick(now) {
+      const dt = (now - last.current) / 1000;
+      last.current = now;
+      if (playing) {
+        setT(t => {
+          const nt = t + dt * speed;
+          return nt > TOTAL_T + 0.5 ? 0 : nt;
+        });
+      }
+      raf.current = requestAnimationFrame(tick);
+    }
+    raf.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf.current);
+  }, [playing, speed]);
+
+  const visibleTrace = TRACE.filter(e => e.t <= tNow);
+  const visibleViolations = VIOLATIONS.filter(v => tNow >= v.appearsAt);
+  return { tNow, visibleTrace, visibleViolations, playing, setPlaying, speed, setSpeed, setT };
+}
+
+/* ============================================================
+   PRIMITIVE: Sponsors
+============================================================ */
+function Sponsors() {
+  return (
+    <div className="sponsors">
+      <span className="muted tiny">tools</span>
+      {["AG2","Tavily","Daytona","V0","Gemini"].map(s => <span className="sp" key={s}>{s}</span>)}
+    </div>
+  );
+}
+
+/* ============================================================
+   PRIMITIVE: CtxVars
+============================================================ */
+function CtxVars({ tNow }) {
+  const vars = [
+    { k: "workflow_id",           v: "lit-review-assistant" },
+    { k: "run_id",                v: "run_041" },
+    { k: "verified_sources_count", v: tNow < 2.10 ? "0" : "0", bad: tNow >= 2.10 },
+    { k: "approval_status",       v: "pending", warn: true },
+    { k: "current_agent",         v: tNow < 0.38 ? "—" : tNow < 0.91 ? "Researcher" : tNow < 1.24 ? "Critic" : tNow < 2.10 ? "Verifier" : tNow < 2.82 ? "Reporter" : "ActionAgent" },
+    { k: "last_handoff",          v: tNow < 0.91 ? "—" : tNow < 1.24 ? "Researcher → Critic" : "Critic → Reporter", bad: tNow >= 1.24 },
+    { k: "tool_events_seen",      v: tNow < 1.72 ? "0" : "0", bad: tNow >= 1.72 },
+  ];
+  return (
+    <div className="ctx-grid">
+      {vars.map(v => (
+        <div className={`ctx-row ${v.bad ? "bad" : v.ok ? "ok" : v.warn ? "warn" : ""}`} key={v.k}>
+          <span className="k">{v.k}</span>
+          <span className="v">{v.v}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ============================================================
+   PRIMITIVE: TraceList
+============================================================ */
+function TraceList({ tNow, maxItems = 12 }) {
+  const items = TRACE.filter(e => e.t <= tNow).slice(-maxItems);
+  return (
+    <div className="trace">
+      {items.map(e => {
+        const isViolation = !!e.violationId;
+        const cls = isViolation ? "row-violation"
+          : e.type === "handoff" ? "row-handoff"
+          : e.type.startsWith("agent") ? ""
+          : e.type === "run.start" || e.type === "run.end" ? "row-diag"
+          : "";
+        const tag = e.type === "handoff" ? "handoff"
+          : e.type === "agent.message" ? "turn"
+          : e.type === "action.reachable" ? "action"
+          : e.type === "run.start" ? "start"
+          : e.type === "run.end" ? "end"
+          : "event";
+        return (
+          <div className={`trace-row ${cls}`} key={e.id}>
+            <span className="t">t={e.t.toFixed(2)}</span>
+            <span className="tag">{tag}</span>
+            <span className="who">{e.agent}</span>
+            <span className="msg">{e.text}</span>
+          </div>
+        );
+      })}
+      {tNow < TOTAL_T && (
+        <div className="trace-row pending">
+          <span className="t">…</span>
+          <span className="tag">live</span>
+          <span className="who muted">awaiting event</span>
+          <span className="cursor">▍</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   PRIMITIVE: ViolationsList
+============================================================ */
+function ViolationsList({ tNow, activeId, onPick }) {
+  return (
+    <div className="violations">
+      {VIOLATIONS.map(v => {
+        const active = tNow >= v.appearsAt;
+        return (
+          <button
+            key={v.id}
+            className={`violation-row ${active ? `sev-${v.severity}` : ""} ${activeId === v.id && active ? "selected" : ""}`}
+            onClick={() => active && onPick && onPick(v.id)}
+            disabled={!active}
+          >
+            <div className="row between">
+              <div className="row tight">
+                <span className="vid">{v.id.toUpperCase()}</span>
+                <span className={`pill ${v.severity === "high" ? "danger" : v.severity === "medium" ? "warn" : ""}`}>
+                  {v.severity.toUpperCase()}
+                </span>
+              </div>
+              <span className="muted tiny">{active ? `t=${v.appearsAt.toFixed(2)}s` : "…"}</span>
+            </div>
+            <div className="vt mt-4">{active ? v.title : "scanning…"}</div>
+            <div className="muted tiny mt-4">{active ? `${v.contract} contract · ${v.agent}` : "—"}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ============================================================
+   PRIMITIVE: WorkflowGraph (SVG, rounded rect nodes, solid arrows)
+============================================================ */
+function WorkflowGraph({ tNow }) {
+  const W = 680, H = 260;
+  const NW = 116, NH = 70;
+  // layout: 5 agents in a roughly linear path with verifier offset
+  const positions = {
+    Researcher:  { x: 20,  y: 20 },
+    Critic:      { x: 20,  y: 145 },
+    Verifier:    { x: 200, y: 80 },
+    Reporter:    { x: 380, y: 20 },
+    ActionAgent: { x: 380, y: 145 },
+  };
+  const humanGateX = 290, humanGateY = 145;
+
+  function nodeState(name) {
+    if (name === "Verifier" && tNow >= 1.24) return "skipped";
+    if (name === "Reporter" && tNow >= 2.10) return "failed";
+    if (name === "ActionAgent" && tNow >= 2.82) return "blocked";
+    if (name === "Researcher" && tNow >= 0.38 && tNow < 0.91) return "active";
+    if (name === "Critic" && tNow >= 0.91 && tNow < 1.24) return "active";
+    if (name === "Reporter" && tNow >= 1.72 && tNow < 2.10) return "active";
+    return "idle";
+  }
+
+  function nodeClass(state) {
+    if (state === "active") return "wf-node-rect active-node";
+    if (state === "failed") return "wf-node-rect failed-node";
+    if (state === "skipped") return "wf-node-rect skipped-node";
+    if (state === "blocked") return "wf-node-rect idle-node";
+    return "wf-node-rect idle-node";
+  }
+
+  const handoffs = [
+    { from: "Researcher", to: "Critic", label: "① retrieved>0", firedAt: 0.38, bad: false },
+    { from: "Critic", to: "Verifier", label: "② expected", firedAt: null, bad: false, missed: true },
+    { from: "Critic", to: "Reporter", label: "③ fallback", firedAt: 1.24, bad: true },
+    { from: "Reporter", to: "ActionAgent", label: "④ approval req", firedAt: null, blocked: true },
+  ];
+
+  function center(name) {
+    const p = positions[name];
+    return { x: p.x + NW/2, y: p.y + NH/2 };
+  }
+
+  function arrowPath(from, to, curve = 0) {
+    const a = center(from), b = center(to);
+    const mx = (a.x + b.x)/2 + curve;
+    const my = (a.y + b.y)/2;
+    return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+  }
+
+  return (
+    <div className="wf-wrap">
+      <svg viewBox={`0 0 ${W} ${H}`} className="wf-svg" style={{ minHeight: 200 }}>
+        <defs>
+          <marker id="arr-agent" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M 0 0 L 7 3.5 L 0 7 z" fill="var(--agent)" />
+          </marker>
+          <marker id="arr-danger" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M 0 0 L 7 3.5 L 0 7 z" fill="var(--danger)" />
+          </marker>
+          <marker id="arr-muted" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M 0 0 L 7 3.5 L 0 7 z" fill="var(--ink-4)" />
+          </marker>
+        </defs>
+
+        {/* Edges */}
+        {handoffs.map((h, i) => {
+          const a = center(h.from), b = center(h.to);
+          const fired = h.firedAt !== null && tNow >= h.firedAt;
+          const bad = h.bad && fired;
+          const missed = h.missed;
+          const blocked = h.blocked;
+          const stroke = bad ? "var(--danger)" : missed ? "var(--ink-4)" : fired ? "var(--agent)" : "var(--line)";
+          const dash = (missed || blocked) ? "5 4" : null;
+          const marker = bad ? "url(#arr-danger)" : missed ? "url(#arr-muted)" : "url(#arr-agent)";
+          const curve = h.from === "Critic" && h.to === "Reporter" ? 40 : 0;
+          const d = arrowPath(h.from, h.to, curve);
+          return (
+            <g key={i}>
+              <path d={d} fill="none" stroke={stroke} strokeWidth={bad ? 2 : 1.5}
+                strokeDasharray={dash} markerEnd={marker} opacity={missed ? 0.5 : 1}
+              />
+              <text
+                x={(a.x + b.x)/2 + curve/2} y={(a.y + b.y)/2 - 6}
+                textAnchor="middle" fontSize="9.5" fill={bad ? "var(--danger)" : "var(--ink-4)"}
+                fontFamily="'JetBrains Mono',monospace"
+              >{h.label}</text>
+            </g>
+          );
+        })}
+
+        {/* HumanGate before ActionAgent */}
+        {tNow >= 0 && (
+          <g transform={`translate(${humanGateX}, ${humanGateY})`}>
+            <rect width={82} height={36} rx="18" className="wf-node-rect human-node" />
+            <text x="41" y="14" textAnchor="middle" fontSize="9" fill="var(--human)" fontFamily="Inter" fontWeight="500">HumanGate</text>
+            <text x="41" y="26" textAnchor="middle" fontSize="8.5" fill="var(--human)" fontFamily="'JetBrains Mono',monospace">UserProxy</text>
+          </g>
+        )}
+
+        {/* Workflow agents */}
+        {WORKFLOW.zoneAAgents.map(agent => {
+          const p = positions[agent.name];
+          if (!p) return null;
+          const st = nodeState(agent.name);
+          return (
+            <g key={agent.name} transform={`translate(${p.x}, ${p.y})`}>
+              <rect width={NW} height={NH} rx="8" className={nodeClass(st)} />
+              <text x="10" y="18" fontSize="10" fill="var(--agent)" fontFamily="'JetBrains Mono',monospace" fontWeight="500">
+                {agent.n}
+              </text>
+              <text x="24" y="18" fontSize="12" fill="var(--ink-1)" fontWeight="600" fontFamily="Inter">
+                {agent.name}
+              </text>
+              <text x="10" y="32" fontSize="10" fill="var(--ink-3)" fontFamily="Inter">{agent.role}</text>
+              <text x="10" y="46" fontSize="9.5" fill="var(--ink-4)" fontFamily="'JetBrains Mono',monospace">
+                {agent.contracts.join(" · ")}
+              </text>
+              {st === "active" && (
+                <text x="10" y="62" fontSize="9" fill="var(--agent)" fontFamily="'JetBrains Mono',monospace">● running</text>
+              )}
+              {st === "failed" && (
+                <text x="10" y="62" fontSize="9" fill="var(--danger)" fontFamily="'JetBrains Mono',monospace">✕ blocked</text>
+              )}
+              {st === "skipped" && (
+                <text x="10" y="62" fontSize="9" fill="var(--ink-4)" fontFamily="'JetBrains Mono',monospace">— skipped</text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+/* ============================================================
+   PRIMITIVE: DiagnosticFlow (SVG, pill-shaped nodes, dashed probes, brand tokens)
+============================================================ */
+function DiagnosticFlow({ tNow }) {
+  const W = 680, H = 110;
+  const PW = 96, PH = 44; // pill dimensions
+  const spacing = 108;
+  const startX = 10;
+  const y = 28;
+
+  const diagActiveAt = [5.0, 6.0, 7.0, 8.0, 9.0, 9.5];
+
+  return (
+    <div className="wf-wrap">
+      <svg viewBox={`0 0 ${W} ${H}`} className="wf-svg" style={{ minHeight: 80 }}>
+        <defs>
+          <marker id="arr-brand" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M 0 0 L 7 3.5 L 0 7 z" fill="var(--brand)" />
+          </marker>
+        </defs>
+        {/* Connecting dashed arrows between diagnostic agents */}
+        {WORKFLOW.zoneBAgents.slice(0, -1).map((_, i) => {
+          const ax = startX + i * spacing + PW;
+          const bx = startX + (i+1) * spacing;
+          const cy = y + PH/2;
+          const fired = tNow >= diagActiveAt[i + 1];
+          return (
+            <line key={i}
+              x1={ax} y1={cy} x2={bx} y2={cy}
+              stroke={fired ? "var(--brand)" : "var(--line)"}
+              strokeWidth="1" strokeDasharray="4 3"
+              markerEnd={fired ? "url(#arr-brand)" : undefined}
+            />
+          );
+        })}
+        {/* Pill nodes */}
+        {WORKFLOW.zoneBAgents.map((agent, i) => {
+          const x = startX + i * spacing;
+          const active = tNow >= diagActiveAt[i];
+          return (
+            <g key={agent.name} transform={`translate(${x}, ${y})`}>
+              <rect width={PW} height={PH} rx={PH/2}
+                className={`diag-node-pill ${active ? "active-diag" : ""}`}
+                fill={active ? "var(--brand-soft)" : "var(--bg)"}
+                stroke={active ? "var(--brand)" : "var(--line)"}
+                strokeWidth={active ? 1.5 : 1}
+              />
+              <text x={PW/2} y={16} textAnchor="middle" fontSize="9" fill={active ? "var(--brand)" : "var(--ink-4)"} fontFamily="'JetBrains Mono',monospace" fontWeight="500">
+                {agent.n}
+              </text>
+              <text x={PW/2} y={28} textAnchor="middle" fontSize="10" fill={active ? "var(--brand-ink)" : "var(--ink-4)"} fontFamily="Inter" fontWeight="500">
+                {agent.name.length > 11 ? agent.name.slice(0,10)+"…" : agent.name}
+              </text>
+              <text x={PW/2} y={40} textAnchor="middle" fontSize="8.5" fill={active ? "var(--brand)" : "var(--ink-4)"} fontFamily="Inter">
+                {agent.role.length > 16 ? agent.role.slice(0,15)+"…" : agent.role}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+/* ============================================================
+   SCREEN 0 — OVERVIEW
+============================================================ */
+function S0({ onJump }) {
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <div className="eyebrow">Concord Lite · AG2 Hackathon Demo</div>
+          <h1>Contract violations, diagnosed and repaired.</h1>
+          <p className="muted small mt-8" style={{ maxWidth: 620 }}>
+            Concord Lite detects, attributes, repairs, and regression-tests contract violations
+            in AG2 multi-agent workflows. Built with <b>AG2</b>, <b>Tavily</b>, and <b>Daytona</b>.
+          </p>
+          <div className="row tight mt-12">
+            <button className="btn brand" onClick={() => onJump(1)}>▶ Watch the demo</button>
+            <button className="btn" onClick={() => onJump(2)}>View architecture</button>
+          </div>
+        </div>
+        <Sponsors />
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+        {[
+          { k: "1 — Detect",    t: "Contract violations",          b: "Diagnostic flow replays the run and checks every claim against the workflow contract — evidence, tool, routing, approval, schema.", c: "var(--danger)" },
+          { k: "2 — Attribute", t: "Failed agent + step",          b: "Attribution agent assigns blame with a confidence score and decisive trace evidence from the run.", c: "var(--brand)" },
+          { k: "3 — Repair",    t: "AG2-native patch + test",      b: "Repair agent produces a Handoff / OnContextCondition / Guardrail / HumanGate diff and a regression test before any human approves.", c: "var(--success)" },
+        ].map(s => (
+          <div className="card" key={s.k}>
+            <div className="card-body">
+              <div className="label-cap" style={{ color: s.c }}>{s.k}</div>
+              <h3 className="mt-4">{s.t}</h3>
+              <p className="muted small mt-8">{s.b}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <h3>How a session reads</h3>
+          <span className="muted small">9 beats · ~10 s end-to-end</span>
+        </div>
+        <div className="card-body">
+          <div className="flow-strip">
+            {["Upload run","Show contract","Run diagnostic","Detect violations","Attribute failure","Suggest repair","Generate test","Approve / revise","Final report"].map((b, i, arr) => (
+              <React.Fragment key={i}>
+                <div className="flow-beat">
+                  <span className="n">{i+1}</span>
+                  <span>{b}</span>
+                </div>
+                {i < arr.length - 1 && <span className="flow-arrow">→</span>}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head"><h3>Workflow under test</h3><span className="pill agent">Literature Review Assistant · run_041</span></div>
+        <div className="card-body">
+          <p className="muted small">A 5-agent GroupChat workflow that collects, critiques, verifies, reports, and acts on academic literature. Run #041 produced 4 contract violations — used as the demo scenario throughout.</p>
+          <div className="grid mt-12" style={{ gridTemplateColumns: "repeat(5,1fr)", gap: 8 }}>
+            {WORKFLOW.zoneAAgents.map(a => (
+              <div className="frame" key={a.n}>
+                <div className="label-cap">{a.n}</div>
+                <div className="small" style={{ fontWeight: 600, color: "var(--agent)" }}>{a.name}</div>
+                <div className="tiny muted mt-4">{a.role}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   SCREEN 1 — LIVE RUN
+============================================================ */
+function S1({ clock, onJump, activeViolation, onPickViolation }) {
+  const { tNow, visibleTrace, visibleViolations } = clock;
+  const status = tNow >= 4.22 ? "TERMINATED" : tNow > 0 ? "RUNNING" : "PENDING";
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <div className="crumbs">Runs <span className="sep">/</span> Literature Review Assistant <span className="sep">/</span> run_041</div>
+          <h1>Live run viewer</h1>
+          <div className="row tight mt-8">
+            <span className={`pill ${status === "TERMINATED" ? "danger" : "brand"}`}>
+              {status !== "RUNNING" ? null : <span className="dot" />}{status}
+            </span>
+            <span className="pill">AG2 · AutoPattern</span>
+            <span className="muted tiny">2026-05-02 · 14:22 UTC</span>
+          </div>
+        </div>
+        <div className="row tight">
+          <button className="btn ghost">⤓ trace.json</button>
+          <button className="btn brand" onClick={() => onJump(3)} disabled={visibleViolations.length === 0}>
+            Open violation →
+          </button>
+        </div>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "repeat(6,1fr)" }}>
+        <div className={`metric ${status === "TERMINATED" ? "fail" : ""}`}>
+          <span className="k">Status</span>
+          <span className="v sm">{status}</span>
+          <span className="x">{tNow.toFixed(2)}s elapsed</span>
+        </div>
+        <div className={`metric ${visibleViolations.length > 0 ? "fail" : ""}`}>
+          <span className="k">Violations</span>
+          <span className="v">{visibleViolations.length}</span>
+          <span className="x">{visibleViolations.filter(v=>v.severity==="high").length} high · {visibleViolations.filter(v=>v.severity==="medium").length} med</span>
+        </div>
+        <div className="metric">
+          <span className="k">Trace events</span>
+          <span className="v">{visibleTrace.length}</span>
+          <span className="x">of {TRACE.length} total</span>
+        </div>
+        <div className={`metric ${tNow >= 1.24 ? "fail" : ""}`}>
+          <span className="k">Routing</span>
+          <span className="v sm">{tNow >= 1.24 ? "DEVIATED" : "OK"}</span>
+          <span className="x">{tNow >= 1.24 ? "Critic → Reporter (bad)" : "nominal"}</span>
+        </div>
+        <div className="metric warn">
+          <span className="k">Approval</span>
+          <span className="v sm">pending</span>
+          <span className="x">HumanGate not reached</span>
+        </div>
+        <div className="metric">
+          <span className="k">Tool events</span>
+          <span className="v">{tNow >= 1.72 ? "0" : "0"}</span>
+          <span className="x">Verifier: 0 expected ≥1</span>
+        </div>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "1fr 1.4fr 1fr" }}>
+        <div className="card">
+          <div className="card-head">
+            <h3>Workflow under test</h3>
+            <span className="pill agent">5 agents</span>
+          </div>
+          <div className="card-body">
+            <div className="observed-run-frame">
+              <div className="observed-run-eyebrow">OBSERVED RUN · run_041 · 4.22s captured</div>
+              <WorkflowGraph tNow={tNow} />
+            </div>
+            <div className="frame mt-12">
+              <span className="label-cap">ContextVariables · live</span>
+              <CtxVars tNow={tNow} />
+            </div>
+          </div>
+          <div className="card-foot">
+            <button className="btn sm" onClick={() => onJump(2)}>Inspect workflow →</button>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <h3>Agent trace</h3>
+            <span className="pill live"><span className="dot" />streaming</span>
+          </div>
+          <div className="card-body tight">
+            <TraceList tNow={tNow} />
+          </div>
+          <div className="card-foot">
+            <span className="muted tiny">{visibleTrace.length} events · {visibleViolations.length} violations detected</span>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <h3>Violations</h3>
+            <span className={`pill ${visibleViolations.length > 0 ? "danger" : ""}`}>{visibleViolations.length} open</span>
+          </div>
+          <div className="card-body tight">
+            <ViolationsList tNow={tNow} activeId={activeViolation} onPick={id => { onPickViolation(id); onJump(3); }} />
+          </div>
+          <div className="card-foot">
+            <span className="muted tiny">click any row to investigate</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   SCREEN 2 — WORKFLOW DETAIL
+============================================================ */
+function S2({ clock, onJump }) {
+  const { tNow } = clock;
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <div className="crumbs">Runs <span className="sep">/</span> run_041 <span className="sep">/</span> Workflow detail</div>
+          <h1>Literature Review Assistant</h1>
+          <div className="row tight mt-8">
+            <span className="pill agent">GroupChat · AutoPattern</span>
+            <span className="pill">5 agents · 3 tools</span>
+            <span className="pill warn">4 violations</span>
+          </div>
+        </div>
+        <div className="row tight">
+          <button className="btn ghost">contract.yaml</button>
+          <button className="btn brand" onClick={() => onJump(3)}>See violations →</button>
+        </div>
+      </div>
+
+      {/* === WORKFLOW UNDER TEST (top) === */}
+      <div>
+        <div className="card">
+          <div className="card-head">
+            <h3>Workflow under test</h3>
+            <span className="pill agent">run_041</span>
+          </div>
+          <div className="card-body">
+            <div className="observed-run-frame">
+              <div className="observed-run-eyebrow">OBSERVED RUN · run_041 · 4.22s captured</div>
+              <WorkflowGraph tNow={tNow} />
+              <div className="grid mt-12" style={{ gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div className="frame">
+                  <span className="label-cap">Handoffs · OnContextCondition</span>
+                  <ul className="spec mt-4" style={{ fontSize: 12 }}>
+                    <li className="dot">① Researcher → Critic — retrieved_sources &gt; 0</li>
+                    <li className="x">② Critic → Verifier — expected · NOT TAKEN</li>
+                    <li className="x">③ Critic → Reporter — fallback fired (bad)</li>
+                    <li className="q">④ Reporter → ActionAgent — approval required</li>
+                  </ul>
+                </div>
+                <div className="frame">
+                  <span className="label-cap">Guardrails</span>
+                  <ul className="spec mt-4" style={{ fontSize: 12 }}>
+                    <li className="x">missing evidence before Reporter</li>
+                    <li className="x">tool claim without tool event (Verifier)</li>
+                    <li className="q">schema check — warn</li>
+                    <li className="q">ActionAgent gate — pending approval</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid mt-12" style={{ gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+              <div className="frame">
+                <span className="label-cap">TavilySearchTool</span>
+                <div className="small mt-4" style={{ fontWeight: 500 }}>External evidence</div>
+                <div className="tiny muted mt-2">Used by Researcher · 0 calls on this run</div>
+              </div>
+              <div className="frame" style={{ borderColor: "#e8a8a8" }}>
+                <span className="label-cap">DaytonaCodeExecutor</span>
+                <div className="small mt-4" style={{ fontWeight: 500 }}>Sandboxed validation</div>
+                <div className="tiny mt-2" style={{ color: "var(--danger)" }}>0 calls — Verifier expected ≥1</div>
+              </div>
+              <div className="frame">
+                <span className="label-cap">Custom Contract Rules</span>
+                <div className="small mt-4" style={{ fontWeight: 500 }}>Schema / policy checks</div>
+                <div className="tiny muted mt-2">12 rules · 4 violated</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* === DIAGNOSTIC FLOW (bottom) === */}
+      <div>
+        <div className="card">
+          <div className="card-head">
+            <h3>Diagnostic flow</h3>
+            <span className="pill brand">Concord diagnostic</span>
+          </div>
+          <div className="card-body">
+            <div className="diagnostic-eyebrow">DIAGNOSTIC SESSION · live</div>
+            <DiagnosticFlow tNow={tNow} />
+            <div className="grid mt-12" style={{ gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+              <div className="frame">
+                <span className="label-cap">Contract checks</span>
+                <ul className="spec mt-4" style={{ fontSize: 12 }}>
+                  {["Evidence","Tool","Routing","Approval","Schema"].map(c => (
+                    <li key={c} className={tNow >= 6.0 ? "x" : ""}>{c}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="frame">
+                <span className="label-cap">Attribution</span>
+                <div className="small mt-4" style={{ fontWeight: 500 }}>
+                  {tNow >= 7.0 ? "Router (Critic→Reporter handoff)" : "—"}
+                </div>
+                <div className="tiny muted mt-2">
+                  {tNow >= 7.0 ? `Confidence: 0.94 · step e04` : "running…"}
+                </div>
+              </div>
+              <div className="frame">
+                <span className="label-cap">Repair status</span>
+                <div className="small mt-4" style={{ fontWeight: 500 }}>
+                  {tNow >= 8.0 ? "Patch drafted" : "—"}
+                </div>
+                <div className="tiny muted mt-2">
+                  {tNow >= 8.0 ? "OnContextCondition + HumanGate + Guardrail" : "awaiting attribution"}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="card-foot">
+            <button className="btn sm brand" onClick={() => onJump(3)}>See violations →</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ContextVariables side panel */}
+      <div className="card">
+        <div className="card-head">
+          <h3>ContextVariables · run_041</h3>
+          <span className="tag">shared state · 7 keys</span>
+        </div>
+        <div className="card-body">
+          <CtxVars tNow={tNow} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   SCREEN 3 — VIOLATION DETAIL
+============================================================ */
+function S3({ clock, activeViolation, onPickViolation, onJump }) {
+  const { tNow } = clock;
+  const v = VIOLATIONS.find(x => x.id === activeViolation) || VIOLATIONS[0];
+  const idx = VIOLATIONS.indexOf(v);
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <div className="crumbs">run_041 <span className="sep">/</span> Violations <span className="sep">/</span> {v.id.toUpperCase()}</div>
+          <h1>{v.title}</h1>
+          <div className="row tight mt-8">
+            <span className={`pill ${v.severity === "high" ? "danger" : "warn"}`}>{v.severity.toUpperCase()}</span>
+            <span className="pill">OPEN</span>
+            <span className="pill agent">{v.agent}</span>
+            <span className="pill warn">{v.contract} contract · step {v.step}</span>
+          </div>
+        </div>
+        <div className="row tight">
+          <button className="btn ghost" onClick={() => onPickViolation(VIOLATIONS[Math.max(0, idx-1)].id)}>← prev</button>
+          <button className="btn ghost" onClick={() => onPickViolation(VIOLATIONS[Math.min(VIOLATIONS.length-1, idx+1)].id)}>next →</button>
+          <button className="btn brand" onClick={() => onJump(4)}>Open repair →</button>
+        </div>
+      </div>
+
+      <div className="banner danger">
+        <div className="banner-ic">!</div>
+        <div className="banner-text">
+          <div className="t">{v.observed}</div>
+          <div className="s">Contract Checker flags {v.agent} for violating the {v.contract} contract at step {v.step}.</div>
+        </div>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "1.3fr 1fr" }}>
+        <div className="col">
+          <div className="card">
+            <div className="card-head">
+              <h3>Contract rule · {v.contract}</h3>
+              <span className="tag mono tiny">{v.id} · conf {v.confidence}</span>
+            </div>
+            <div className="card-body">
+              <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="frame expected">
+                  <span className="label-cap" style={{ color: "var(--success)" }}>EXPECTED</span>
+                  <pre className="mono small mt-4">{v.expected}</pre>
+                </div>
+                <div className="frame observed">
+                  <span className="label-cap" style={{ color: "var(--danger)" }}>OBSERVED</span>
+                  <pre className="mono small mt-4" style={{ color: "var(--danger-ink)" }}>{v.observed}</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <h3>Evidence trace</h3>
+              <span className="tag">{v.evidence_event_ids.join(" · ")}</span>
+            </div>
+            <div className="card-body">
+              <div className="code">
+                {v.evidence_event_ids.map(eid => {
+                  const ev = TRACE.find(e => e.id === eid);
+                  if (!ev) return null;
+                  return <span className="hi" key={eid}>{`t=${ev.t.toFixed(2)}  ${ev.type.padEnd(18)}  ${ev.agent}: ${ev.text}`}</span>;
+                })}
+                {v.id === "v03" && (
+                  <span className="ctx">{`  ↳ expected: Critic → Verifier → Reporter`}</span>
+                )}
+              </div>
+              <div className="frame mt-12">
+                <span className="label-cap">ContextVariables snapshot @ {v.step}</span>
+                <CtxVars tNow={v.appearsAt + 0.01} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col">
+          <div className="card">
+            <div className="card-head">
+              <h3>Failure attribution</h3>
+              <span className="tag">Concord · Attribution agent</span>
+            </div>
+            <div className="card-body">
+              <div className="frame observed">
+                <span className="label-cap" style={{ color: "var(--danger)" }}>FAILED AGENT</span>
+                <h2 className="mt-4" style={{ color: "var(--danger-ink)" }}>{v.agent}</h2>
+                <p className="small muted mt-4">{v.contract} contract · step {v.step}</p>
+              </div>
+              <div className="grid mt-12" style={{ gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div className="metric warn">
+                  <span className="k">Failed step</span>
+                  <span className="v sm">{v.step}</span>
+                  <span className="x">{v.contract} check</span>
+                </div>
+                <div className="metric ok">
+                  <span className="k">Confidence</span>
+                  <span className="v">{v.confidence}</span>
+                  <span className="x">trace cross-check</span>
+                </div>
+              </div>
+              <div className="frame mt-12">
+                <span className="label-cap">Diagnostic reasoning</span>
+                <p className="small mt-4">{v.observed} The {v.contract} contract requires: {v.expected}</p>
+              </div>
+            </div>
+            <div className="card-foot">
+              <button className="btn brand" onClick={() => onJump(4)}>See suggested repair →</button>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-head"><h3>All violations · run_041</h3></div>
+            <div className="card-body tight">
+              <ViolationsList tNow={TOTAL_T} activeId={v.id} onPick={onPickViolation} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   SCREEN 4 — REPAIR
+============================================================ */
+function S4({ onJump }) {
+  const [simulated, setSimulated] = React.useState(false);
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <div className="crumbs">run_041 <span className="sep">/</span> Repair <span className="sep">/</span> patch v1</div>
+          <h1>Suggested repair <span className="muted" style={{ fontWeight: 400 }}>— patch v1</span></h1>
+          <div className="row tight mt-8">
+            <span className="pill agent">Repair agent</span>
+            <span className="pill ok">conf 0.91</span>
+            <span className="pill warn">3 AG2 primitives</span>
+          </div>
+        </div>
+        <div className="row tight">
+          <button className="btn ghost">↺ regen patch</button>
+          <button className="btn brand" onClick={() => { setSimulated(true); onJump(5); }}>Simulate rerun →</button>
+        </div>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "repeat(4,1fr)" }}>
+        <div className="metric ok"><span className="k">Patch confidence</span><span className="v">0.91</span><span className="x">cross-checked</span></div>
+        <div className="metric"><span className="k">Primitives touched</span><span className="v sm">3</span><span className="x">Handoff · Guardrail · HumanGate</span></div>
+        <div className="metric warn"><span className="k">Fixes violations</span><span className="v sm">3 / 4</span><span className="x">v01, v02, v04</span></div>
+        <div className="metric human"><span className="k">Human approval</span><span className="v sm">REQUIRED</span><span className="x">before apply</span></div>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "1fr 1.5fr" }}>
+        <div className="col">
+          <div className="card">
+            <div className="card-head"><h3>Patched AG2 primitives</h3><span className="muted small">3 changes</span></div>
+            <div className="card-body">
+              {[
+                { prim: "Handoff", desc: "Critic → Verifier (OnContextCondition: always)", icon: "→", c: "agent" },
+                { prim: "Handoff", desc: "Verifier → Reporter (condition: verified_sources_count >= 2)", icon: "→", c: "agent" },
+                { prim: "Guardrail", desc: "Reporter requires citations.length >= 2 before output", icon: "⊘", c: "warn" },
+                { prim: "HumanGate", desc: "ActionAgent blocked until UserProxyAgent approves", icon: "⚿", c: "human" },
+              ].map((p, i) => (
+                <div className="frame mt-8" key={i} style={{ marginTop: i===0?0:8 }}>
+                  <div className="row between">
+                    <div className="row tight">
+                      <span className={`pill ${p.c}`}>{p.prim}</span>
+                    </div>
+                  </div>
+                  <div className="small mt-4">{p.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-head"><h3>Expected impact</h3></div>
+            <div className="card-body">
+              <div className="frame expected">
+                <span className="label-cap" style={{ color: "var(--success)" }}>After patch</span>
+                <p className="small mt-4">{REPAIR.expectedImpact}</p>
+              </div>
+              <div className="row tight mt-12">
+                <span className="pill ok">v01 resolved</span>
+                <span className="pill ok">v02 resolved</span>
+                <span className="pill ok">v04 resolved</span>
+                <span className="pill warn">v03 partial</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <h3>Diff · workflow.py</h3>
+            <span className="muted small">+{REPAIR.diff.filter(l=>l.startsWith("+")).length} / −{REPAIR.diff.filter(l=>l.startsWith("-")).length}</span>
+          </div>
+          <div className="card-body">
+            <div className="code">
+              {REPAIR.diff.map((line, i) => (
+                <span key={i} className={line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : "ctx"}>
+                  {line}
+                </span>
+              ))}
+            </div>
+
+            <div className="grid mt-12" style={{ gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <button className="btn brand" onClick={() => { setSimulated(true); onJump(5); }}>↻ Simulate rerun</button>
+              <button className="btn">Approve for export</button>
+              <button className="btn ghost">Request revision</button>
+              <button className="btn ghost">view raw diff</button>
+            </div>
+
+            <div className="frame mt-12 expected">
+              <div className="row between">
+                <span className="label-cap" style={{ color: "var(--success)" }}>Simulated rerun preview</span>
+                <span className="pill ok">3 / 4 violations resolved</span>
+              </div>
+              <div className="grid mt-8" style={{ gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <ul className="spec">
+                  <li className="dot">Critic → Verifier → Reporter (correct route)</li>
+                  <li className="dot">verified_sources_count = 4 (was 0)</li>
+                  <li className="dot">DaytonaCodeExecutor called once</li>
+                </ul>
+                <ul className="spec">
+                  <li className="dot">Reporter passed citation guardrail</li>
+                  <li className="q">approval_status awaiting human (expected)</li>
+                  <li className="x">v03 routing still flags 1 minor warn</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   SCREEN 5 — REGRESSION TEST
+============================================================ */
+function S5({ onJump }) {
+  const [daytonaRun, setDaytonaRun] = React.useState(false);
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <div className="crumbs">run_041 <span className="sep">/</span> Repair <span className="sep">/</span> Regression test</div>
+          <h1>Generated regression test</h1>
+          <div className="row tight mt-8">
+            <span className="pill agent">Regression Test agent</span>
+            <span className="pill">4 assertions</span>
+            <span className="pill ok">simulated · passed</span>
+          </div>
+        </div>
+        <div className="row tight">
+          <button className="btn ghost">↺ regen test</button>
+          <button className="btn ghost">save to repo</button>
+          <button className="btn brand" onClick={() => onJump(6)}>Final report →</button>
+        </div>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "1.6fr 1fr 1fr" }}>
+        <div className="metric"><span className="k">Test name</span><span className="v sm mono">{TEST.name.slice(0,32)}…</span><span className="x">tests/test_run_041_contract.py</span></div>
+        <div className="metric"><span className="k">Assertions</span><span className="v">{TEST.assertions.length}</span><span className="x">all contract rules covered</span></div>
+        <div className="metric ok"><span className="k">Execution</span><span className="v sm">PASSED</span><span className="x">Daytona sandbox · 0.41s</span></div>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "1.4fr 1fr" }}>
+        <div className="card">
+          <div className="card-head"><h3>Test source</h3><span className="muted small">pytest</span></div>
+          <div className="card-body">
+            <div className="code">
+              {TEST.code.split("\n").map((line, i) => {
+                const cls = line.trim().startsWith("assert") ? "hi" : "ctx";
+                return <span key={i} className={cls}>{line}</span>;
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="col">
+          <div className="card">
+            <div className="card-head"><h3>Assertions</h3><span className="pill ok">4 / 4 PASS</span></div>
+            <div className="card-body">
+              <ul className="spec">
+                {TEST.assertions.map((a, i) => <li key={i} className="dot">{a}</li>)}
+              </ul>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <h3>Daytona run output</h3>
+              <button className="btn sm" onClick={() => setDaytonaRun(true)}>Run sandbox</button>
+            </div>
+            <div className="card-body">
+              <div className="code" style={{ minHeight: 80 }}>
+                {daytonaRun
+                  ? TEST.daytona_stdout.map((l, i) => <span key={i} className={l.includes("passed") ? "add" : "ctx"}>{l}</span>)
+                  : <span className="ctx">$ (click "Run sandbox" to execute in Daytona)</span>
+                }
+              </div>
+              {daytonaRun && (
+                <div className="row tight mt-8">
+                  <span className="pill ok">PASSED</span>
+                  <span className="muted tiny">1 test · 0.41s · Daytona sandbox</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-head"><h3>Coverage</h3></div>
+            <div className="card-body">
+              <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                <div className="row tight"><span className="pill ok">passes</span><span className="tiny muted">on patched run</span></div>
+                <div className="row tight"><span className="pill danger">fails</span><span className="tiny muted">on original run</span></div>
+                <div className="row tight"><span className="pill brand">Daytona</span><span className="tiny muted">sandboxed exec</span></div>
+                <div className="row tight"><span className="pill">pending</span><span className="tiny muted">CI integration</span></div>
+              </div>
+              <div className="row tight mt-12">
+                <button className="btn sm">add to CI</button>
+                <button className="btn sm ghost">link to PR</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   SCREEN 6 — FINAL REPORT
+============================================================ */
+function S6({ onJump }) {
+  const [exportJSON, setExportJSON] = React.useState(false);
+  const [exportPDF, setExportPDF] = React.useState(false);
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <div className="crumbs">run_041 <span className="sep">/</span> Final report</div>
+          <h1>Contract Violation Report</h1>
+          <div className="row tight mt-8">
+            <span className="pill brand">run_041 · Literature Review Assistant</span>
+            <span className="pill danger">4 violations</span>
+            <span className="pill ok">repair drafted</span>
+            <span className="pill human">awaiting human</span>
+          </div>
+        </div>
+        <div className="row tight">
+          <button className="btn ghost" onClick={() => setExportPDF(true)}>
+            {exportPDF ? "✓ PDF queued" : "⤓ Export PDF"}
+          </button>
+          <button className="btn ghost" onClick={() => setExportJSON(true)}>
+            {exportJSON ? "✓ JSON prepared" : "⤓ Export JSON"}
+          </button>
+        </div>
+      </div>
+
+      {/* Summary strip */}
+      <div className="card">
+        <div className="card-head"><h3>Executive summary</h3></div>
+        <div className="card-body">
+          <div className="grid" style={{ gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
+            {[
+              ["Run ID",            "run_041"],
+              ["Workflow",          "Literature Review Assistant"],
+              ["Violations",        "4 (3 high, 1 medium)"],
+              ["Repair confidence", "0.91 · patch v1"],
+            ].map(([k, v]) => (
+              <div key={k}>
+                <div className="label-cap">{k}</div>
+                <div className="small mt-4" style={{ fontWeight: 600 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "1.4fr 1fr" }}>
+        <div className="col">
+          {/* Target workflow summary */}
+          <div className="card">
+            <div className="card-head"><h3>Target workflow summary</h3><span className="pill agent">Literature Review Assistant</span></div>
+            <div className="card-body">
+              <div className="observed-run-frame">
+                <div className="observed-run-eyebrow">OBSERVED RUN · run_041 · 4.22s captured</div>
+                <div className="grid" style={{ gridTemplateColumns: "repeat(5,1fr)", gap: 6 }}>
+                  {WORKFLOW.zoneAAgents.map(a => (
+                    <div key={a.n} className="frame" style={{ padding: "6px 8px" }}>
+                      <div className="tiny" style={{ color: "var(--agent)", fontWeight: 600 }}>{a.n} {a.name}</div>
+                      <div className="tiny muted mt-2">{a.contracts.join("·")}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Concord diagnostic summary */}
+          <div className="card">
+            <div className="card-head"><h3>Concord diagnostic summary</h3><span className="pill brand">6 diagnostic agents</span></div>
+            <div className="card-body">
+              <div className="diagnostic-eyebrow">DIAGNOSTIC SESSION · complete</div>
+              <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
+                {WORKFLOW.zoneBAgents.map(a => (
+                  <div key={a.n} className="frame" style={{ padding: "6px 8px", borderColor: "var(--brand-soft)" }}>
+                    <div className="tiny" style={{ color: "var(--brand)", fontWeight: 600 }}>{a.n} {a.name}</div>
+                    <div className="tiny muted mt-2">{a.role}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Violations summary */}
+          <div className="card">
+            <div className="card-head"><h3>Violations summary</h3><span className="pill danger">4 open</span></div>
+            <div className="card-body">
+              <ul className="spec">
+                {VIOLATIONS.map(v => (
+                  <li key={v.id} className="x">
+                    <b>{v.id.toUpperCase()} · {v.severity.toUpperCase()}</b> — {v.title}
+                    <span className="tiny muted" style={{ marginLeft: 8 }}>{v.contract} · conf {v.confidence}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Repair + test */}
+          <div className="card">
+            <div className="card-head">
+              <h3>Recommended repair · patch v1</h3>
+              <span className="pill ok">conf 0.91 · fixes 3/4</span>
+            </div>
+            <div className="card-body">
+              <div className="row tight"><span className="pill warn">OnContextCondition</span><span className="pill warn">Guardrail</span><span className="pill human">HumanGate</span></div>
+              <p className="small muted mt-8">{REPAIR.summary}</p>
+              <button className="btn sm ghost mt-8" onClick={() => onJump(4)}>view full diff</button>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-head"><h3>Regression test status</h3><span className="pill ok">PASSED</span></div>
+            <div className="card-body">
+              <div className="frame">
+                <div className="mono small">{TEST.name}</div>
+                <ul className="spec mt-8">
+                  {TEST.assertions.map((a,i) => <li key={i} className="dot">{a}</li>)}
+                </ul>
+              </div>
+              <div className="row tight mt-8">
+                <span className="pill brand">Daytona sandbox</span>
+                <span className="muted tiny">1 passed · 0.41s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col">
+          {/* HumanGate */}
+          <div className="card">
+            <div className="card-head"><h3>Human approval gate</h3><span className="pill human">UserProxyAgent / HumanGate</span></div>
+            <div className="card-body">
+              <div className="row tight">
+                <div className="avatar">d3</div>
+                <div>
+                  <div className="small"><b>d3v07</b> · pending</div>
+                  <div className="muted tiny">required before patch apply + rerun</div>
+                </div>
+              </div>
+              <textarea
+                className="frame mt-8"
+                rows="3"
+                defaultValue="Looks correct. Confirm DaytonaCodeExecutor permissions before rerun."
+                style={{ width: "100%", resize: "vertical", fontSize: 13, lineHeight: 1.45 }}
+              />
+              <div className="approve-row mt-12">
+                <button className="btn success">✓ Approve</button>
+                <button className="btn">Request revision</button>
+                <button className="btn danger">✕ Reject</button>
+              </div>
+              <p className="muted tiny mt-8">Approval flips repair_status → APPROVED · unlocks rerun</p>
+            </div>
+          </div>
+
+          {/* Export */}
+          <div className="card">
+            <div className="card-head"><h3>Export</h3></div>
+            <div className="card-body">
+              <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <button className="btn" onClick={() => setExportPDF(true)}>
+                  {exportPDF ? "✓ PDF queued" : "⤓ Export PDF"}
+                </button>
+                <button className="btn" onClick={() => setExportJSON(true)}>
+                  {exportJSON ? "✓ JSON prepared" : "⤓ Export JSON"}
+                </button>
+                <button className="btn ghost">⤓ Trace bundle</button>
+                <button className="btn ghost">copy share link</button>
+              </div>
+              <div className="frame mt-12 mono small" style={{ color: "var(--ink-3)" }}>
+                concord://runs/run_041?view=report&patch=v1
+              </div>
+            </div>
+          </div>
+
+          {/* Rerun readiness */}
+          <div className="card">
+            <div className="card-head"><h3>Rerun readiness</h3><span className="pill">not yet</span></div>
+            <div className="card-body">
+              <ul className="spec">
+                <li className="dot">patch validated against contract</li>
+                <li className="dot">regression test simulated · passed</li>
+                <li className="q">human approval — pending</li>
+                <li className="q">CI integration — pending</li>
+              </ul>
+              <button className="btn mt-12 w-full" disabled style={{ justifyContent: "center" }}>
+                ↻ Rerun blocked until approval
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   SCREEN REGISTRY
+============================================================ */
+const SCREENS = [
+  { id: 0, label: "Overview",        short: "00" },
+  { id: 1, label: "Live Run",        short: "01" },
+  { id: 2, label: "Workflow",        short: "02" },
+  { id: 3, label: "Violation",       short: "03" },
+  { id: 4, label: "Repair",          short: "04" },
+  { id: 5, label: "Regression Test", short: "05" },
+  { id: 6, label: "Final Report",    short: "06" },
+];
+
+const FLOW_BEATS = [
+  "Upload run","Show contract","Run diagnostic","Detect violations",
+  "Attribute failure","Suggest repair","Generate test","Approve / revise","Final report"
+];
+
+/* ============================================================
+   APP
+============================================================ */
+function App() {
+  const clock = useDemoClock();
+  const [screen, setScreen] = useState(0);
+  const [activeViolation, setActiveViolation] = useState("v01");
+  const [density, setDensity] = useState("comfortable");
+  const [autopilot, setAutopilot] = useState(true);
+
+  // Autopilot — only advances when enabled; re-enables on loop reset
+  useEffect(() => {
+    if (!autopilot) return;
+    const t = clock.tNow;
+    let target = 0;
+    if (t < 0.1)  target = 0;
+    else if (t < 4.5)  target = 1;
+    else if (t < 5.8)  target = 2;
+    else if (t < 7.2)  target = 3;
+    else if (t < 8.6)  target = 4;
+    else if (t < 9.6)  target = 5;
+    else               target = 6;
+    setScreen(target);
+  }, [Math.floor(clock.tNow * 2), autopilot]);
+
+  // Re-enable autopilot when clock loops back to 0
+  useEffect(() => {
+    if (clock.tNow < 0.15) setAutopilot(true);
+  }, [clock.tNow < 0.15]);
+
+  function jump(n) { setAutopilot(false); setScreen(n); }
+
+  const progress = Math.min(1, clock.tNow / TOTAL_T);
+  const showTransport = screen >= 1 && screen <= 3;
+
+  function beatReached(i) {
+    if (i === 0) return true;
+    if (i === 1) return clock.tNow > 0.05;
+    if (i === 2) return clock.tNow > 4.5;
+    if (i === 3) return clock.tNow > 5.5;
+    if (i === 4) return clock.tNow > 6.8;
+    if (i === 5) return clock.tNow > 8.0;
+    if (i === 6) return clock.tNow > 9.0;
+    if (i === 7) return clock.tNow > 9.5;
+    if (i === 8) return clock.tNow > 9.8;
+    return false;
+  }
+
+  const currentBeat = (() => {
+    const t = clock.tNow;
+    if (t < 0.05) return 0;
+    if (t < 4.5)  return 1;
+    if (t < 5.5)  return 2;
+    if (t < 6.8)  return 3;
+    if (t < 8.0)  return 4;
+    if (t < 9.0)  return 5;
+    if (t < 9.5)  return 6;
+    if (t < 9.8)  return 7;
+    return 8;
+  })();
+
+  const screenEl = (() => {
+    const props = { clock, onJump: jump, activeViolation, onPickViolation: setActiveViolation };
+    switch (screen) {
+      case 0: return <S0 {...props} />;
+      case 1: return <S1 {...props} />;
+      case 2: return <S2 {...props} />;
+      case 3: return <S3 {...props} />;
+      case 4: return <S4 {...props} />;
+      case 5: return <S5 {...props} />;
+      case 6: return <S6 {...props} />;
+      default: return <S0 {...props} />;
+    }
+  })();
+
+  return (
+    <div className={`app density-${density}`} style={{ gridTemplateRows: showTransport ? "52px 44px 1fr 40px" : "52px 1fr 40px" }}>
+      {/* TOP BAR */}
+      <header className="top">
+        <div className="brand-mark">
+          <div className="logo">◐</div>
+          <div className="brand-text">
+            <div className="name">Concord <span className="lite">Lite</span></div>
+            <div className="tagline">contract-to-repair · AG2</div>
+          </div>
+        </div>
+
+        <nav className="screen-nav">
+          {SCREENS.map(s => (
+            <button key={s.id} className={`screen-tab ${screen === s.id ? "active" : ""}`} onClick={() => jump(s.id)}>
+              <span className="num">{s.short}</span>
+              <span>{s.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="top-actions">
+          <button
+            className="density-btn"
+            style={autopilot ? { borderColor: "var(--brand)", color: "var(--brand)" } : {}}
+            onClick={() => setAutopilot(a => !a)}
+            title="Toggle autopilot"
+          >
+            {autopilot ? "● autopilot" : "○ autopilot"}
+          </button>
+          <button className="density-btn" onClick={() => setDensity(d => d === "comfortable" ? "compact" : "comfortable")}>
+            {density === "comfortable" ? "compact" : "comfy"}
+          </button>
+          <div className="avatar">d3</div>
+        </div>
+      </header>
+
+      {/* TRANSPORT BAR (screens 1–3) */}
+      {showTransport && (
+        <div className="transport">
+          <button className="play-btn" onClick={() => clock.setPlaying(p => !p)}>
+            {clock.playing ? "❚❚" : "▶"}
+          </button>
+          <div className="t-cur">{clock.tNow.toFixed(2)}s</div>
+          <div className="bar">
+            <div className="bar-fill" style={{ width: `${progress*100}%` }} />
+            {VIOLATIONS.map(v => (
+              <div key={v.id} className="bar-marker" title={v.title}
+                style={{ left: `${(v.appearsAt / TOTAL_T) * 100}%` }} />
+            ))}
+          </div>
+          <div className="t-tot">{TOTAL_T.toFixed(1)}s</div>
+          <div className="speed">
+            {[1, 2, 4].map(s => (
+              <button key={s} className={`sp-btn ${clock.speed === s ? "active" : ""}`} onClick={() => clock.setSpeed(s)}>{s}×</button>
+            ))}
+            <button className="reset-btn" onClick={() => clock.setT(0)}>↺</button>
+          </div>
+          <Sponsors />
+        </div>
+      )}
+
+      {/* MAIN */}
+      <main className="main">{screenEl}</main>
+
+      {/* FLOW RAIL */}
+      <footer className="foot">
+        <div className="flow-rail">
+          {FLOW_BEATS.map((beat, i) => (
+            <React.Fragment key={i}>
+              <button
+                className={`rail-step ${beatReached(i) ? "reached" : ""} ${currentBeat === i ? "current" : ""}`}
+                onClick={() => {
+                  const screenMap = [0,1,2,3,4,5,6,6,6];
+                  jump(screenMap[i] || 0);
+                }}
+              >
+                <span className="dot" />
+                <span>{beat}</span>
+              </button>
+              {i < FLOW_BEATS.length - 1 && (
+                <span className={`rail-gap ${beatReached(i) ? "reached" : ""}`} />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
