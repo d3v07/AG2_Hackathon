@@ -8,12 +8,10 @@ response cannot be parsed.
 """
 import asyncio
 import json
-from autogen import ConversableAgent, UserProxyAgent
+from autogen import ConversableAgent
 from shared.models import RunTrace, ContextSnapshot, Violation
 from zone_b.config import get_llm_config
-
-
-from zone_b.utils import parse_json_body as _parse_json_body
+from zone_b.utils import parse_json_body as _parse_json_body, make_proxy as _make_proxy
 
 
 def _deterministic_failed_step(run_trace: RunTrace, agent_name: str) -> int:
@@ -41,14 +39,7 @@ def _ask_llm_for_attribution(
         max_consecutive_auto_reply=1,
         code_execution_config=False,
     )
-    proxy = UserProxyAgent(
-        name="AttributionProxy",
-        llm_config=False,
-        human_input_mode="NEVER",
-        is_termination_msg=lambda x: True,
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
-    )
+    proxy = _make_proxy("AttributionProxy")
 
     handoff_path = [e.agent for e in run_trace.events]
     violations_summary = [

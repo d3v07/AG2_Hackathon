@@ -1,4 +1,16 @@
 import json
+from autogen import UserProxyAgent
+
+
+def make_proxy(name: str) -> UserProxyAgent:
+    return UserProxyAgent(
+        name=name,
+        llm_config=False,
+        human_input_mode="NEVER",
+        is_termination_msg=lambda x: True,
+        max_consecutive_auto_reply=0,
+        code_execution_config=False,
+    )
 
 
 def parse_json_body(body: str) -> dict:

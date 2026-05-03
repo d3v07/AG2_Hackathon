@@ -5,9 +5,10 @@ the LLM is only used to generate the human-readable narrative summary.
 """
 import asyncio
 import json
-from autogen import ConversableAgent, UserProxyAgent
+from autogen import ConversableAgent
 from shared.models import RunTrace, ContextSnapshot, Violation
 from zone_b.config import get_llm_config
+from zone_b.utils import make_proxy as _make_proxy
 
 
 def _violations_to_dicts(violations: list[Violation]) -> list[dict]:
@@ -46,14 +47,7 @@ def _ask_llm_for_narrative(report_core: dict) -> str:
         max_consecutive_auto_reply=1,
         code_execution_config=False,
     )
-    proxy = UserProxyAgent(
-        name="ReporterProxy",
-        llm_config=False,
-        human_input_mode="NEVER",
-        is_termination_msg=lambda x: True,
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
-    )
+    proxy = _make_proxy("ReporterProxy")
     prompt = (
         "Write a two-paragraph operator narrative for this Contract Violation "
         "Report. No JSON, no markdown headers — plain text only.\n\n"

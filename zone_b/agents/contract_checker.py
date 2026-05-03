@@ -1,8 +1,9 @@
 import asyncio
 import json
-from autogen import ConversableAgent, UserProxyAgent
+from autogen import ConversableAgent
 from shared.models import RunTrace, ContextSnapshot, Violation
 from zone_b.config import get_llm_config
+from zone_b.utils import parse_json_body as _parse_json_body, make_proxy as _make_proxy
 
 
 CONTRACTS = [
@@ -53,14 +54,7 @@ def _generate_violation_text(contract: dict, run_trace: RunTrace, snap: ContextS
         max_consecutive_auto_reply=1,
         code_execution_config=False,
     )
-    user = UserProxyAgent(
-        name="ContractCheckerProxy",
-        llm_config=False,
-        human_input_mode="NEVER",
-        is_termination_msg=lambda x: True,
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
-    )
+    user = _make_proxy("ContractCheckerProxy")
     prompt = (
         f"Contract type: {contract['type']}\n"
         f"Rule: {contract['rule']}\n"
@@ -71,12 +65,7 @@ def _generate_violation_text(contract: dict, run_trace: RunTrace, snap: ContextS
     )
     result = user.initiate_chat(checker, message=prompt, max_turns=1)
     try:
-        body = result.chat_history[-1]["content"].strip()
-        if body.startswith("```"):
-            body = body.split("```")[1]
-            if body.startswith("json"):
-                body = body[4:]
-        data = json.loads(body)
+        data = _parse_json_body(result.chat_history[-1]["content"])
         return data.get("expected", contract["rule"]), data.get("observed", "contract check failed")
     except Exception:
         return contract["rule"], "contract check failed"
