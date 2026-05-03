@@ -2,3 +2,5 @@
 __pycache__/
 *.pyc
 .gstack/
+*.egg-info/
+.DS_Store
