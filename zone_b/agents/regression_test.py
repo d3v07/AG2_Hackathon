@@ -10,12 +10,10 @@ Per issue #2:
 import asyncio
 import json
 import os
-from autogen import ConversableAgent, UserProxyAgent
+from autogen import ConversableAgent
 from shared.models import RunTrace, Violation
 from zone_b.config import get_llm_config
-
-
-from zone_b.utils import parse_json_body as _parse_json_body
+from zone_b.utils import parse_json_body as _parse_json_body, make_proxy as _make_proxy
 
 
 def _ask_llm_for_test(
@@ -36,14 +34,7 @@ def _ask_llm_for_test(
         max_consecutive_auto_reply=1,
         code_execution_config=False,
     )
-    proxy = UserProxyAgent(
-        name="RegressionTestProxy",
-        llm_config=False,
-        human_input_mode="NEVER",
-        is_termination_msg=lambda x: True,
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
-    )
+    proxy = _make_proxy("RegressionTestProxy")
 
     violations_summary = [
         {"type": v.contract_type, "rule": v.rule, "failed_agent": v.failed_agent}

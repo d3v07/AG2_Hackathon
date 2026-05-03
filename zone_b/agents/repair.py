@@ -7,7 +7,7 @@ cannot produce parseable JSON.
 """
 import asyncio
 import json
-from autogen import ConversableAgent, UserProxyAgent
+from autogen import ConversableAgent
 from shared.models import Violation
 from zone_b.config import get_llm_config
 
@@ -23,7 +23,7 @@ PRIMITIVE_MAP: dict[str, str] = {
 SEVERITY_RANK = {"high": 3, "medium": 2, "low": 1}
 
 
-from zone_b.utils import parse_json_body as _parse_json_body
+from zone_b.utils import parse_json_body as _parse_json_body, make_proxy as _make_proxy
 
 
 def _pick_primary(violations: list[Violation]) -> Violation:
@@ -48,14 +48,7 @@ def _ask_llm_for_patch(
         max_consecutive_auto_reply=1,
         code_execution_config=False,
     )
-    proxy = UserProxyAgent(
-        name="RepairProxy",
-        llm_config=False,
-        human_input_mode="NEVER",
-        is_termination_msg=lambda x: True,
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
-    )
+    proxy = _make_proxy("RepairProxy")
     prompt = (
         f"Violation type     : {primary.contract_type}\n"
         f"Rule               : {primary.rule}\n"
