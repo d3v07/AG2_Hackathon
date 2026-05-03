@@ -23,13 +23,7 @@ PRIMITIVE_MAP: dict[str, str] = {
 SEVERITY_RANK = {"high": 3, "medium": 2, "low": 1}
 
 
-def _parse_json_body(body: str) -> dict:
-    body = body.strip()
-    if body.startswith("```"):
-        body = body.split("```")[1]
-        if body.startswith("json"):
-            body = body[4:]
-    return json.loads(body)
+from zone_b.utils import parse_json_body as _parse_json_body
 
 
 def _pick_primary(violations: list[Violation]) -> Violation:

@@ -15,13 +15,7 @@ from shared.models import RunTrace, Violation
 from zone_b.config import get_llm_config
 
 
-def _parse_json_body(body: str) -> dict:
-    body = body.strip()
-    if body.startswith("```"):
-        body = body.split("```")[1]
-        if body.startswith("json"):
-            body = body[4:]
-    return json.loads(body)
+from zone_b.utils import parse_json_body as _parse_json_body
 
 
 def _ask_llm_for_test(
