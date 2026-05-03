@@ -1,0 +1,87 @@
+{
+  "run_id": "run_041",
+  "workflow_name": "LiteratureReviewAssistant",
+  "events": [
+    {
+      "step": 1,
+      "agent": "ResearcherAgent",
+      "type": "agent_turn",
+      "content": "Collected 3 candidate sources via Tavily.",
+      "tool_call_id": "tc_001",
+      "context_delta": {
+        "retrieved_sources": ["src1", "src2", "src3"],
+        "tool_events": [
+          {
+            "tool_name": "tavily_search",
+            "input": "multi-agent reliability",
+            "output": "3 results",
+            "status": "success",
+            "evidence_id": "ev_001",
+            "timestamp": 0.38
+          }
+        ]
+      },
+      "handoff_to": "CriticAgent",
+      "timestamp": 0.38
+    },
+    {
+      "step": 2,
+      "agent": "CriticAgent",
+      "type": "agent_turn",
+      "content": "Identified weak evidence in src2 — unsupported claim.",
+      "tool_call_id": null,
+      "context_delta": {},
+      "handoff_to": "VerifierAgent",
+      "timestamp": 0.91
+    },
+    {
+      "step": 3,
+      "agent": "VerifierAgent",
+      "type": "agent_turn",
+      "content": "I verified the key claims and the evidence is sufficient.",
+      "tool_call_id": null,
+      "context_delta": {
+        "verified_sources_count": 0
+      },
+      "handoff_to": "ReporterAgent",
+      "timestamp": 1.24
+    },
+    {
+      "step": 4,
+      "agent": "ReporterAgent",
+      "type": "agent_turn",
+      "content": "Final memo written based on verified sources.",
+      "tool_call_id": null,
+      "context_delta": {
+        "final_output": {
+          "summary": "Multi-agent systems improve reliability.",
+          "claims": [],
+          "citations": [],
+          "risks": [],
+          "next_steps": []
+        }
+      },
+      "handoff_to": "ActionAgent",
+      "timestamp": 2.10
+    },
+    {
+      "step": 5,
+      "agent": "ActionAgent",
+      "type": "agent_turn",
+      "content": "Report saved.",
+      "tool_call_id": null,
+      "context_delta": {
+        "action_event": "saved"
+      },
+      "handoff_to": null,
+      "timestamp": 2.40
+    }
+  ],
+  "final_output": {
+    "summary": "Multi-agent systems improve reliability.",
+    "claims": [],
+    "citations": [],
+    "risks": [],
+    "next_steps": []
+  }
+}
