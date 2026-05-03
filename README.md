@@ -4,6 +4,24 @@
 
 Concord Lite monitors a multi-agent workflow run, detects when agents violate their behavioural contracts, attributes the root cause to the responsible agent, proposes a repair targeting the correct AG2 primitive, and validates the fix with a sandboxed regression test — all automatically, end-to-end.
 
+> **Live demo:** https://concord-lite.vercel.app/
+> **Pipeline (CLI):** `python run_all.py --fixture`
+
+---
+
+## Demo Path (4 minutes)
+
+1. Open the live mission-control dashboard: **https://concord-lite.vercel.app/**
+2. Walk the 7 screens:
+   - **Overview** — Run #041 stats + animated agent pipeline (▶ REPLAY RUN to play through 12 steps)
+   - **Workflow DAG** — declared topology vs observed path, with skipped guards / missing approvals highlighted
+   - **Agent Trace** — 12-event timeline with FAIL/WARN flags
+   - **Violations** — 4 detected (V-001 evidence, V-002 tool, V-003 routing, V-004 approval). Click a row → jumps to the matching repair patch.
+   - **Repair Patch** — 4 AG2-native primitives (Guardrail, ToolGate, OnContextCondition, UserProxyAgent/HumanGate) shown as before/after diffs
+   - **Regression** — Daytona sandbox terminal log + 4 PASS assertions
+   - **Final Report** — narrative + RERUN READY status flip + APPROVE block
+3. Run the backend pipeline locally: `python run_all.py --fixture` (no API keys needed) — produces the same Contract Violation Report on stdout that drives the dashboard.
+
 ---
 
 ## The Idea
@@ -376,6 +394,20 @@ The LLM is called *after* a check fails — only to produce `expected` / `observ
 │       ├── regression_test.py      LLM test gen + Daytona execution
 │       ├── reporter.py             LLM narrative + report assembly
 │       └── human_gate.py           auto-approves (demo mode)
+│
+├── public/                         frontend (Vercel-deployed mission-control dashboard)
+│   ├── index.html                  self-contained HTML + inline React app + fixture
+│   ├── styles.css                  monospace dark-mode UI tokens
+│   ├── app.jsx                     7-screen React component tree (split-file copy)
+│   └── data.js                     extracted CONCORD_DATA fixture (split-file copy)
+│
+├── api/                            backend HTTP layer (FastAPI; not deployed yet)
+│   ├── index.py                    routes: /api/health, /api/runs, /api/runs/{id}.js, approval
+│   ├── adapter.py                  Zone B report → CONCORD_DATA shape
+│   └── store.py                    in-memory run store seeded with RUN-041
+│
+├── vercel.json                     static-only deploy config
+├── requirements.txt                FastAPI deps (for the api/ layer)
 │
 └── tests/
     ├── conftest.py                 shared fixtures (sample_trace_raw, clean_trace_raw, ...)
