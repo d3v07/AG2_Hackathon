@@ -7,19 +7,19 @@
 <style>
 /* Concord Lite — terminal/instruments aesthetic */
 :root {
-  --bg:        #E8EAF0;
-  --surface:   #FFFFFF;
-  --surface-2: #DDE0EA;
-  --border:    #B8BACE;
-  --border-2:  #8688A4;
-  --gold:      #F1642E;
-  --gold-dim:  #FCDD9D;
-  --sage:      #5F7E37;
-  --brick:     #B83518;
-  --orange:    #C97619;
-  --text:      #1F1F33;
-  --text-2:    #3D3D5A;
-  --text-3:    #6E6E8C;
+  --bg:        #0c0f0a;
+  --surface:   #13160f;
+  --surface-2: #181b13;
+  --border:    #242820;
+  --border-2:  #2e3327;
+  --gold:      #c8b560;
+  --gold-dim:  #8a7a3f;
+  --sage:      #7a9e7e;
+  --brick:     #b85c4a;
+  --orange:    #c4854a;
+  --text:      #d4ceb8;
+  --text-2:    #6b6b58;
+  --text-3:    #4a4a3d;
   --mono: ui-monospace, "SF Mono", "Menlo", "DejaVu Sans Mono", "Consolas", monospace;
 }
 
@@ -35,50 +35,45 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: stretch;
-  background: #1F1F33;
-  border: 1.5px solid #C8CADB;
-  border-bottom-width: 0;
-  box-shadow: 0 1px 0 #C8CADB;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
 }
-.brand { padding: 12px 22px; border-right: 1.5px solid #C8CADB; display: flex; flex-direction: column; gap: 3px; justify-content: center; }
-.brand .mark { color: #F1642E; font-weight: 700; letter-spacing: 0.16em; font-size: 18px; line-height: 1; }
-.brand .sub  { color: #8E8FAC; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; }
+.brand { padding: 10px 18px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 1px; }
+.brand .mark { color: var(--gold); font-weight: 600; letter-spacing: 0.18em; font-size: 12px; }
+.brand .sub  { color: var(--text-3); font-size: 10.5px; letter-spacing: 0.12em; }
 
-.tabs { display: flex; align-items: stretch; padding: 0; }
+.tabs { display: flex; align-items: stretch; padding: 0 6px; }
 .tab {
-  background: transparent; border: 0; padding: 0 18px; height: 100%;
-  color: #B8B9D0; letter-spacing: 0.14em; font-size: 11.5px;
+  background: transparent; border: 0; padding: 0 16px; height: 100%;
+  color: var(--text-2); letter-spacing: 0.14em; font-size: 11.5px;
   text-transform: uppercase; cursor: pointer;
-  border-right: 1.5px solid #C8CADB;
-  border-bottom: 3px solid transparent; margin-bottom: -2px; display: flex; align-items: center; gap: 8px;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; display: flex; align-items: center; gap: 8px;
 }
-.tabs .tab:last-child { border-right: 1.5px solid #C8CADB; }
-.tab:hover { color: #FFFFFF; }
-.tab.active { color: #F1642E; border-bottom-color: #F1642E; }
-.tab .num { color: #6E6F8C; font-size: 10px; }
-.tab.active .num { color: #FCDD9D; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+.tab .num { color: var(--text-3); font-size: 10px; }
+.tab.active .num { color: var(--gold-dim); }
 
-.status-cluster { display: flex; align-items: center; gap: 14px; padding: 0 18px; border-left: 1.5px solid #C8CADB; color: #B8B9D0; }
+.status-cluster { display: flex; align-items: center; gap: 14px; padding: 0 18px; border-left: 1px solid var(--border); }
 .status-line { display: flex; align-items: center; gap: 8px; }
 .status-dot { width: 8px; height: 8px; display: inline-block; }
-.status-dot.fail { background: #FF6B4A; }
-.status-dot.ok   { background: #A8C97A; }
+.status-dot.fail { background: var(--brick); }
+.status-dot.ok   { background: var(--sage); }
 .status-dot.warn { background: var(--orange); }
 .status-dot.idle { background: var(--text-3); }
 .status-text { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; }
-.status-text.fail { color: #FF6B4A; }
-.status-text.ok   { color: #A8C97A; }
+.status-text.fail { color: var(--brick); }
+.status-text.ok   { color: var(--sage); }
 .cursor { display: inline-block; width: 7px; height: 13px; background: var(--gold); margin-left: 2px; vertical-align: -2px; animation: blink 1.05s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
 .meta-strip {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  background: var(--surface-2);
-  border-bottom: 1.5px solid var(--text-2);
+  border-bottom: 1px solid var(--border);
   font-size: 11px;
 }
-.meta-cell { padding: 8px 14px; border-right: 1.5px solid var(--text-2); display: flex; gap: 10px; align-items: baseline; }
+.meta-cell { padding: 7px 14px; border-right: 1px solid var(--border); display: flex; gap: 10px; align-items: baseline; }
 .meta-cell:last-child { border-right: 0; }
 .meta-cell .lbl { color: var(--text-3); letter-spacing: 0.14em; text-transform: uppercase; font-size: 10px; }
 .meta-cell .val { color: var(--text); }
@@ -87,7 +82,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .main { flex: 1; padding: 18px 22px 40px; max-width: 1480px; width: 100%; margin: 0 auto; }
 .section-head {
   display: flex; align-items: baseline; justify-content: space-between;
-  border-bottom: 1.5px solid var(--text-2); padding-bottom: 8px; margin-bottom: 14px;
+  border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 14px;
 }
 .section-head h2 { font-size: 12px; margin: 0; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text); font-weight: 600; }
 .section-head .right { color: var(--text-3); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; }
@@ -99,14 +94,12 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 /* ---------- Cards / blocks ---------- */
 .card {
   background: var(--surface);
-  border: 1.5px solid var(--text-2);
-  box-shadow: 0 1px 0 rgba(31, 31, 51, 0.04);
+  border: 1px solid var(--border);
   border-radius: 2px;
 }
 .card-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 12px; border-bottom: 1.5px solid var(--text-2);
-  background: var(--surface-2);
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
   font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-2);
 }
 .card-head .right { color: var(--text-3); }
@@ -115,9 +108,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 /* ---------- Stat blocks (Overview) ---------- */
 .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .stat {
-  background: var(--surface); border: 1.5px solid var(--text-2);
+  background: var(--surface); border: 1px solid var(--border);
   padding: 14px 16px; position: relative;
-  box-shadow: 0 1px 0 rgba(31, 31, 51, 0.04);
 }
 .stat .lbl { color: var(--text-2); font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; }
 .stat .num { font-size: 38px; font-weight: 600; color: var(--text); margin-top: 4px; letter-spacing: -0.01em; line-height: 1; }
@@ -125,7 +117,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .stat .num.brick { color: var(--brick); }
 .stat .num.sage  { color: var(--sage); }
 .stat .delta { color: var(--text-3); font-size: 10.5px; margin-top: 6px; letter-spacing: 0.1em; }
-.stat-accent { position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+.stat-accent { position: absolute; top: 0; left: 0; width: 3px; height: 100%; }
 .stat-accent.brick { background: var(--brick); }
 .stat-accent.gold  { background: var(--gold); }
 .stat-accent.sage  { background: var(--sage); }
@@ -165,7 +157,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 }
 .pgraph-controls .ctl:hover { background: var(--surface-2); }
 .pgraph-controls .ctl.primary { border-color: var(--gold); color: var(--gold); }
-.pgraph-controls .ctl.primary:hover { background: rgba(241, 100, 46, 0.08); }
+.pgraph-controls .ctl.primary:hover { background: rgba(200,181,96,0.07); }
 .pgraph-controls .step-readout { font-variant-numeric: tabular-nums; color: var(--text); }
 .pgraph-controls .legend { display: flex; gap: 14px; margin-left: auto; }
 .pgraph-controls .legend .lg { display: flex; align-items: center; gap: 6px; }
@@ -175,7 +167,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .pgraph-controls .legend .pass { background: var(--sage); }
 .pgraph-controls .legend .fail { background: var(--brick); }
 
-.pgraph-svg { display: block; width: 100%; height: 270px; background: var(--bg); }
+.pgraph-svg { display: block; width: 100%; height: 240px; background: var(--bg); }
 .pgraph-svg .edge { stroke: var(--border-2); stroke-width: 1; fill: none; }
 .pgraph-svg .edge.active { stroke: var(--gold); stroke-width: 1.5; }
 .pgraph-svg .edge.pass { stroke: var(--sage); stroke-width: 1; }
@@ -212,47 +204,12 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .pgraph-foot .cell .ag { color: var(--text); font-size: 11px; letter-spacing: 0.04em; }
 .pgraph-foot .cell .ev { color: var(--text-3); letter-spacing: 0.16em; text-transform: uppercase; font-size: 9.5px; }
 
-/* ---------- Pipeline traveler (context envelope) ---------- */
-.pgraph-svg .traveler-rect {
-  fill: var(--bg);
-  stroke: var(--gold);
-  stroke-width: 1.5;
-}
-.pgraph-svg .traveler-glow {
-  fill: var(--gold);
-  opacity: 0.18;
-}
-.pgraph-svg .traveler-label {
-  fill: var(--gold);
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-.pgraph-svg .traveler-tail {
-  stroke: var(--gold);
-  stroke-width: 1;
-  fill: none;
-  opacity: 0.5;
-}
-.pgraph-svg .traveler-pulse {
-  fill: none;
-  stroke: var(--gold);
-  stroke-width: 1;
-  opacity: 0.6;
-  animation: travelerPulse 0.9s ease-out infinite;
-}
-@keyframes travelerPulse {
-  0%   { r: 8; opacity: 0.6; }
-  100% { r: 22; opacity: 0; }
-}
-
-
+/* ---------- Tables ---------- */
 .tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .tbl thead th {
-  text-align: left; color: var(--text); font-weight: 600;
+  text-align: left; color: var(--text-3); font-weight: 500;
   letter-spacing: 0.16em; text-transform: uppercase; font-size: 10px;
-  padding: 8px 10px; border-bottom: 1.5px solid var(--text-2); background: var(--surface-2);
+  padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--bg);
 }
 .tbl tbody td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text); }
 .tbl tbody tr:hover td { background: var(--surface-2); }
@@ -289,10 +246,10 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 /* ---------- Violations screen ---------- */
 .viol-row {
   display: grid; grid-template-columns: 4px 90px 110px 1fr 1.4fr 200px 90px;
-  border: 1.5px solid var(--text-2); border-bottom: 0; background: var(--surface);
+  border: 1px solid var(--border); border-bottom: 0; background: var(--surface);
   align-items: stretch; cursor: pointer;
 }
-.viol-list .viol-row:last-child { border-bottom: 1.5px solid var(--text-2); }
+.viol-list .viol-row:last-child { border-bottom: 1px solid var(--border); }
 .viol-row:hover { background: var(--surface-2); }
 .viol-row .sev-bar { background: var(--brick); }
 .viol-row.med .sev-bar { background: var(--orange); }
@@ -308,109 +265,6 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .viol-row .where { color: var(--text); font-size: 11.5px; }
 .viol-row .where .step { color: var(--gold); }
 .viol-row .where .agent { color: var(--text); }
-
-/* ---------- Repair DAG (mini graphs above each diff) ---------- */
-.rdag-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
-.rdag-card { border: 1px solid var(--border); background: var(--surface); }
-.rdag-head {
-  display: grid; grid-template-columns: 90px 1fr 200px 110px;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-}
-.rdag-head > div { padding: 12px 14px; border-right: 1px solid var(--border); }
-.rdag-head > div:last-child { border-right: 0; }
-.rdag-head .id { color: var(--text-2); letter-spacing: 0.18em; font-size: 11px; }
-.rdag-head .ctitle { color: var(--text); font-size: 12.5px; }
-.rdag-head .prim {
-  color: var(--gold);
-  border: 1px solid var(--gold-dim);
-  padding: 4px 8px;
-  letter-spacing: 0.14em; font-size: 10.5px; text-transform: uppercase;
-  display: inline-block;
-}
-.rdag-body { padding: 14px 14px 0; }
-.rdag-svg { display: block; width: 100%; height: 130px; background: var(--bg); }
-.rdag-controls {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px; border-top: 1px solid var(--border); margin-top: 10px;
-}
-.rdag-controls .status {
-  font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase;
-  color: var(--gold);
-}
-.rdag-controls .status.applied { color: var(--sage); }
-.rdag-btn {
-  background: transparent; border: 1px solid var(--gold);
-  color: var(--gold); padding: 7px 14px; cursor: pointer;
-  letter-spacing: 0.14em; font-size: 10.5px; text-transform: uppercase;
-  transition: background 0.12s ease;
-}
-.rdag-btn:hover { background: rgba(241, 100, 46, 0.08); }
-.rdag-btn:disabled { cursor: default; }
-.rdag-btn.applying {
-  border-color: var(--gold-dim); color: var(--gold-dim);
-  animation: rdagBtnPulse 0.8s ease-in-out infinite;
-}
-.rdag-btn.applied {
-  border-color: var(--sage); color: var(--sage);
-  background: rgba(107, 138, 63, 0.08);
-}
-@keyframes rdagBtnPulse { 50% { opacity: 0.5; } }
-
-/* SVG element classes for RepairDAG */
-.rdag-svg .n-rect { stroke-width: 1; }
-.rdag-svg .n-rect.fail { fill: #FCE8E2; stroke: var(--brick); stroke-width: 1.5; }
-.rdag-svg .n-rect.pass { fill: #EEF1E2; stroke: var(--sage); stroke-width: 1.5; }
-.rdag-svg .n-rect.fix  { fill: #FFEFD9; stroke: var(--gold); stroke-width: 1.5; }
-.rdag-svg .n-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; }
-.rdag-svg .n-label.fail { fill: var(--brick); }
-.rdag-svg .n-label.pass { fill: var(--sage); }
-.rdag-svg .n-label.fix  { fill: var(--gold); }
-.rdag-svg .n-sub { font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
-.rdag-svg .n-sub.fail { fill: #9C2A14; }
-.rdag-svg .n-sub.pass { fill: #4F6A2C; }
-.rdag-svg .n-sub.fix  { fill: #A04A12; }
-.rdag-svg .n-status.fail { fill: var(--brick); }
-.rdag-svg .n-status.pass { fill: var(--sage); }
-.rdag-svg .e-line.broken {
-  stroke: var(--brick); stroke-width: 1; fill: none;
-  stroke-dasharray: 4 3;
-}
-.rdag-svg .e-line.applying {
-  stroke: var(--gold); stroke-width: 1; fill: none; opacity: 0.5;
-}
-.rdag-svg .e-line.applied {
-  stroke: var(--sage); stroke-width: 1; fill: none;
-}
-.rdag-svg .e-label {
-  font-family: var(--mono); font-size: 9px;
-  letter-spacing: 0.08em; text-transform: uppercase;
-}
-.rdag-svg .e-label.broken { fill: var(--brick); }
-.rdag-svg .e-label.applied { fill: var(--sage); }
-.rdag-svg .e-label.applying { fill: var(--gold-dim); }
-.rdag-svg .fix-pulse { animation: rdagFixPulse 0.8s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
-@keyframes rdagFixPulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.4; }
-}
-
-.rdag-banner {
-  display: grid; grid-template-columns: 1fr auto;
-  align-items: center; gap: 14px;
-  background: #EEF1E2; border: 1px solid var(--sage);
-  padding: 14px 18px;
-  margin-bottom: 18px;
-}
-.rdag-banner .head { color: var(--sage); letter-spacing: 0.14em; font-size: 12px; text-transform: uppercase; }
-.rdag-banner .sub  { color: #4F6A2C; letter-spacing: 0.14em; font-size: 10.5px; text-transform: uppercase; margin-top: 4px; }
-.rdag-banner .go {
-  background: transparent; border: 1px solid var(--sage);
-  color: var(--sage); padding: 9px 16px; cursor: pointer;
-  letter-spacing: 0.14em; font-size: 11px; text-transform: uppercase;
-  transition: background 0.12s ease;
-}
-.rdag-banner .go:hover { background: rgba(107, 138, 63, 0.12); }
 
 /* ---------- Patch / diff ---------- */
 .patch-block { border: 1px solid var(--border); background: var(--surface); margin-bottom: 14px; }
@@ -433,8 +287,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .diff .pane.rem .line { color: var(--text); }
 .diff .pane.rem .line::before { content: "-"; position: absolute; left: 14px; color: var(--brick); }
 .diff .pane.add .line::before { content: "+"; position: absolute; left: 14px; color: var(--sage); }
-.diff .pane.rem .line { background: rgba(199, 58, 31, 0.06); }
-.diff .pane.add .line { background: rgba(107, 138, 63, 0.10); }
+.diff .pane.rem .line { background: rgba(184, 92, 74, 0.05); }
+.diff .pane.add .line { background: rgba(122, 158, 126, 0.05); }
 
 /* ---------- Terminal ---------- */
 .term {
@@ -466,7 +320,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
   letter-spacing: 0.18em; text-transform: uppercase; font-size: 11px;
   border-radius: 0;
 }
-.btn:hover { background: rgba(241, 100, 46, 0.08); }
+.btn:hover { background: rgba(200, 181, 96, 0.07); }
 .btn.ghost { border-color: var(--border-2); color: var(--text); }
 .btn.ghost:hover { background: var(--surface-2); }
 .btn-row { display: flex; gap: 10px; padding: 14px; }
@@ -490,92 +344,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .contracts-list .ctype { color: var(--text); letter-spacing: 0.16em; font-size: 10.5px; text-transform: uppercase; }
 .contracts-list .rule { color: var(--text-2); font-size: 11.5px; }
 
-/* ---------- Workflow DAG screen ---------- */
-.dag-wrap { background: var(--surface); border: 1px solid var(--border); }
-.dag-head {
-  display: flex; align-items: center; gap: 14px;
-  padding: 10px 14px; border-bottom: 1px solid var(--border);
-  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-2);
-}
-.dag-head .legend { display: flex; gap: 14px; margin-left: auto; align-items: center; }
-.dag-head .legend .lg { display: flex; align-items: center; gap: 6px; font-size: 10px; }
-.dag-head .legend .sq { width: 9px; height: 9px; display: inline-block; }
-.dag-head .legend .sq.ok    { background: var(--sage); }
-.dag-head .legend .sq.skip  { background: var(--orange); }
-.dag-head .legend .sq.miss  { background: var(--brick); }
-.dag-head .legend .sq.prop  { background: var(--gold); }
-.dag-head .legend .sq.idle  { background: var(--text-3); }
-
-.dag-svg { display: block; width: 100%; height: 380px; background: var(--bg); }
-.dag-svg .lane { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 4; }
-.dag-svg .edge { stroke: var(--text-3); stroke-width: 1; fill: none; }
-.dag-svg .edge.ok   { stroke: var(--sage); }
-.dag-svg .edge.skip { stroke: var(--orange); stroke-dasharray: 4 3; }
-.dag-svg .edge.miss { stroke: var(--brick); }
-.dag-svg .edge.prop { stroke: var(--gold); stroke-dasharray: 4 3; }
-.dag-svg .node-rect { fill: var(--surface); stroke: var(--text-3); stroke-width: 1; }
-.dag-svg .node-rect.agent  { stroke: var(--text-2); }
-.dag-svg .node-rect.tool   { stroke: var(--gold-dim); }
-.dag-svg .node-rect.gate   { stroke: var(--gold); stroke-dasharray: 3 2; }
-.dag-svg .node-rect.manager{ stroke: var(--text); }
-.dag-svg .node-rect.fail   { stroke: var(--brick); }
-.dag-svg .node-rect.pass   { stroke: var(--sage); }
-.dag-svg .node-id    { fill: var(--text-3); font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em; }
-.dag-svg .node-name  { fill: var(--text); font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; }
-.dag-svg .node-role  { fill: var(--text-3); font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; }
-.dag-svg .node-name.fail { fill: var(--brick); }
-.dag-svg .node-name.pass { fill: var(--sage); }
-.dag-svg .edge-label { fill: var(--text-2); font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; }
-.dag-svg .edge-label.skip { fill: var(--orange); }
-.dag-svg .edge-label.miss { fill: var(--brick); }
-.dag-svg .edge-label.prop { fill: var(--gold); }
-
-.routes-tbl .badge { display: inline-block; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; padding: 1px 6px; border: 1px solid; }
-.routes-tbl .badge.ok   { color: var(--sage); border-color: var(--sage); }
-.routes-tbl .badge.skip { color: var(--orange); border-color: var(--orange); }
-.routes-tbl .badge.miss { color: var(--brick); border-color: var(--brick); }
-.routes-tbl .badge.prop { color: var(--gold); border-color: var(--gold); }
-
-/* ---------- Trace mini-graph ---------- */
-.trace-layout { display: grid; grid-template-columns: 220px 1fr; gap: 14px; align-items: start; }
-.minirail {
-  background: var(--surface); border: 1px solid var(--border);
-  position: sticky; top: 14px;
-}
-.minirail .mh {
-  padding: 8px 12px; border-bottom: 1px solid var(--border);
-  color: var(--text-2); letter-spacing: 0.18em; font-size: 10px; text-transform: uppercase;
-}
-.minirail svg { display: block; width: 100%; height: 520px; }
-.minirail .lane-line { stroke: var(--border); stroke-width: 1; }
-.minirail .lane-label { fill: var(--text-3); font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em; }
-.minirail .step { cursor: pointer; }
-.minirail .step rect { stroke-width: 1; }
-.minirail .step.ok   rect { fill: var(--sage); stroke: var(--sage); }
-.minirail .step.fail rect { fill: var(--brick); stroke: var(--brick); }
-.minirail .step.warn rect { fill: var(--orange); stroke: var(--orange); }
-.minirail .step.idle rect { fill: var(--surface); stroke: var(--text-3); }
-.minirail .step.active rect { stroke: var(--gold); stroke-width: 2; }
-.minirail .step-num { fill: var(--text-3); font-family: var(--mono); font-size: 8.5px; }
-.minirail .conn { stroke: var(--border-2); stroke-width: 1; fill: none; }
-.minirail .conn.fail { stroke: var(--brick); }
-.minirail .conn.warn { stroke: var(--orange); }
-
-.trace-row.focused td { background: var(--surface-2) !important; box-shadow: inset 2px 0 0 var(--gold); }
-
-/* ---------- micro-interaction polish ---------- */
-.tab { transition: color 120ms ease, border-color 120ms ease; }
-.btn, .ctl { transition: background 120ms ease, color 120ms ease, border-color 120ms ease; }
-.viol-row { transition: background 120ms ease; }
-.tbl tbody tr { transition: background 120ms ease; }
-.kbd-hint { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; }
-.kbd-hint kbd {
-  font-family: var(--mono); font-size: 10px;
-  border: 1px solid var(--border-2); padding: 1px 6px; color: var(--text-2);
-  background: var(--surface);
-}
-
-
+/* ---------- misc ---------- */
 .scroll { overflow: auto; }
 .muted { color: var(--text-3); }
 .text-2 { color: var(--text-2); }
@@ -625,71 +394,6 @@ window.CONCORD_DATA = {
     { id: "RPT", name: "ReporterAgent",    steps: 2, status: "FAIL", note: "verified=0" },
     { id: "ACT", name: "ActionAgent",      steps: 1, status: "FAIL", note: "approval=pending" }
   ],
-  // ---------------------------------------------------------------
-  // topology — declared workflow shape; this is what the operator wrote
-  // into the AG2 builder. The DAG screen renders this and overlays the
-  // observed trace on top, surfacing ROUTING violations structurally.
-  //
-  // Schema (stable contract for backend):
-  //   topology.nodes[]: { id, name, role, kind, contracts[] }
-  //     kind: "agent" | "tool" | "gate" | "manager"
-  //     contracts: contract ids that are bound to this node
-  //   topology.edges[]: { from, to, kind, condition?, declared, expected_tool_event? }
-  //     kind: "handoff" | "tool_call" | "side_effect" | "approval"
-  //     declared: whether this edge exists in the user's program
-  //     condition: optional human-readable AG2 OnContextCondition expr
-  //   topology.entry: node id where the run starts
-  // ---------------------------------------------------------------
-  topology: {
-    entry: "MGR",
-    nodes: [
-      { id: "MGR", name: "GroupChatManager", role: "manager",  kind: "manager", contracts: ["C-RTE"] },
-      { id: "RES", name: "ResearcherAgent",  role: "research", kind: "agent",   contracts: [] },
-      { id: "TVL", name: "tavily_search",    role: "tool",     kind: "tool",    contracts: [] },
-      { id: "CRT", name: "CriticAgent",      role: "critique", kind: "agent",   contracts: [] },
-      { id: "VRF", name: "VerifierAgent",    role: "verify",   kind: "agent",   contracts: ["C-TOL"] },
-      { id: "RPT", name: "ReporterAgent",    role: "report",   kind: "agent",   contracts: ["C-EVD","C-SCH"] },
-      { id: "HGT", name: "HumanGate",        role: "approval", kind: "gate",    contracts: ["C-APR"], proposed: true },
-      { id: "ACT", name: "ActionAgent",      role: "side_effect", kind: "agent", contracts: ["C-APR"] }
-    ],
-    edges: [
-      { from: "MGR", to: "RES", kind: "handoff",     declared: true },
-      { from: "RES", to: "TVL", kind: "tool_call",   declared: true },
-      { from: "TVL", to: "RES", kind: "tool_call",   declared: true, returns: true },
-      { from: "RES", to: "CRT", kind: "handoff",     declared: true },
-      { from: "CRT", to: "VRF", kind: "handoff",     declared: true },
-      { from: "VRF", to: "RPT", kind: "handoff",     declared: true,
-        condition: "any tool_event[VerifierAgent].status == ok",
-        expected_tool_event: true },
-      { from: "RPT", to: "ACT", kind: "handoff",     declared: true },
-      { from: "HGT", to: "ACT", kind: "approval",    declared: false, proposed: true,
-        condition: "approval_status == approved" }
-    ]
-  },
-
-  // ---------------------------------------------------------------
-  // routes — observed traversal vs declared. One entry per declared edge
-  // plus any unexpected edges (declared:false, observed:true). Backend can
-  // emit this directly from the trace; UI consumes it as-is.
-  //
-  // Schema:
-  //   { id, from, to, declared, observed, status, contract?, note? }
-  //   status: "ok" | "skipped_guard" | "missing_approval" | "unexpected"
-  // ---------------------------------------------------------------
-  routes: [
-    { id: "R-01", from: "MGR", to: "RES", declared: true, observed: true,  status: "ok" },
-    { id: "R-02", from: "RES", to: "TVL", declared: true, observed: true,  status: "ok",
-      note: "tavily_search returned 7 sources" },
-    { id: "R-03", from: "RES", to: "CRT", declared: true, observed: true,  status: "ok" },
-    { id: "R-04", from: "CRT", to: "VRF", declared: true, observed: true,  status: "ok" },
-    { id: "R-05", from: "VRF", to: "RPT", declared: true, observed: true,  status: "skipped_guard",
-      contract: "C-RTE", note: "handoff fired without satisfying tool_event guard" },
-    { id: "R-06", from: "RPT", to: "ACT", declared: true, observed: true,  status: "missing_approval",
-      contract: "C-APR", note: "ActionAgent invoked with approval_status=pending" },
-    { id: "R-07", from: "HGT", to: "ACT", declared: false, observed: false, status: "unexpected",
-      contract: "C-APR", note: "HumanGate not in program — proposed by P-004" }
-  ],
-
   contracts: [
     { id: "C-EVD", type: "EVIDENCE", rule: "Reporter may write final answer only when verified_sources_count > 0", status: "FAIL" },
     { id: "C-TOL", type: "TOOL",     rule: "Claims of 'verified' / 'searched' / 'checked' require a matching tool_event", status: "FAIL" },
@@ -898,12 +602,11 @@ const D = window.CONCORD_DATA;
 
 const SCREENS = [
   { id: "overview",   num: "01", label: "Overview" },
-  { id: "topology",   num: "02", label: "Workflow DAG" },
-  { id: "trace",      num: "03", label: "Agent Trace" },
-  { id: "violations", num: "04", label: "Violations" },
-  { id: "repair",     num: "05", label: "Repair Patch" },
-  { id: "regression", num: "06", label: "Regression" },
-  { id: "report",     num: "07", label: "Final Report" },
+  { id: "trace",      num: "02", label: "Agent Trace" },
+  { id: "violations", num: "03", label: "Violations" },
+  { id: "repair",     num: "04", label: "Repair Patch" },
+  { id: "regression", num: "05", label: "Regression" },
+  { id: "report",     num: "06", label: "Final Report" },
 ];
 
 function Sq({ kind }) { return <span className={`sq ${kind}`}></span>; }
@@ -1014,30 +717,13 @@ function edgeStateAt(fromIdx, currentStep) {
 function PipelineGraph({ setScreen }) {
   const [step, setStep] = useState(TOTAL_STEPS);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(380); // demo: faster than the original 520ms
-  const [subStep, setSubStep] = useState(1); // 0..1 progress between step-1 and step
 
   useEffect(() => {
     if (!playing) return;
     if (step >= TOTAL_STEPS) { setPlaying(false); return; }
-    const t = setTimeout(() => setStep(s => s + 1), speed);
+    const t = setTimeout(() => setStep(s => s + 1), 520);
     return () => clearTimeout(t);
-  }, [playing, step, speed]);
-
-  // Animate subStep 0 → 1 across each step transition for smooth traveler motion
-  useEffect(() => {
-    setSubStep(0);
-    let raf;
-    const start = performance.now();
-    const dur = playing ? speed : 320;
-    const tick = (now) => {
-      const t = Math.min(1, (now - start) / dur);
-      setSubStep(t);
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [step]);
+  }, [playing, step]);
 
   const replay = () => { setStep(0); setPlaying(true); };
   const togglePlay = () => {
@@ -1046,21 +732,9 @@ function PipelineGraph({ setScreen }) {
   };
   const reset = () => { setPlaying(false); setStep(TOTAL_STEPS); };
 
-  // Stage shortcut: R replays. Ignore if user is typing.
-  useEffect(() => {
-    const onKey = (e) => {
-      const tag = (e.target.tagName || "").toLowerCase();
-      if (tag === "input" || tag === "textarea") return;
-      if (e.key === "r" || e.key === "R") { replay(); }
-      if (e.key === " ") { e.preventDefault(); togglePlay(); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [step, playing]);
-
   // Layout
-  const W = 1200, H = 260;
-  const nodeY = 116;
+  const W = 1200, H = 240;
+  const nodeY = 96;
   const nodeXs = D.agents.map((_, i) => 90 + i * ((W - 180) / (D.agents.length - 1)));
 
   const currentEvent = D.trace.find(e => e.step === step);
@@ -1086,17 +760,6 @@ function PipelineGraph({ setScreen }) {
         <span className="step-readout">STEP {String(step).padStart(2,"0")} / {String(TOTAL_STEPS).padStart(2,"0")}</span>
         <span className="muted" style={{fontSize: 10.5}}>
           {currentEvent ? `${currentEvent.ts}  ${currentEvent.agent}.${currentEvent.type}` : "session not started"}
-        </span>
-        <span className="kbd-hint" style={{marginLeft: 14}}>
-          <kbd>R</kbd> REPLAY <kbd>SPACE</kbd> PLAY
-        </span>
-        <span style={{marginLeft: 10, display: "flex", gap: 4}}>
-          {[{l:"1×",v:520},{l:"2×",v:260},{l:"4×",v:130}].map(s => (
-            <button key={s.l} className="ctl" style={{padding: "3px 8px",
-              borderColor: speed === s.v ? "var(--gold)" : "var(--border-2)",
-              color: speed === s.v ? "var(--gold)" : "var(--text)"}}
-              onClick={() => setSpeed(s.v)}>{s.l}</button>
-          ))}
         </span>
         <span className="legend">
           <span className="lg"><span className="sq idle"></span><span>IDLE</span></span>
@@ -1176,76 +839,6 @@ function PipelineGraph({ setScreen }) {
             {ctxLine.length > 130 ? ctxLine.slice(0,128) + "…" : ctxLine}
           </text>
         )}
-
-        {/* TRAVELER — context envelope flying from MGR → ACT during replay.
-            Position is interpolated from the current step's owning agent into
-            the next event's owning agent. Color flips to brick if a violation
-            fires at this step. */}
-        {step > 0 && step <= TOTAL_STEPS && (() => {
-          const agentIdxOf = (agentName) => {
-            const i = D.agents.findIndex(a => agentName.startsWith(a.name.replace("Agent","")));
-            return i;
-          };
-          const ev = D.trace.find(e => e.step === step) || D.trace[D.trace.length-1];
-          const prevEv = D.trace.find(e => e.step === step - 1);
-          const fromIdx = prevEv ? agentIdxOf(prevEv.agent) : 0;
-          const toIdx = agentIdxOf(ev.agent);
-          // If either agent isn't on the rail (e.g. GroupChatManager step_1),
-          // anchor to first node.
-          const a = fromIdx < 0 ? 0 : fromIdx;
-          const b = toIdx < 0 ? a : toIdx;
-          // Ease-in-out
-          const t = subStep < 0.5 ? 2*subStep*subStep : 1 - Math.pow(-2*subStep+2, 2)/2;
-          const x = nodeXs[a] + (nodeXs[b] - nodeXs[a]) * t;
-          const y = nodeY - 38; // float just above the nodes
-          // Cumulative health: once any prior step has FAILed, traveler stays brick.
-          // WARN tints orange; otherwise gold.
-          const priorFailed = D.trace.slice(0, step).some(e => e.status === "FAIL");
-          const priorWarned = D.trace.slice(0, step).some(e => e.status === "WARN");
-          const isFail = priorFailed || ev.status === "FAIL";
-          const isWarn = !isFail && (priorWarned || ev.status === "WARN");
-          const color = isFail ? "var(--brick)" : isWarn ? "var(--orange)" : "var(--gold)";
-          // Short label of what's traveling
-          const labelMap = {
-            session_start: "INIT",
-            agent_turn:    "TURN",
-            tool_call:     "TOOL",
-            context_write: "WRITE",
-            handoff:       "HANDOFF",
-            side_effect:   "EFFECT",
-          };
-          const flowLabel = labelMap[ev.type] || "CTX";
-          // Tail dots — three faint trailing markers, fading
-          const tailOffsets = [16, 32, 48];
-          return (
-            <g>
-              {/* leader line down to the rail */}
-              <line x1={x} y1={y+10} x2={x} y2={nodeY-22}
-                stroke={color} strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
-              {/* trailing dots */}
-              {tailOffsets.map((dx, i) => {
-                const dir = b >= a ? -1 : 1;
-                const tx = x + dir * dx;
-                if (tx < nodeXs[0] - 20 || tx > nodeXs[nodeXs.length-1] + 20) return null;
-                return (
-                  <rect key={i} x={tx-2} y={y-2} width="4" height="4"
-                    fill={color} opacity={0.35 - i*0.1} />
-                );
-              })}
-              {/* glow square + envelope */}
-              <rect x={x-32} y={y-14} width="64" height="28" className="traveler-glow"
-                style={{fill: color, opacity: 0.18}} />
-              <rect x={x-28} y={y-11} width="56" height="22" className="traveler-rect"
-                style={{stroke: color, fill: "var(--surface)"}} />
-              <text x={x} y={y+4} textAnchor="middle" className="traveler-label"
-                style={{fill: color}}>
-                {flowLabel}
-              </text>
-              {/* subtle pulse */}
-              <circle cx={x} cy={y} className="traveler-pulse" style={{stroke: color}} />
-            </g>
-          );
-        })()}
       </svg>
 
       <div className="pgraph-foot">
@@ -1335,284 +928,8 @@ function Overview({ setScreen }) {
   );
 }
 
-/* ---------------- WORKFLOW DAG ---------------- */
-// Layered layout: place each node in a lane (Y axis) and a column (X axis).
-// Lanes group nodes by role so the topology reads top-to-bottom by stage.
-const DAG_POSITIONS = {
-  MGR: { col: 0, lane: 0 },
-  RES: { col: 1, lane: 1 },
-  TVL: { col: 2, lane: 0 },
-  CRT: { col: 3, lane: 1 },
-  VRF: { col: 4, lane: 1 },
-  RPT: { col: 5, lane: 1 },
-  HGT: { col: 6, lane: 2 },
-  ACT: { col: 6, lane: 1 },
-};
-const LANE_LABELS = ["TOOLS / MANAGER", "AGENT FLOW", "GATES / APPROVALS"];
-
-function routeStatusToCls(s) {
-  return ({ ok: "ok", skipped_guard: "skip", missing_approval: "miss", unexpected: "prop" })[s] || "ok";
-}
-
-function Topology({ setScreen, setSelectedPatch }) {
-  const W = 1240, H = 360;
-  const colW = 150, colX0 = 70;
-  const laneY = [40, 160, 280];
-  const nodeW = 110, nodeH = 56;
-
-  const pos = (id) => {
-    const p = DAG_POSITIONS[id];
-    return { x: colX0 + p.col * colW, y: laneY[p.lane] };
-  };
-
-  // map declared edges → routes for status, fall back to declared-only style
-  const routeByEdge = {};
-  D.routes.forEach(r => { routeByEdge[`${r.from}->${r.to}`] = r; });
-
-  const edgeStatus = (e) => {
-    const r = routeByEdge[`${e.from}->${e.to}`];
-    if (!e.declared && e.proposed) return "prop";
-    if (!r) return "idle";
-    return routeStatusToCls(r.status);
-  };
-
-  const nodeStatus = (n) => {
-    if (n.proposed) return "gate";
-    const ag = D.agents.find(a => a.id === n.id);
-    if (ag) return ag.status === "FAIL" ? "fail" : "pass";
-    return n.kind;
-  };
-
-  // Curved orthogonal-ish path; gentle S-curve
-  const pathFor = (a, b) => {
-    const ax = a.x + nodeW / 2, ay = a.y + nodeH / 2;
-    const bx = b.x - nodeW / 2, by = b.y + nodeH / 2;
-    if (Math.abs(ay - by) < 4) {
-      return `M ${ax} ${ay} L ${bx} ${by}`;
-    }
-    const mx = (ax + bx) / 2;
-    return `M ${ax} ${ay} C ${mx} ${ay}, ${mx} ${by}, ${bx} ${by}`;
-  };
-
-  return (
-    <>
-      <div className="section-head">
-        <h2>Workflow DAG &nbsp;//&nbsp; declared topology vs observed path</h2>
-        <div className="right">{D.topology.nodes.length} nodes &nbsp;&middot;&nbsp; {D.topology.edges.length} edges &nbsp;&middot;&nbsp; {D.routes.filter(r=>r.status!=="ok").length} divergences</div>
-      </div>
-
-      <div className="dag-wrap" style={{marginBottom: 14}}>
-        <div className="dag-head">
-          <span>concord.topology.v1</span>
-          <span className="muted" style={{textTransform: "none", letterSpacing: 0}}>workflow ← {D.run.workflow}</span>
-          <div className="legend">
-            <span className="lg"><span className="sq ok"></span>OK</span>
-            <span className="lg"><span className="sq skip"></span>SKIPPED GUARD</span>
-            <span className="lg"><span className="sq miss"></span>MISSING APPROVAL</span>
-            <span className="lg"><span className="sq prop"></span>PROPOSED (P-004)</span>
-          </div>
-        </div>
-
-        <svg className="dag-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
-          {/* lane backgrounds */}
-          {laneY.map((y, i) => (
-            <g key={i}>
-              <line x1={40} y1={y + nodeH/2} x2={W - 40} y2={y + nodeH/2} className="lane" />
-              <text x={40} y={y - 8} className="node-id">{LANE_LABELS[i]}</text>
-            </g>
-          ))}
-
-          {/* edges */}
-          {D.topology.edges.filter(e => !e.returns).map((e, i) => {
-            const a = pos(e.from), b = pos(e.to);
-            const st = edgeStatus(e);
-            const r = routeByEdge[`${e.from}->${e.to}`];
-            const mid = { x: (a.x + b.x)/2 + nodeW/2, y: (a.y + b.y)/2 + nodeH/2 };
-            const labelText =
-              st === "skip" ? "SKIPPED GUARD"
-              : st === "miss" ? "NO APPROVAL"
-              : st === "prop" ? "PROPOSED"
-              : e.kind.toUpperCase();
-            return (
-              <g key={`e-${i}`}>
-                <path d={pathFor(a, b)} className={`edge ${st}`} markerEnd="url(#arr)" />
-                <text x={mid.x} y={mid.y - 8} textAnchor="middle" className={`edge-label ${st}`}>
-                  {labelText}
-                </text>
-                {r && r.contract && (
-                  <text x={mid.x} y={mid.y + 12} textAnchor="middle" className="edge-label">
-                    {r.contract}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-
-          {/* arrowhead defs — one per color (no gradients, plain strokes) */}
-          <defs>
-            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
-            </marker>
-          </defs>
-
-          {/* nodes */}
-          {D.topology.nodes.map(n => {
-            const p = pos(n.id);
-            const cls = nodeStatus(n);
-            const failed = D.agents.find(a => a.id === n.id && a.status === "FAIL");
-            return (
-              <g key={n.id}
-                 style={{cursor: "pointer"}}
-                 onClick={() => {
-                   if (n.contracts && n.contracts.length) {
-                     // jump to the matching violation/patch when relevant
-                     const v = D.violations.find(v => n.contracts.includes(v.contract));
-                     if (v) {
-                       const patch = D.patches.find(p => p.violation === v.id);
-                       if (patch) setSelectedPatch(patch.id);
-                       setScreen("repair");
-                       return;
-                     }
-                   }
-                   setScreen("trace");
-                 }}>
-                <rect x={p.x - nodeW/2} y={p.y} width={nodeW} height={nodeH}
-                      className={`node-rect ${n.kind} ${cls}`} rx="2" />
-                <text x={p.x} y={p.y + 14} textAnchor="middle" className="node-id">
-                  {n.id} · {n.kind.toUpperCase()}
-                </text>
-                <text x={p.x} y={p.y + 32} textAnchor="middle" className={`node-name ${failed ? "fail" : (cls === "pass" ? "pass" : "")}`}>
-                  {n.name.replace("Agent","")}
-                </text>
-                <text x={p.x} y={p.y + 47} textAnchor="middle" className="node-role">
-                  {n.role.toUpperCase()}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-
-      <div className="card">
-        <div className="card-head">
-          <span>Routes &nbsp;&middot;&nbsp; declared vs observed</span>
-          <span className="right">{D.routes.length} edges &nbsp;&middot;&nbsp; click a divergence row for repair</span>
-        </div>
-        <div className="card-body" style={{padding: 0}}>
-          <table className="tbl routes-tbl">
-            <thead>
-              <tr>
-                <th style={{width: 60}}>ID</th>
-                <th style={{width: 220}}>Edge</th>
-                <th style={{width: 100}}>Declared</th>
-                <th style={{width: 100}}>Observed</th>
-                <th style={{width: 100}}>Contract</th>
-                <th>Note</th>
-                <th style={{width: 160}}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {D.routes.map(r => {
-                const cls = routeStatusToCls(r.status);
-                const v = r.contract && D.violations.find(v => v.contract === r.contract);
-                const clickable = !!v;
-                return (
-                  <tr key={r.id}
-                      className={clickable ? "clickable" : ""}
-                      onClick={() => {
-                        if (!v) return;
-                        const p = D.patches.find(p => p.violation === v.id);
-                        if (p) setSelectedPatch(p.id);
-                        setScreen("repair");
-                      }}>
-                    <td className="text-2">{r.id}</td>
-                    <td><span className="text-gold">{r.from}</span> → <span className="text-gold">{r.to}</span></td>
-                    <td>{r.declared ? "yes" : <span className="text-3">no</span>}</td>
-                    <td>{r.observed ? "yes" : <span className="text-3">no</span>}</td>
-                    <td className="text-2">{r.contract || "—"}</td>
-                    <td className={cls === "miss" || cls === "skip" ? "text-orange" : "text-2"}>
-                      {r.note || "—"}
-                    </td>
-                    <td><span className={`badge ${cls}`}>
-                      {r.status.replace("_", " ").toUpperCase()}
-                    </span></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  );
-}
-
-/* ---------------- TRACE MINI-RAIL ---------------- */
-function TraceMiniRail({ focusedStep, setFocusedStep }) {
-  const lanes = D.agents; // 5 swimlanes
-  const RAIL_H = 520;
-  const PAD_T = 36, PAD_B = 30;
-  const usable = RAIL_H - PAD_T - PAD_B;
-  const stepY = (s) => PAD_T + ((s - 1) / (D.trace.length - 1)) * usable;
-  const laneX = (idx) => 70 + idx * 28;
-  const laneOfAgent = (agentName) => {
-    const ag = lanes.find(a => agentName.startsWith(a.name.replace("Agent","")));
-    return ag ? lanes.indexOf(ag) : -1;
-  };
-
-  return (
-    <div className="minirail">
-      <div className="mh">Trace Rail</div>
-      <svg viewBox={`0 0 200 ${RAIL_H}`} preserveAspectRatio="none">
-        {/* lane verticals */}
-        {lanes.map((a, i) => (
-          <g key={a.id}>
-            <line x1={laneX(i)} y1={PAD_T - 10} x2={laneX(i)} y2={RAIL_H - PAD_B + 10} className="lane-line" />
-            <text x={laneX(i)} y={PAD_T - 16} textAnchor="middle" className="lane-label">{a.id}</text>
-          </g>
-        ))}
-
-        {/* connections between consecutive events */}
-        {D.trace.slice(0, -1).map((e, i) => {
-          const next = D.trace[i + 1];
-          const li = laneOfAgent(e.agent), lj = laneOfAgent(next.agent);
-          if (li < 0 || lj < 0) return null;
-          const cls = next.status === "FAIL" ? "fail" : next.status === "WARN" ? "warn" : "";
-          return (
-            <line key={`c-${i}`}
-              x1={laneX(li)} y1={stepY(e.step)}
-              x2={laneX(lj)} y2={stepY(next.step)}
-              className={`conn ${cls}`} />
-          );
-        })}
-
-        {/* event squares */}
-        {D.trace.map(e => {
-          const li = laneOfAgent(e.agent);
-          if (li < 0) return null;
-          const x = laneX(li), y = stepY(e.step);
-          const cls =
-            e.status === "FAIL" ? "fail" :
-            e.status === "WARN" ? "warn" :
-            e.status === "OK"   ? "ok" : "idle";
-          const focused = focusedStep === e.step;
-          return (
-            <g key={e.step}
-               className={`step ${cls} ${focused ? "active" : ""}`}
-               onClick={() => setFocusedStep(e.step)}>
-              <rect x={x - 5} y={y - 5} width={10} height={10} />
-              <text x={20} y={y + 3} className="step-num">{String(e.step).padStart(2,"0")}</text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
-
+/* ---------------- TRACE ---------------- */
 function Trace() {
-  const [focusedStep, setFocusedStep] = useState(null);
   const renderCtx = (e) => {
     const entries = Object.entries(e.ctx || {});
     return entries.map(([k, v], i) => {
@@ -1631,49 +948,42 @@ function Trace() {
         <h2>Agent Trace &nbsp;//&nbsp; ordered timeline</h2>
         <div className="right">{D.trace.length} events &nbsp;&middot;&nbsp; 1 tool event &nbsp;&middot;&nbsp; 4 violations</div>
       </div>
-      <div className="trace-layout">
-        <TraceMiniRail focusedStep={focusedStep} setFocusedStep={setFocusedStep} />
-        <div className="card">
-          <div className="card-head">
-            <span>events</span>
-            <span className="right">step &nbsp;&middot;&nbsp; ts &nbsp;&middot;&nbsp; agent &nbsp;&middot;&nbsp; type &nbsp;&middot;&nbsp; ctx &nbsp;&middot;&nbsp; status</span>
-          </div>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th style={{width: 36}}>#</th>
-                <th style={{width: 110}}>Timestamp</th>
-                <th style={{width: 180}}>Agent</th>
-                <th style={{width: 140}}>Event</th>
-                <th>Context</th>
-                <th style={{width: 130}}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {D.trace.map(e => (
-                <tr key={e.step}
-                    onClick={() => setFocusedStep(e.step)}
-                    className={`trace-row ${e.status === "FAIL" ? "fail" : e.status === "WARN" ? "warn" : ""} ${focusedStep === e.step ? "focused" : ""}`}
-                    style={{cursor: "pointer"}}>
-                  <td>{String(e.step).padStart(2, "0")}</td>
-                  <td className="ts">{e.ts}</td>
-                  <td><span className="agent">{e.agent}</span></td>
-                  <td><span className="type">{e.type}</span></td>
-                  <td className="ctx">{renderCtx(e)}</td>
-                  <td>
-                    {e.status === "OK"   && <Pill kind="pass">PASS</Pill>}
-                    {e.status === "FAIL" && <Pill kind="fail">FAIL · {e.flag}</Pill>}
-                    {e.status === "WARN" && <Pill kind="warn">WARN · {e.flag}</Pill>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="card">
+        <div className="card-head">
+          <span>events</span>
+          <span className="right">step &nbsp;&middot;&nbsp; ts &nbsp;&middot;&nbsp; agent &nbsp;&middot;&nbsp; type &nbsp;&middot;&nbsp; ctx &nbsp;&middot;&nbsp; status</span>
         </div>
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th style={{width: 36}}>#</th>
+              <th style={{width: 110}}>Timestamp</th>
+              <th style={{width: 180}}>Agent</th>
+              <th style={{width: 140}}>Event</th>
+              <th>Context</th>
+              <th style={{width: 130}}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {D.trace.map(e => (
+              <tr key={e.step} className={`trace-row ${e.status === "FAIL" ? "fail" : e.status === "WARN" ? "warn" : ""}`}>
+                <td>{String(e.step).padStart(2, "0")}</td>
+                <td className="ts">{e.ts}</td>
+                <td><span className="agent">{e.agent}</span></td>
+                <td><span className="type">{e.type}</span></td>
+                <td className="ctx">{renderCtx(e)}</td>
+                <td>
+                  {e.status === "OK"   && <Pill kind="pass">PASS</Pill>}
+                  {e.status === "FAIL" && <Pill kind="fail">FAIL · {e.flag}</Pill>}
+                  {e.status === "WARN" && <Pill kind="warn">WARN · {e.flag}</Pill>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <div style={{marginTop: 12, color: "var(--text-3)", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", display: "flex", justifyContent: "space-between"}}>
-        <span>end of trace &nbsp;&middot;&nbsp; final_output emitted at step 11 &nbsp;&middot;&nbsp; side_effect attempted at step 12</span>
-        <span className="kbd-hint">CLICK <kbd>RAIL</kbd> OR <kbd>ROW</kbd> TO FOCUS</span>
+      <div style={{marginTop: 12, color: "var(--text-3)", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase"}}>
+        end of trace &nbsp;&middot;&nbsp; final_output emitted at step 11 &nbsp;&middot;&nbsp; side_effect attempted at step 12
       </div>
     </>
   );
@@ -1764,261 +1074,13 @@ function Violations({ setScreen, setSelectedPatch }) {
 }
 
 /* ---------------- REPAIR ---------------- */
-
-// Per-patch DAG specs — declarative so the SVG renderer is data-driven
-const REPAIR_DAG_SPECS = {
-  "P-001": {
-    left:  { label: "VerifierAgent", sub: "verified=0",   status: "fail" },
-    right: { label: "ReporterAgent", sub: "ran anyway",   status: "fail" },
-    fix:   { label: "Guardrail",     sub: "verified > 0" },
-    edges: { broken: "handoff · verified=0", a: "handoff", b: "if pass → else route_back" },
-  },
-  "P-002": {
-    left:  { label: "TavilySearch",  sub: "tool_event",   status: "pass" },
-    right: { label: "VerifierAgent", sub: "no gate",      status: "fail" },
-    fix:   { label: "ToolGate",      sub: "last_event=ok" },
-    edges: { broken: "no gate · skipped", a: "tool_event", b: "gated" },
-  },
-  "P-003": {
-    left:  { label: "VerifierAgent", sub: "tool_events=0", status: "fail" },
-    right: { label: "ReporterAgent", sub: "bypassed",      status: "fail" },
-    fix:   { label: "OnContextCondition", sub: "tool_ok check" },
-    edges: { broken: "unconditional handoff", a: "handoff", b: "condition=true" },
-  },
-  "P-004": {
-    left:  { label: "ReporterAgent", sub: "emits output", status: "pass" },
-    right: { label: "ActionAgent",   sub: "approval=pending", status: "fail" },
-    fix:   { label: "HumanGate",     sub: "UserProxyAgent" },
-    edges: { broken: "direct · no gate", a: "output", b: "approved" },
-  },
-};
-
-function RepairMiniDAG({ patchId, state }) {
-  // state: "idle" | "applying" | "applied"
-  const spec = REPAIR_DAG_SPECS[patchId];
-  if (!spec) return null;
-
-  const showFix = state === "applying" || state === "applied";
-  const leftCx = 80, rightCx = 520, fixCx = 300;
-  const agentW = 116, agentH = 44;
-  const fixW = 134, fixH = 36;
-  const rowY = 50; // top of agent rect
-  const fixY = 54; // top of fix rect (slightly inset)
-
-  // left/right node colors depend on state — agents go sage when applied
-  const leftStatus = state === "applied" ? "pass" : spec.left.status;
-  const rightStatus = state === "applied" ? "pass" : spec.right.status;
-  const leftSub  = state === "applied" ? "fixed" : spec.left.sub;
-  const rightSub = state === "applied" ? "fixed" : spec.right.sub;
-
-  // edge classes
-  const edgeBroken = state === "idle";
-  const edgeApplying = state === "applying";
-  const edgeApplied = state === "applied";
-  const edgeClass = edgeBroken ? "broken" : edgeApplying ? "applying" : "applied";
-
-  // arrowhead defs use unique ids per state
-  const arrowId = `rdag-arrow-${patchId}-${state}`;
-  const arrowColor = edgeBroken ? "#C73A1F" : edgeApplied ? "#6B8A3F" : "#F1642E";
-
-  // node rect helper
-  const nodeRect = (cx, status, label, sub) => {
-    const x = cx - agentW / 2;
-    return (
-      <g>
-        <rect className={`n-rect ${status}`} x={x} y={rowY} width={agentW} height={agentH} rx={0} ry={0} />
-        <rect className={`n-status ${status}`} x={x + 6} y={rowY + 6} width={7} height={7} />
-        <text className={`n-label ${status}`} x={cx} y={rowY + 22} textAnchor="middle">{label}</text>
-        <text className={`n-sub ${status}`}   x={cx} y={rowY + 35} textAnchor="middle">{sub}</text>
-      </g>
-    );
-  };
-
-  // edge midpoint y
-  const edgeY = rowY + agentH / 2;
-
-  return (
-    <svg className="rdag-svg" viewBox="0 0 600 130" preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <marker id={arrowId} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
-          <path d="M0,0 L5,3 L0,6 z" fill={arrowColor} />
-        </marker>
-      </defs>
-
-      {/* Edges */}
-      {!showFix && (
-        <g>
-          {/* single broken edge straight across */}
-          <line className={`e-line ${edgeClass}`}
-                x1={leftCx + agentW/2} y1={edgeY}
-                x2={rightCx - agentW/2 - 4} y2={edgeY}
-                markerEnd={`url(#${arrowId})`} />
-          {(() => {
-            const lbl = spec.edges.broken;
-            const cx = (leftCx + rightCx) / 2;
-            // Wrap on " · " separator if present and long
-            if (lbl.length > 18 && lbl.includes(" · ")) {
-              const parts = lbl.split(" · ");
-              return (
-                <text className={`e-label ${edgeClass}`} x={cx} y={edgeY - 14} textAnchor="middle">
-                  <tspan x={cx} dy="0">{parts[0]}</tspan>
-                  <tspan x={cx} dy="10">· {parts.slice(1).join(" · ")}</tspan>
-                </text>
-              );
-            }
-            return (
-              <text className={`e-label ${edgeClass}`} x={cx} y={edgeY - 8} textAnchor="middle">{lbl}</text>
-            );
-          })()}
-        </g>
-      )}
-      {showFix && (
-        <g>
-          {/* left → fix */}
-          <line className={`e-line ${edgeClass}`}
-                x1={leftCx + agentW/2} y1={edgeY}
-                x2={fixCx - fixW/2 - 4} y2={edgeY}
-                markerEnd={`url(#${arrowId})`} />
-          <text className={`e-label ${edgeClass}`}
-                x={(leftCx + agentW/2 + fixCx - fixW/2) / 2}
-                y={edgeY - 8} textAnchor="middle">
-            {spec.edges.a}
-          </text>
-          {/* fix → right */}
-          <line className={`e-line ${edgeClass}`}
-                x1={fixCx + fixW/2} y1={edgeY}
-                x2={rightCx - agentW/2 - 4} y2={edgeY}
-                markerEnd={`url(#${arrowId})`} />
-          {(() => {
-            const lbl = spec.edges.b;
-            const cx = (fixCx + fixW/2 + rightCx - agentW/2) / 2;
-            // Long labels split onto two lines
-            if (lbl.length > 14) {
-              const parts = lbl.split(" → ");
-              if (parts.length === 2) {
-                return (
-                  <text className={`e-label ${edgeClass}`} x={cx} y={edgeY - 14} textAnchor="middle" style={{fontSize: 8.5}}>
-                    <tspan x={cx} dy="0">{parts[0]} →</tspan>
-                    <tspan x={cx} dy="10">{parts[1]}</tspan>
-                  </text>
-                );
-              }
-            }
-            return (
-              <text className={`e-label ${edgeClass}`} x={cx} y={edgeY - 8} textAnchor="middle">{lbl}</text>
-            );
-          })()}
-        </g>
-      )}
-
-      {/* Agents */}
-      {nodeRect(leftCx, leftStatus, spec.left.label, leftSub)}
-      {nodeRect(rightCx, rightStatus, spec.right.label, rightSub)}
-
-      {/* Fix node — only when applying or applied */}
-      {showFix && (
-        <g className={state === "applying" ? "fix-pulse" : ""}>
-          <rect className="n-rect fix"
-                x={fixCx - fixW/2} y={fixY}
-                width={fixW} height={fixH} rx={0} ry={0} />
-          <text className="n-label fix" x={fixCx} y={fixY + 16} textAnchor="middle">{spec.fix.label}</text>
-          <text className="n-sub fix"   x={fixCx} y={fixY + 28} textAnchor="middle">{spec.fix.sub}</text>
-        </g>
-      )}
-    </svg>
-  );
-}
-
-function RepairDAG({ patches, appliedPatches, setAppliedPatches, setScreen }) {
-  const [applying, setApplying] = useState(null); // patchId currently in applying transition
-
-  const stateOf = (id) => {
-    if (applying === id) return "applying";
-    if (appliedPatches.includes(id)) return "applied";
-    return "idle";
-  };
-
-  const onApply = (id) => {
-    if (stateOf(id) !== "idle") return;
-    setApplying(id);
-    setTimeout(() => {
-      setAppliedPatches(prev => prev.includes(id) ? prev : [...prev, id]);
-      setApplying(null);
-    }, 1600);
-  };
-
-  const allApplied = patches.length > 0 && patches.every(p => appliedPatches.includes(p.id));
-
-  return (
-    <>
-      {allApplied && (
-        <div className="rdag-banner">
-          <div>
-            <div className="head">All patches applied — workflow corrected</div>
-            <div className="sub">4 AG2 primitives inserted · ready for regression</div>
-          </div>
-          <button className="go" onClick={() => setScreen("regression")}>Run regression →</button>
-        </div>
-      )}
-      <div className="rdag-stack">
-        {patches.map(p => {
-          const st = stateOf(p.id);
-          const statusText =
-            st === "applying" ? "Zone B patching..." :
-            st === "applied"  ? "Patch applied" :
-                                "Ready to apply";
-          const btnText =
-            st === "applying" ? "Applying..." :
-            st === "applied"  ? "Applied" :
-                                "Apply patch";
-          return (
-            <div key={p.id} className="rdag-card">
-              <div className="rdag-head">
-                <div className="id">{p.id}</div>
-                <div className="ctitle">{p.title}</div>
-                <div><span className="prim">{p.primitive}</span></div>
-                <div>
-                  <Pill kind={st === "applied" ? "pass" : "ok"}>
-                    {st === "applied" ? "APPLIED" : st === "applying" ? "PATCHING" : "READY"}
-                  </Pill>
-                </div>
-              </div>
-              <div className="rdag-body">
-                <RepairMiniDAG patchId={p.id} state={st} />
-              </div>
-              <div className="rdag-controls">
-                <div className={`status ${st === "applied" ? "applied" : ""}`}>{statusText}</div>
-                <button
-                  className={`rdag-btn ${st}`}
-                  disabled={st !== "idle"}
-                  onClick={() => onApply(p.id)}
-                >{btnText}</button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-/* ---------------- REPAIR ---------------- */
-function Repair({ selectedPatch, setSelectedPatch, appliedPatches, setAppliedPatches, setScreen }) {
-  const visiblePatches = D.patches.filter(p => selectedPatch === null || selectedPatch === p.id);
+function Repair({ selectedPatch, setSelectedPatch }) {
   return (
     <>
       <div className="section-head">
         <h2>Repair Patch &nbsp;//&nbsp; AG2-native primitives</h2>
-        <div className="right">{D.patches.length} patches &nbsp;&middot;&nbsp; mapped from {D.violations.length} violations &nbsp;&middot;&nbsp; <span style={{color: appliedPatches.length === D.patches.length ? "var(--sage)" : "var(--gold)"}}>{appliedPatches.length}/{D.patches.length} applied</span></div>
+        <div className="right">{D.patches.length} patches &nbsp;&middot;&nbsp; mapped from {D.violations.length} violations</div>
       </div>
-
-      <RepairDAG
-        patches={visiblePatches}
-        appliedPatches={appliedPatches}
-        setAppliedPatches={setAppliedPatches}
-        setScreen={setScreen}
-      />
-
       <div style={{display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap"}}>
         <button
           className={`btn ${selectedPatch === null ? "" : "ghost"}`}
@@ -2033,9 +1095,10 @@ function Repair({ selectedPatch, setSelectedPatch, appliedPatches, setAppliedPat
         ))}
       </div>
 
-      {visiblePatches.map(p => {
+      {D.patches
+        .filter(p => selectedPatch === null || selectedPatch === p.id)
+        .map(p => {
         const v = D.violations.find(v => v.id === p.violation);
-        const isApplied = appliedPatches.includes(p.id);
         return (
           <div key={p.id} className="patch-block">
             <div className="patch-head">
@@ -2045,7 +1108,7 @@ function Repair({ selectedPatch, setSelectedPatch, appliedPatches, setAppliedPat
                 <div className="muted" style={{fontSize: 11, marginTop: 4}}>fixes <span className="text-brick">{v.id}</span> &nbsp;&middot;&nbsp; {v.type} CONTRACT &nbsp;&middot;&nbsp; failed at step {v.failed_step}</div>
               </div>
               <div className="prim">{p.primitive}</div>
-              <div><Pill kind={isApplied ? "pass" : "ok"}>{isApplied ? "APPLIED" : "READY"}</Pill></div>
+              <div><Pill kind="ok">READY</Pill></div>
             </div>
             <div className="diff">
               <div className="pane rem">
@@ -2229,7 +1292,6 @@ function Report({ setScreen }) {
 function App() {
   const [screen, setScreen] = useState("overview");
   const [selectedPatch, setSelectedPatch] = useState(null);
-  const [appliedPatches, setAppliedPatches] = useState([]);
 
   // when leaving repair screen, clear filter
   useEffect(() => { if (screen !== "repair") setSelectedPatch(null); }, [screen]);
@@ -2240,10 +1302,9 @@ function App() {
       <MetaStrip />
       <main className="main">
         {screen === "overview"   && <Overview setScreen={setScreen} />}
-        {screen === "topology"   && <Topology setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
         {screen === "trace"      && <Trace />}
         {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
-        {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} appliedPatches={appliedPatches} setAppliedPatches={setAppliedPatches} setScreen={setScreen} />}
+        {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} />}
         {screen === "regression" && <Regression />}
         {screen === "report"     && <Report setScreen={setScreen} />}
       </main>

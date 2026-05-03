@@ -5,6 +5,7 @@
 **/.DS_Store
 **/__pycache__
 **/*.pyc
+api
 zone_a
 zone_b
 shared
@@ -12,9 +13,11 @@ tests
 docs
 concord_lite.egg-info
 AG2 continued
+AG2-Final
 concord-lite.html
 run_all.py
 README.md
 pyproject.toml
+requirements.txt
 .claude
 node_modules
