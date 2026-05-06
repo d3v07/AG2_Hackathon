@@ -79,7 +79,7 @@ _FIXTURE_RUN_041: dict[str, Any] = {
     "contracts": [
         {"id": "C-EVD", "type": "EVIDENCE", "rule": "Reporter may write final answer only when verified_sources_count > 0", "status": "FAIL"},
         {"id": "C-TOL", "type": "TOOL", "rule": "Claims of 'verified' / 'searched' / 'checked' require a matching tool_event", "status": "FAIL"},
-        {"id": "C-RTE", "type": "ROUTING", "rule": "Reporter must run after Verifier with a successful tool event", "status": "WARN"},
+        {"id": "C-RTE", "type": "ROUTING", "rule": "Reporter must run after Verifier with a successful tool event", "status": "FAIL"},
         {"id": "C-APR", "type": "APPROVAL", "rule": "ActionAgent requires approval_status == approved", "status": "FAIL"},
         {"id": "C-SCH", "type": "SCHEMA", "rule": "Final output must include summary, claims[], citations[], risks[], next_steps[]", "status": "PASS"},
     ],
@@ -93,7 +93,7 @@ _FIXTURE_RUN_041: dict[str, Any] = {
         {"step": 7, "ts": "14:22:13.004", "agent": "CriticAgent", "type": "handoff", "ctx": {"handoff_to": "VerifierAgent"}, "status": "OK"},
         {"step": 8, "ts": "14:22:13.330", "agent": "VerifierAgent", "type": "agent_turn", "ctx": {"content": "I verified the key claims and the evidence is sufficient."}, "status": "FAIL", "flag": "C-TOL"},
         {"step": 9, "ts": "14:22:13.512", "agent": "VerifierAgent", "type": "context_write", "ctx": {"verified_sources_count": 0}, "status": "FAIL", "flag": "C-EVD"},
-        {"step": 10, "ts": "14:22:13.701", "agent": "VerifierAgent", "type": "handoff", "ctx": {"handoff_to": "ReporterAgent"}, "status": "WARN", "flag": "C-RTE"},
+        {"step": 10, "ts": "14:22:13.701", "agent": "VerifierAgent", "type": "handoff", "ctx": {"handoff_to": "ReporterAgent"}, "status": "FAIL", "flag": "C-RTE"},
         {"step": 11, "ts": "14:22:15.882", "agent": "ReporterAgent", "type": "agent_turn", "ctx": {"final_output": "<memo>", "verified": 0}, "status": "FAIL", "flag": "C-EVD"},
         {"step": 12, "ts": "14:22:18.220", "agent": "ActionAgent", "type": "side_effect", "ctx": {"action": "save_report", "approval_status": "pending"}, "status": "FAIL", "flag": "C-APR"},
     ],

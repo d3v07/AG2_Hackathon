@@ -33,6 +33,23 @@ def _severity_summary(violations: list[Violation]) -> dict:
     return counts
 
 
+def _repair_patches(repair_out: dict) -> list[dict]:
+    patches = repair_out.get("patches")
+    if isinstance(patches, list):
+        return patches
+    if repair_out.get("repair_patch"):
+        return [
+            {
+                "repair_patch": repair_out.get("repair_patch", ""),
+                "affected_primitive": repair_out.get("affected_primitive", ""),
+                "patch_code": repair_out.get("patch_code", ""),
+                "expected_impact": repair_out.get("expected_impact", ""),
+                "confidence": repair_out.get("confidence", 0.0),
+            }
+        ]
+    return []
+
+
 def _ask_llm_for_narrative(report_core: dict) -> str:
     narrator = ConversableAgent(
         name="ReporterAgent",
@@ -84,6 +101,7 @@ async def run_reporter(
         "repair_confidence": repair_out.get("confidence", 0.0),
         "approval_status": approval_status,
         "violations": violation_dicts,
+        "patches": _repair_patches(repair_out),
     }
 
     try:

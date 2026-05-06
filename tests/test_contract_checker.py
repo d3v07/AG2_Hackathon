@@ -112,11 +112,13 @@ class TestContractLambdas:
         assert c["check"](self._trace(), self._snap(approval="rejected")) is False
 
     # contract metadata
-    def test_all_three_contracts_defined(self):
+    def test_expected_contracts_defined(self):
         types = {c["type"] for c in CONTRACTS}
         assert "evidence" in types
         assert "tool" in types
         assert "approval" in types
+        assert "routing" in types
+        assert "schema" in types
 
     def test_all_contracts_have_required_keys(self):
         for c in CONTRACTS:
@@ -127,9 +129,13 @@ class TestContractLambdas:
             assert "check" in c
             assert callable(c["check"])
 
-    def test_all_contracts_high_severity(self):
-        for c in CONTRACTS:
-            assert c["severity"] == "high"
+    def test_contract_severities_match_rules(self):
+        severities = {c["type"]: c["severity"] for c in CONTRACTS}
+        assert severities["evidence"] == "high"
+        assert severities["tool"] == "high"
+        assert severities["approval"] == "high"
+        assert severities["routing"] == "medium"
+        assert severities["schema"] == "medium"
 
 
 # ---------------------------------------------------------------------------
@@ -138,12 +144,12 @@ class TestContractLambdas:
 
 @pytest.mark.integration
 class TestRunContractChecker:
-    def test_finds_3_violations_on_broken_trace(self, sample_trace_raw):
+    def test_finds_4_violations_on_broken_trace(self, sample_trace_raw):
         collected = asyncio.run(run_trace_collector(sample_trace_raw))
         result = run_contract_checker(
             collected["run_trace"], collected["context_snapshot"]
         )
-        assert result["violation_count"] == 3
+        assert result["violation_count"] == 4
 
     def test_returns_correct_keys(self, sample_trace_raw):
         collected = asyncio.run(run_trace_collector(sample_trace_raw))
@@ -160,7 +166,7 @@ class TestRunContractChecker:
         for v in result["violations"]:
             assert isinstance(v, Violation)
 
-    def test_all_three_contract_types_caught(self, sample_trace_raw):
+    def test_all_fixture_contract_types_caught(self, sample_trace_raw):
         collected = asyncio.run(run_trace_collector(sample_trace_raw))
         result = run_contract_checker(
             collected["run_trace"], collected["context_snapshot"]
@@ -169,14 +175,20 @@ class TestRunContractChecker:
         assert "evidence" in types
         assert "tool" in types
         assert "approval" in types
+        assert "routing" in types
 
-    def test_all_violations_high_severity(self, sample_trace_raw):
+    def test_fixture_violation_severities(self, sample_trace_raw):
         collected = asyncio.run(run_trace_collector(sample_trace_raw))
         result = run_contract_checker(
             collected["run_trace"], collected["context_snapshot"]
         )
-        for v in result["violations"]:
-            assert v.severity == "high"
+        severities = {v.contract_type: v.severity for v in result["violations"]}
+        assert severities == {
+            "evidence": "high",
+            "tool": "high",
+            "approval": "high",
+            "routing": "medium",
+        }
 
     def test_severity_summary_correct(self, sample_trace_raw):
         collected = asyncio.run(run_trace_collector(sample_trace_raw))
@@ -184,7 +196,7 @@ class TestRunContractChecker:
             collected["run_trace"], collected["context_snapshot"]
         )
         assert result["severity_summary"]["high"] == 3
-        assert result["severity_summary"]["medium"] == 0
+        assert result["severity_summary"]["medium"] == 1
         assert result["severity_summary"]["low"] == 0
 
     def test_violations_have_non_empty_expected_observed(self, sample_trace_raw):

@@ -6,6 +6,9 @@ from zone_b.config import get_llm_config
 from zone_b.utils import parse_json_body as _parse_json_body, make_proxy as _make_proxy
 
 
+REQUIRED_FINAL_OUTPUT_KEYS = {"summary", "claims", "citations", "risks", "next_steps"}
+
+
 CONTRACTS = [
     {
         "type": "evidence",
@@ -30,7 +33,59 @@ CONTRACTS = [
         "failed_agent": "ActionAgent",
         "check": lambda trace, snap: snap.approval_status == "approved",
     },
+    {
+        "type": "routing",
+        "severity": "medium",
+        "rule": (
+            "ReporterAgent requires a successful VerifierAgent tool event; "
+            "ActionAgent requires HumanGate first"
+        ),
+        "failed_agent": "ReporterAgent",
+        "check": lambda trace, snap: _check_routing_contract(trace),
+    },
+    {
+        "type": "schema",
+        "severity": "medium",
+        "rule": "final_output must include summary, claims, citations, risks, and next_steps",
+        "failed_agent": "ReporterAgent",
+        "check": lambda trace, snap: _check_schema_contract(snap),
+    },
 ]
+
+
+def _has_successful_verifier_tool_event(event) -> bool:
+    if event.agent != "VerifierAgent":
+        return False
+    for tool_event in event.context_delta.get("tool_events") or []:
+        status = getattr(tool_event, "status", None)
+        if status is None and isinstance(tool_event, dict):
+            status = tool_event.get("status")
+        if status in {"success", "ok"}:
+            return True
+    return False
+
+
+def _check_routing_contract(run_trace: RunTrace) -> bool:
+    verifier_tool_seen = False
+    human_gate_seen = False
+
+    for event in sorted(run_trace.events, key=lambda e: e.step):
+        if _has_successful_verifier_tool_event(event):
+            verifier_tool_seen = True
+        if event.agent in {"HumanGate", "HumanGateAgent"}:
+            human_gate_seen = True
+        if event.agent == "ReporterAgent" and not verifier_tool_seen:
+            return False
+        if event.agent == "ActionAgent" and not human_gate_seen:
+            return False
+
+    return True
+
+
+def _check_schema_contract(snap: ContextSnapshot) -> bool:
+    if not isinstance(snap.final_output, dict):
+        return False
+    return REQUIRED_FINAL_OUTPUT_KEYS.issubset(snap.final_output.keys())
 
 
 def _find_failed_step(run_trace: RunTrace, agent_name: str) -> int:
