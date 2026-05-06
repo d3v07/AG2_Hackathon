@@ -3,11 +3,11 @@
 ## Overview
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
-- Phase: Sprint 4 execution
+- Phase: Public landing sequence
 - Branch: feat/sprint-3-foundation
 - Current Sprint: Sprint 4
-- Current Task: #15 per-violation repair patches
-- Last Checkpoint: #15 full gate and review passed locally; local commit recorded.
+- Current Task: Land #12-#15 through production, then main
+- Last Checkpoint: User approved public landing path; push and PR to `production` are next.
 
 ## Sprint Board
 Sprint 3: Foundation
@@ -59,6 +59,7 @@ Sprint 4: Repair and downstream report compatibility
 - #15 AG2 import smoke passed.
 - #15 live demo probe returned HTTP 200.
 - #15 `git diff --check` passed.
+- Public landing path approved: push `feat/sprint-3-foundation`, open PR to `production`, run review/check gate, merge only if clean, verify `production`, then open and check PR from `production` to `main`.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -72,4 +73,4 @@ Sprint 4: Repair and downstream report compatibility
 - Remaining toolchain gaps: `ruff` unavailable, FastAPI unavailable in this Python environment, `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Wait for fresh approval before pushing or creating a PR to `production`.
+Push `feat/sprint-3-foundation` and open a PR to `production`; no force-push and no direct commit to `main`.
