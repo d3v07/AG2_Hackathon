@@ -76,6 +76,13 @@ class TestFallbackTest:
         result = _fallback_test("patch", violations)
         assert len(result["assertions"]) >= 1
 
+    def test_test_code_covers_routing_contract(self):
+        result = _fallback_test("patch", [_v("routing")])
+        assert "ReporterAgent" in result["test_code"]
+        assert "HumanGateAgent" in result["test_code"]
+        assert "routing violation still present" in result["test_code"]
+        assert "routing contract is satisfied post-repair" in result["assertions"]
+
     def test_test_name_is_snake_case(self):
         result = _fallback_test("patch", [_v()])
         assert " " not in result["test_name"]

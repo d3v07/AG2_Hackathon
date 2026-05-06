@@ -20,7 +20,10 @@ WORKFLOW_CONTRACT = {
         {
             "id": "C3",
             "type": "routing",
-            "rule": "ReporterAgent must run after VerifierAgent, not directly after CriticAgent",
+            "rule": (
+                "ReporterAgent must run after VerifierAgent has a successful tool event; "
+                "ActionAgent requires HumanGateAgent first"
+            ),
             "severity": "medium",
         },
         {

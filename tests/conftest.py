@@ -40,7 +40,14 @@ def clean_trace_raw() -> dict:
                 "step": 3, "agent": "VerifierAgent", "type": "agent_turn",
                 "content": "Verified all claims.",
                 "tool_call_id": "tc_002",
-                "context_delta": {"verified_sources_count": 3, "approval_status": "approved"},
+                "context_delta": {
+                    "verified_sources_count": 3,
+                    "approval_status": "approved",
+                    "tool_events": [
+                        {"tool_name": "tavily_search", "input": "q", "output": "r",
+                         "status": "success", "evidence_id": "ev_002", "timestamp": 1.0}
+                    ],
+                },
                 "handoff_to": "ReporterAgent", "timestamp": 1.0
             },
             {
@@ -52,10 +59,16 @@ def clean_trace_raw() -> dict:
                         "claims": ["c1"], "citations": ["r1"], "risks": [], "next_steps": []
                     }
                 },
-                "handoff_to": "ActionAgent", "timestamp": 2.0
+                "handoff_to": "HumanGateAgent", "timestamp": 2.0
             },
             {
-                "step": 5, "agent": "ActionAgent", "type": "agent_turn",
+                "step": 5, "agent": "HumanGateAgent", "type": "agent_turn",
+                "content": "Approved.", "tool_call_id": None,
+                "context_delta": {"approval_status": "approved"},
+                "handoff_to": "ActionAgent", "timestamp": 2.2
+            },
+            {
+                "step": 6, "agent": "ActionAgent", "type": "agent_turn",
                 "content": "Report saved.", "tool_call_id": None,
                 "context_delta": {}, "handoff_to": None, "timestamp": 2.5
             },

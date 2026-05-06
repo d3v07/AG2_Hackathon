@@ -276,7 +276,6 @@ class TestPartialContractFailures:
     def _trace_with_verifier(self, tool_call_id=None) -> RunTrace:
         return _make_run_trace([
             _make_trace_event(3, "VerifierAgent", tool_call_id=tool_call_id),
-            _make_trace_event(5, "ActionAgent"),
         ])
 
     def test_only_evidence_fails(self):

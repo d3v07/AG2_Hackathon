@@ -361,7 +361,7 @@ Two reasons:
 ### Q38: How do you guarantee determinism in contract checks?
 
 Three layers:
-1. **Lambda-based contracts** (`contract_checker.py:9-33`) — pure code, no LLM in the verdict.
+1. **Lambda-based contracts** (`contract_checker.py:9-74`) — pure code, no LLM in the verdict.
 2. **Deterministic primitive map** (`repair.py:15-21`) — `evidence → Guardrail`, `tool → OnContextCondition`, etc. Same violation type, same primitive, every time.
 3. **Templated fallbacks** — when the LLM fails, every agent has a deterministic fallback path. Confidence drops from 0.85 to 0.5, but the report is still produced.
 
@@ -372,7 +372,7 @@ Same trace in → same violations and same primitive recommendations out. The na
 `zone_b/utils.py:parse_json_body()` raises. Each agent's caller catches and falls back:
 - `attribution.py:96-114` — uses the first violation's `failed_agent`, deterministic step lookup
 - `repair.py:97-102` — stub patch comment, confidence = 0.5
-- `regression_test.py:130-132` — calls `_fallback_test()` which returns hard-coded test code that asserts the three core contracts
+- `regression_test.py:161-172` — calls `_fallback_test()` which returns hard-coded test code that asserts the four enforced contracts
 - `reporter.py:68-74` — uses templated narrative
 
 We never crash on a bad LLM turn.
@@ -532,7 +532,7 @@ We use AG2 to repair AG2. That's the dogfood.
 
 ### Q63: What if two contracts disagree?
 
-Can't happen by construction — each contract checks an independent invariant. `evidence` checks `verified_sources_count`; `tool` checks `tool_call_id` presence; `approval` checks `approval_status`. Orthogonal axes. They can ALL fail simultaneously (and in our demo, three of them do), but they can't contradict.
+Can't happen by construction — each contract checks an independent invariant. `evidence` checks `verified_sources_count`; `tool` checks `tool_call_id` presence; `routing` checks trace order; `approval` checks `approval_status`. Orthogonal axes. They can ALL fail simultaneously (and in our demo, four of them do), but they can't contradict.
 
 ### Q64: What if a trace has no violations?
 
@@ -548,7 +548,7 @@ Contract lambdas reference specific agent names (`VerifierAgent`, `ActionAgent`,
 
 ### Q67: How does fallback test code know what to assert?
 
-`_fallback_test:60-79` hard-codes assertions for the three core contracts (`verified_sources_count > 0`, `approval_status == "approved"`, `verifier_tool_call_id`). The fallback assumes the worst case (all three violated) and asserts they're all fixed. If the actual violations are a subset, the fallback over-tests but doesn't under-test.
+`_fallback_test:60-81` hard-codes assertions for the four enforced contracts (`verified_sources_count > 0`, `approval_status == "approved"`, `verifier_tool_call_id`, and ordered Reporter/Action handoffs). The fallback assumes the worst case and asserts they're all fixed. If the actual violations are a subset, the fallback over-tests but doesn't under-test.
 
 ### Q68: Why is the regression test self-contained Python?
 

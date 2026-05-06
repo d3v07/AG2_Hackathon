@@ -132,8 +132,8 @@ TraceCollector → ContractChecker → Attribution → Repair
 - **Output:** `test_name`, `test_code`, `assertions`, `test_status` (pass/fail/error), `stdout`, `sandbox_id`
 - **Two-step:**
   1. `_ask_llm_for_test:19-57` — `ConversableAgent` writes a self-contained Python script that simulates post-repair state and asserts each violation is no longer reachable. Script must print `PASS` or `FAIL: <reason>`. Standard library only.
-  2. `_run_in_daytona:91-117` — creates a fresh Daytona sandbox via `daytona_sdk.Daytona(DaytonaConfig(...)).create()`, runs the test with `sandbox.process.code_run(test_code)`, parses stdout, **always deletes the sandbox in `finally`**.
-- **Hand-rolled fallback** (`_fallback_test:60-79`): if the LLM call or parse fails, we use a known-good test that asserts the three core contracts directly. Means the demo never breaks just because the LLM had a bad turn.
+  2. `_run_in_daytona:98-123` — creates a fresh Daytona sandbox via `daytona_sdk.Daytona(DaytonaConfig(...)).create()`, runs the test with `sandbox.process.code_run(test_code)`, parses stdout, **always deletes the sandbox in `finally`**.
+- **Hand-rolled fallback** (`_fallback_test:60-81`): if the LLM call or parse fails, we use a known-good test that asserts the four enforced contracts directly. Means the demo never breaks just because the LLM had a bad turn.
 - `_parse_status:82-88` is intentionally strict: needs `PASS` and not `FAIL` to count as pass. Anything else is `error`.
 
 ### B6. Reporter (`zone_b/agents/reporter.py`)
@@ -295,14 +295,14 @@ python run_all.py
 #   plus /api/runs/RUN-041 returns the same CONCORD_DATA shape.
 ```
 
-The 226-test pytest suite covers parsing, contract lambdas, primitive map, fallback paths, and Zone A→B integration.
+The 281-test pytest suite covers parsing, contract lambdas, primitive map, fallback paths, and Zone A→B integration.
 
 ---
 
 ## 10. Q&A — Likely Judge Questions
 
 **Q: Why not let the LLM decide if a contract is violated?**
-Because contract violations need to be *deterministic*. If the same trace produces a different violation count on different runs, you can't trust the report. The lambdas in `contract_checker.py:9-33` are pure code; the LLM is only used for the human-readable `expected` / `observed` strings.
+Because contract violations need to be *deterministic*. If the same trace produces a different violation count on different runs, you can't trust the report. The lambdas in `contract_checker.py:9-74` are pure code; the LLM is only used for the human-readable `expected` / `observed` strings.
 
 **Q: Why a separate Attribution agent? Doesn't the contract already name the failed agent?**
 Yes for simple cases. But the agent whose contract *failed* is often downstream of the agent who *caused* the failure. Example: Reporter emits final output without verified sources — Reporter's contract failed, but Verifier is responsible for `verified_sources_count=0`. Attribution reasons over the handoff path to surface the upstream cause.

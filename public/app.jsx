@@ -5,7 +5,7 @@ const D = window.CONCORD_DATA;
 const SCREENS = [
   { id: "overview",   num: "01", label: "Overview" },
   { id: "trace",      num: "02", label: "Agent Trace" },
-  { id: "violations", num: "03", label: "Violations" },
+  { id: "violations", num: "04", label: "Violations" },
   { id: "repair",     num: "04", label: "Repair Patch" },
   { id: "regression", num: "05", label: "Regression" },
   { id: "report",     num: "06", label: "Final Report" },

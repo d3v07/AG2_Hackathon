@@ -63,7 +63,7 @@ Warnings are dependency deprecations from `autogen.fast_depends` and `daytona_sd
 |---|---|---|
 | Zone A live Tavily path | Live when env is loaded; fixture mode bypasses it | `zone_a/agents/researcher.py:45-58` raises if `TAVILY_API_KEY` is absent, then calls `TavilyClient.search` |
 | Zone A fixture path | Working | `run_all.py:102-107` skips Zone A and uses `zone_b/fixtures/sample_trace.json` |
-| Zone B contract checker | Partially live | `zone_b/agents/contract_checker.py:9-33` enforces evidence/tool/approval only |
+| Zone B contract checker | Partially live | `zone_b/agents/contract_checker.py:9-74` enforces evidence/tool/approval/routing; schema remains pending |
 | Zone B repair | Partially live | `zone_b/agents/repair.py:29-31` picks one primary violation; `zone_b/agents/repair.py:83-110` emits one patch |
 | Zone B regression test | Live Daytona path, but verdict can vary | `zone_b/agents/regression_test.py:91-117` creates, runs, and deletes a Daytona sandbox |
 | Dashboard fixture data | Static and demo-shaped | `api/store.py:12-133` seeds `RUN-041`; `public/data.js` also carries fixture data |
@@ -82,19 +82,19 @@ Credential names are present in `.env`; no secret values were read or copied int
 
 ## Exact v0 Gaps Remaining
 
-1. Only three of five declared contracts are enforced in backend code.
+1. Four of five declared contracts are enforced in backend code.
    - Declared workflow contract includes evidence, tool, routing, approval, and schema at `zone_a/workflow_contract.py:4-40`.
-   - Backend `CONTRACTS` contains only evidence, tool, and approval checks at `zone_b/agents/contract_checker.py:9-33`.
-   - Routing and schema are represented in presentation data at `api/adapter.py:19-25` and `public/data.js`, but not as deterministic backend checks yet.
+   - Backend `CONTRACTS` contains evidence, tool, approval, and routing checks in `zone_b/agents/contract_checker.py`.
+   - Schema is represented in presentation data at `api/adapter.py:19-25` and `public/data.js`, but not as deterministic backend behavior yet.
 
-2. Routing contract is not deterministic backend behavior yet.
+2. Routing contract is now deterministic backend behavior.
    - Fixture has VerifierAgent handing off to ReporterAgent with `verified_sources_count=0` at `zone_b/fixtures/sample_trace.json:38-47`.
-   - Dashboard marks routing as `WARN` in fixture data at `public/data.js:33` and `public/data.js:47`.
-   - Sprint #13 should add this as a backend lambda in `zone_b/agents/contract_checker.py` instead of treating it as presentation-only data.
+   - Dashboard marks routing as `FAIL` in fixture data at `public/data.js:33` and `public/data.js:47`.
+   - Sprint #13 added this as a backend lambda in `zone_b/agents/contract_checker.py` instead of treating it as presentation-only data.
 
 3. Schema contract is not deterministic backend behavior yet.
    - Fixture final output currently includes `summary`, `claims`, `citations`, `risks`, and `next_steps` at `zone_b/fixtures/sample_trace.json:56-62` and `zone_b/fixtures/sample_trace.json:80-86`.
-   - Backend does not validate that shape in `zone_b/agents/contract_checker.py:9-33`.
+   - Backend does not validate that shape in `zone_b/agents/contract_checker.py:9-74`.
    - Sprint #14 should add this as a backend lambda and keep the current fixture passing.
 
 4. Repair emits one primary patch, not one patch per violation.
