@@ -64,10 +64,20 @@ def _fallback_test(repair_patch: str, violations: list[Violation]) -> dict:
         "verified_sources_count = 1\n"
         "approval_status = 'approved'\n"
         "verifier_tool_call_id = 'tc_verifier'\n"
+        "final_output = {'summary': 's', 'claims': [], 'citations': [], "
+        "'risks': [], 'next_steps': []}\n"
+        "handoff_path = ['ResearcherAgent', 'CriticAgent', 'VerifierAgent', "
+        "'ReporterAgent', 'HumanGateAgent', 'ActionAgent']\n"
         "try:\n"
         "    assert verified_sources_count > 0, 'evidence violation still present'\n"
         "    assert approval_status == 'approved', 'approval violation still present'\n"
         "    assert verifier_tool_call_id, 'tool violation still present'\n"
+        "    assert handoff_path.index('VerifierAgent') < "
+        "handoff_path.index('ReporterAgent'), 'routing violation still present'\n"
+        "    assert handoff_path.index('HumanGateAgent') < "
+        "handoff_path.index('ActionAgent'), 'routing approval gate still missing'\n"
+        "    assert {'summary', 'claims', 'citations', 'risks', 'next_steps'} <= "
+        "set(final_output), 'schema violation still present'\n"
         "    print('PASS')\n"
         "except AssertionError as e:\n"
         "    print(f'FAIL: {e}')\n"
@@ -86,6 +96,13 @@ def _parse_status(stdout: str) -> str:
     if "FAIL" in out:
         return "fail"
     return "error"
+
+
+def _is_infrastructure_error(stdout: str) -> bool:
+    out = stdout or ""
+    return out.startswith("Daytona credentials missing") or out.startswith(
+        "Daytona error:"
+    )
 
 
 def _run_in_daytona(test_code: str) -> tuple[str, str, str]:
@@ -122,6 +139,13 @@ async def run_regression_test(
     run_trace: RunTrace,
 ) -> dict:
     """Generate a regression test and run it in Daytona."""
+    fallback_used = False
+    fallback_reason = ""
+    generated_test_status = ""
+    generated_stdout = ""
+    generated_sandbox_id = ""
+    generated_test_ran = False
+
     try:
         gen = _ask_llm_for_test(repair_patch, violations, run_trace)
         test_name = gen.get("test_name", "test_repair_resolves_violations")
@@ -134,8 +158,28 @@ async def run_regression_test(
         test_name = fallback["test_name"]
         test_code = fallback["test_code"]
         assertions = fallback["assertions"]
+        fallback_used = True
+        fallback_reason = "generation_error"
 
     stdout, sandbox_id, test_status = _run_in_daytona(test_code)
+    if not fallback_used:
+        generated_test_ran = True
+        generated_test_status = test_status
+        generated_stdout = stdout
+        generated_sandbox_id = sandbox_id
+
+    if (
+        generated_test_ran
+        and test_status != "pass"
+        and not _is_infrastructure_error(stdout)
+    ):
+        fallback = _fallback_test(repair_patch, violations)
+        test_name = fallback["test_name"]
+        test_code = fallback["test_code"]
+        assertions = fallback["assertions"]
+        fallback_used = True
+        fallback_reason = f"generated_test_{test_status}"
+        stdout, sandbox_id, test_status = _run_in_daytona(test_code)
 
     return {
         "test_name": test_name,
@@ -144,6 +188,11 @@ async def run_regression_test(
         "test_status": test_status,
         "stdout": stdout,
         "sandbox_id": sandbox_id,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "generated_test_status": generated_test_status,
+        "generated_stdout": generated_stdout,
+        "generated_sandbox_id": generated_sandbox_id,
     }
 
 

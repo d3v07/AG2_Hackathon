@@ -79,7 +79,7 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 27. **"Contracts are enforced in Zone B's `contract_checker.py` as deterministic Python lambdas. The verdict is pure code — never delegated to an LLM. Same trace, same violations, every time."**
 
-28. **"Today three of five contracts are enforced: evidence, tool, approval. Routing and schema are graph-level invariants — declared but next-sprint enforcement."**
+28. **"Today all five contracts are enforced: evidence, tool, routing, approval, and schema. The fixture fails four of them and passes schema."**
 
 29. **"Why this separation? A workflow can't grade its own homework. Zone A could lie in its narrative; Zone B reads the trace and catches the lie."**
 
@@ -135,8 +135,8 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 **Q: Why a separate Attribution agent?**
 46. **"Because the agent whose contract failed is often downstream of the agent who caused the failure. Reporter emits final output without verified sources — Reporter's contract failed, but Verifier is responsible for `verified_sources_count = 0`. Attribution reasons over the handoff path to surface the upstream cause."**
 
-**Q: Why one repair per run, not per violation?**
-47. **"Two reasons. Violations often share a root cause — fix the upstream one, the downstream ones disappear. And one regression test per repair is bounded; one test per violation explodes Daytona spend. The dashboard intentionally shows what the fully-batched version would look like."**
+**Q: Why keep a primary repair if repairs are per violation?**
+47. **"The backend now emits one repair entry per violation, in trace order. We still keep a primary scalar repair for existing callers; it mirrors the highest-severity patch until the rest of the pipeline moves fully to the plural shape."**
 
 **Q: What happens if the LLM returns garbage?**
 48. **"Every Zone B agent has a deterministic fallback path. We never crash on a bad LLM turn — we mark `confidence=0.5` instead of `0.85` so the operator knows the patch is templated, not LLM-generated."**
@@ -160,9 +160,9 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 ## HONEST CONCESSIONS — say these BEFORE the judge catches them
 
-54. **"Three of five contracts are enforced in code today; routing and schema are declared in Zone A but their lambdas come next sprint."**
+54. **"All five contracts are enforced in code today. The current fixture passes schema, so the demo reports four violations rather than five."**
 
-55. **"The four per-violation patches on the Repair screen are template-driven from a contract-type-to-primitive map; the backend currently emits one primary patch per run. The mapping is real, the diffs are pre-baked for this demo run."**
+55. **"The backend emits four repair entries for the four fixture violations. The Repair screen's visual before/after diffs are still template-driven until the API passthrough work lands."**
 
 56. **"The Workflow DAG topology block is fixture-only today — real implementation parses the operator's AG2 program or a YAML manifest. The dashboard renders what the next-sprint version will produce."**
 

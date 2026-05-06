@@ -77,17 +77,18 @@ class TestStageFunctions:
         msg = asyncio.run(_trace_collector_stage(ctx))
         assert "missing raw_trace" in msg
 
-    def test_contract_checker_stage_finds_three_violations(self, fixture_raw):
+    def test_contract_checker_stage_finds_four_violations(self, fixture_raw):
         ctx = ContextVariables(data={"raw_trace": fixture_raw})
         asyncio.run(_trace_collector_stage(ctx))
         msg = asyncio.run(_contract_checker_stage(ctx))
-        assert ctx.get("violation_count") == 3
-        assert "3 violation" in msg
+        assert ctx.get("violation_count") == 4
+        assert "4 violation" in msg
         violations = ctx.get("violations")
         assert {v.contract_type for v in violations} == {
             "evidence",
             "tool",
             "approval",
+            "routing",
         }
 
     def test_contract_checker_stage_handles_missing_inputs(self):
@@ -115,13 +116,15 @@ class TestStageFunctions:
 
 class TestGroupChatEndToEnd:
     @pytest.mark.integration
-    def test_full_group_chat_produces_three_violations_on_fixture(self):
+    def test_full_group_chat_produces_four_violations_on_fixture(self):
         report = asyncio.run(
             run_diagnostic_group_chat(
                 "zone_b/fixtures/sample_trace.json", interactive=False
             )
         )
-        assert report["violation_count"] == 3
+        assert report["violation_count"] == 4
         assert report["severity_summary"]["high"] == 3
+        assert report["severity_summary"]["medium"] == 1
+        assert len(report["patches"]) == 4
         assert report["failed_agent"] in {"VerifierAgent", "ActionAgent"}
         assert report["approval_status"] == "approved"

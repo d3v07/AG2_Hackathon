@@ -1,7 +1,8 @@
 """Tests for zone_b/agents/regression_test.py — deterministic parts only."""
+import asyncio
 import pytest
 from shared.models import Violation, RunTrace
-from zone_b.agents.regression_test import _parse_status, _fallback_test
+from zone_b.agents.regression_test import _parse_status, _fallback_test, run_regression_test
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +76,19 @@ class TestFallbackTest:
         result = _fallback_test("patch", violations)
         assert len(result["assertions"]) >= 1
 
+    def test_test_code_covers_routing_contract(self):
+        result = _fallback_test("patch", [_v("routing")])
+        assert "ReporterAgent" in result["test_code"]
+        assert "HumanGateAgent" in result["test_code"]
+        assert "routing violation still present" in result["test_code"]
+        assert "routing contract is satisfied post-repair" in result["assertions"]
+
+    def test_test_code_covers_schema_contract(self):
+        result = _fallback_test("patch", [_v("schema")])
+        assert "final_output" in result["test_code"]
+        assert "schema violation still present" in result["test_code"]
+        assert "schema contract is satisfied post-repair" in result["assertions"]
+
     def test_test_name_is_snake_case(self):
         result = _fallback_test("patch", [_v()])
         assert " " not in result["test_name"]
@@ -88,3 +102,66 @@ class TestFallbackTest:
             capture_output=True, text=True, timeout=5
         )
         assert "PASS" in proc.stdout
+
+
+class TestRunRegressionTest:
+    def test_bad_generated_test_uses_deterministic_fallback(self, monkeypatch):
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._ask_llm_for_test",
+            lambda *_: {
+                "test_name": "test_bad_generated",
+                "test_code": "print('FAIL: generated assertion is wrong')",
+                "assertions": ["bad generated assertion"],
+            },
+        )
+        calls = []
+
+        def fake_run_in_daytona(test_code):
+            calls.append(test_code)
+            if "generated assertion is wrong" in test_code:
+                return ("FAIL: generated assertion is wrong", "sb-generated", "fail")
+            return ("PASS", "sb-fallback", "pass")
+
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._run_in_daytona",
+            fake_run_in_daytona,
+        )
+
+        result = asyncio.run(
+            run_regression_test("patch", [_v("evidence")], RunTrace("r", "w", [], None))
+        )
+
+        assert result["test_status"] == "pass"
+        assert result["test_name"] == "test_repair_resolves_violations"
+        assert result["fallback_used"] is True
+        assert result["generated_test_status"] == "fail"
+        assert len(calls) == 2
+
+    def test_daytona_infrastructure_error_does_not_fake_pass(self, monkeypatch):
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._ask_llm_for_test",
+            lambda *_: {
+                "test_name": "test_generated",
+                "test_code": "print('PASS')",
+                "assertions": ["generated assertion"],
+            },
+        )
+        calls = []
+
+        def fake_run_in_daytona(test_code):
+            calls.append(test_code)
+            return ("Daytona credentials missing", "no-sandbox", "error")
+
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._run_in_daytona",
+            fake_run_in_daytona,
+        )
+
+        result = asyncio.run(
+            run_regression_test("patch", [_v("evidence")], RunTrace("r", "w", [], None))
+        )
+
+        assert result["test_status"] == "error"
+        assert result["fallback_used"] is False
+        assert result["generated_test_status"] == "error"
+        assert len(calls) == 1

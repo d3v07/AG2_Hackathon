@@ -7,7 +7,7 @@ Covers gaps not addressed by existing test files:
 - zone_b/agents/repair.py: _pick_primary, PRIMITIVE_MAP completeness
 - zone_b/agents/regression_test.py: _parse_status edge cases, fallback path
 - zone_b/agents/attribution.py: fallback path with multiple violations
-- Contract checker: 1-of-3 and 2-of-3 partial failures, boundary values
+- Contract checker: partial failures, boundary values
 - Zone A→B data flow: context_delta folding, unknown keys, minimal trace
 - run_all.py: missing fixture file exit code
 """
@@ -64,7 +64,8 @@ def _make_run_trace(events=None) -> RunTrace:
 def _make_context_snapshot(**overrides) -> ContextSnapshot:
     defaults = dict(
         retrieved_sources=[], verified_sources_count=0, tool_events=[],
-        approval_status="pending", failed_agent=None, failed_step=None, final_output=None,
+        approval_status="pending", failed_agent=None, failed_step=None,
+        final_output={"summary": "s", "claims": [], "citations": [], "risks": [], "next_steps": []},
     )
     defaults.update(overrides)
     return ContextSnapshot(**defaults)
@@ -276,7 +277,6 @@ class TestPartialContractFailures:
     def _trace_with_verifier(self, tool_call_id=None) -> RunTrace:
         return _make_run_trace([
             _make_trace_event(3, "VerifierAgent", tool_call_id=tool_call_id),
-            _make_trace_event(5, "ActionAgent"),
         ])
 
     def test_only_evidence_fails(self):
@@ -471,7 +471,7 @@ class TestRunAllErrorHandling:
         result = subprocess.run(
             [sys.executable, "-c",
              f"import sys; sys.path.insert(0, '.'); "
-             f"import run_all; run_all.TRACE_PATH = '{fake_path}'; "
+             f"import run_all; run_all.LEGACY_TRACE_PATH = '{fake_path}'; "
              f"import sys; sys.argv = ['run_all.py', '--fixture']; run_all.main()"],
             capture_output=True, text=True, timeout=10
         )

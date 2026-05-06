@@ -218,6 +218,9 @@ def build_swarm(
         ]
     )
 
+    # Secondary C2 enforcement: fires only if VerifierAgent narrates a missing
+    # tool_call_id in plain text. Primary C2 enforcement is the OnContextCondition
+    # catch-all above (sources_verified=False when verifier_tool_call_id is empty).
     verifier.register_output_guardrail(
         RegexGuardrail(
             name="C2_missing_tool_call_id",
@@ -326,9 +329,6 @@ def _chat_history_to_trace_events(
                 "approval_status": final_ctx.get("approval_status") or "pending",
             }
 
-        idx = sequence.index(name)
-        next_name = sequence[idx + 1] if idx + 1 < len(sequence) else None
-
         events.append(
             TraceEvent(
                 step=agent_to_step[name],
@@ -337,18 +337,18 @@ def _chat_history_to_trace_events(
                 content=str(content)[:2000],
                 tool_call_id=tool_call_id,
                 context_delta=context_delta,
-                handoff_to=next_name if next_name in seen else None,
+                handoff_to=None,
                 timestamp=now,
             )
         )
 
     for i, ev in enumerate(events):
-        if i + 1 < len(events):
-            ev.handoff_to = events[i + 1].agent
-        else:
-            ev.handoff_to = None
+        ev.handoff_to = events[i + 1].agent if i + 1 < len(events) else None
 
     return events
+
+
+SWARM_TRACE_PATH = "zone_b/fixtures/swarm_trace.json"
 
 
 async def run_swarm(
@@ -357,8 +357,14 @@ async def run_swarm(
     run_id: str = "swarm_001",
     interactive: bool = False,
     fixture_path: str | Path | None = "zone_a/fixtures/task.json",
+    output_path: str | Path = SWARM_TRACE_PATH,
 ) -> dict[str, Any]:
     """Run the Zone A swarm and emit a trace JSON for Zone B to consume.
+
+    The swarm produces a *partial* trace when it terminates early on a
+    contract violation. Output defaults to ``zone_b/fixtures/swarm_trace.json``
+    so the historical 5-event fixture (used by the existing test suite)
+    stays untouched.
 
     Returns a summary dict with the final ContextVariables snapshot, the
     trace events, the last agent reached, and whether the swarm terminated
@@ -405,7 +411,7 @@ async def run_swarm(
         final_output=final_ctx.get("final_output"),
     )
 
-    emit_trace(snapshot, events, run_id=run_id)
+    written = emit_trace(snapshot, events, run_id=run_id, output_path=output_path)
 
     terminated_early = len(events) < 6
     return {
@@ -413,7 +419,7 @@ async def run_swarm(
         "context": final_ctx,
         "last_agent": last_agent.name if last_agent else None,
         "terminated_early": terminated_early,
-        "trace_path": "zone_b/fixtures/sample_trace.json",
+        "trace_path": str(written),
     }
 
 

@@ -114,12 +114,12 @@ Zone B: Concord diagnostic (detects, attributes, repairs)
                              │
                              ▼
               ┌────────────────────────────┐
-              │  ContractChecker  [B2]     │    checks 3 rules
-              │  (deterministic + LLM      │    → 3 Violation objects
-              │   for human text)          │    all HIGH severity
+              │  ContractChecker  [B2]     │    checks 5 rules
+              │  (deterministic + LLM      │    → 4 Violation objects
+              │   for human text)          │    3 HIGH, 1 MEDIUM
               └──────────────┬─────────────┘
                              │
-                         3 violations
+                        4 violations
                              │
                              ▼
               ┌────────────────────────────┐
@@ -304,7 +304,7 @@ Zone B is the *diagnostic pipeline* — it never runs Zone A's agents, only read
 | B1 | TraceCollector | No | raw JSON | `RunTrace` + `ContextSnapshot` |
 | B2 | ContractChecker | Yes (text only) | `RunTrace` + `ContextSnapshot` | `list[Violation]` |
 | B3 | Attribution | Yes | violations + trace | `failed_agent`, `failed_step`, `likely_root_cause` |
-| B4 | Repair | Yes | violations + attribution | `affected_primitive`, `patch_code`, `confidence` |
+| B4 | Repair | Yes | violations + attribution | `patches[]`, `affected_primitive`, `patch_code`, `confidence` |
 | B5 | RegressionTest | Yes + Daytona | repair patch + violations | `test_status`, `sandbox_id` |
 | B6 | Reporter | Yes | all upstream outputs | Contract Violation Report dict |
 | B7 | HumanGate | No | report | `approval_status = "approved"` |
@@ -321,11 +321,11 @@ approval  →  HumanGate
 schema    →  Guardrail
 ```
 
-The LLM is only used to generate `patch_code` and `expected_impact` text for the chosen primitive.
+The LLM is only used to generate `patch_code` and `expected_impact` text for each violation's mapped primitive.
 
 ### ContractChecker rules
 
-Three rules, all checked deterministically against `ContextSnapshot`:
+Five rules, all checked deterministically against `ContextSnapshot`:
 
 ```python
 # C1 — evidence
@@ -388,10 +388,10 @@ The LLM is called *after* a check fails — only to produce `expected` / `observ
 │   ├── run.py                      standalone Zone B runner (reads fixture)
 │   ├── sandbox_run.py              Daytona demo runner with mock trace
 │   ├── fixtures/
-│   │   └── sample_trace.json       pre-baked run_041 trace (3 violations)
+│   │   └── sample_trace.json       pre-baked run_041 trace (4 violations)
 │   └── agents/
 │       ├── trace_collector.py      JSON → RunTrace + ContextSnapshot (no LLM)
-│       ├── contract_checker.py     3 rules, deterministic + LLM text
+│       ├── contract_checker.py     5 rules, deterministic + LLM text
 │       ├── attribution.py          LLM → failed_agent + root cause
 │       ├── repair.py               primitive map + LLM patch code
 │       ├── regression_test.py      LLM test gen + Daytona execution
@@ -415,18 +415,21 @@ The LLM is called *after* a check fails — only to produce `expected` / `observ
 └── tests/
     ├── conftest.py                 shared fixtures (sample_trace_raw, clean_trace_raw, ...)
     ├── test_models.py              21  — dataclass field integrity
-    ├── test_trace_collector.py     35  — parsing, folding, snapshot building
-    ├── test_contract_checker.py    17  — contract lambdas + step lookup
+    ├── test_trace_collector.py     30  — parsing, folding, snapshot building
+    ├── test_contract_checker.py    26  — contract lambdas + step lookup
     ├── test_attribution.py         10  — deterministic fallback paths
-    ├── test_repair.py              15  — _pick_primary, PRIMITIVE_MAP, patch gen
-    ├── test_regression_test.py     16  — _parse_status, fallback test execution
-    ├── test_reporter.py            13  — report assembly, severity summary
+    ├── test_repair.py              20  — per-violation patches, PRIMITIVE_MAP, scalar aliases
+    ├── test_regression_test.py     20  — _parse_status, fallback test execution
+    ├── test_reporter.py            15  — report assembly, severity summary, patches
     ├── test_human_gate.py           6  — approval output shape
     ├── test_zone_a.py              22  — strip_json_fences, _to_trace_event, agent shapes
-    ├── test_integration.py         14  — Zone A→B schema, 3 violations, clean trace = 0
-    └── test_rigorous.py            57  — edge cases, error paths, boundary conditions
+    ├── test_integration.py         19  — Zone A→B schema, 4 violations, clean trace = 0
+    ├── test_rigorous.py            57  — edge cases, error paths, boundary conditions
+    ├── test_routing_contract.py     3  — routing contract broken + clean trace cases
+    ├── test_schema_contract.py      6  — schema contract missing-key + fixture cases
+    └── test_swarm.py               27  — AG2 swarm tools, handoffs, guardrails, trace extraction
                                    ────
-                                   226  total (223 unit + 13 integration-marked)
+                                   288  total (274 non-integration + 14 integration-marked)
 ```
 
 ---
@@ -456,7 +459,7 @@ Only `OPENROUTER_API_KEY` is required to run Zone B. `TAVILY_API_KEY` is require
 
 ### Fixture mode — no API keys needed for Zone A
 
-Uses the pre-baked `zone_b/fixtures/sample_trace.json` (run_041, 3 violations). Runs the full Zone B diagnostic pipeline live with your LLM keys.
+Uses the pre-baked `zone_b/fixtures/sample_trace.json` (run_041, 4 violations). Runs the full Zone B diagnostic pipeline live with your LLM keys.
 
 ```bash
 python run_all.py --fixture
@@ -496,7 +499,7 @@ python zone_a/run.py
 [1/7] TraceCollector — loading zone_b/fixtures/sample_trace.json
       run_041: 5 events, 1 tool call(s), handoff path length 5
 [2/7] ContractChecker — applying contracts
-      3 violation(s) found
+      4 violation(s) found
 [3/7] Attribution — identifying failed agent
       failed_agent=VerifierAgent step=3
 [4/7] Repair — mapping to AG2 primitive
@@ -511,8 +514,8 @@ python zone_a/run.py
   CONTRACT VIOLATION REPORT
 ============================================================
   Run ID            : run_041
-  Violations        : 3
-  Severity          : {'high': 3, 'medium': 0, 'low': 0}
+  Violations        : 4
+  Severity          : {'high': 3, 'medium': 1, 'low': 0}
   Failed agent      : VerifierAgent (step 3)
   Root cause        : VerifierAgent failed to use a tool to gather verified sources
   Affected primitive: Guardrail
@@ -526,7 +529,7 @@ python zone_a/run.py
 ## Tests
 
 ```bash
-# Fast — no API calls (~0.5s, 223 tests)
+# Fast — no API calls (~0.5s, 274 tests)
 pytest tests/ -m "not integration"
 
 # Full suite including LLM + Daytona integration tests
@@ -538,16 +541,19 @@ pytest tests/
 | File | Count | What it covers |
 |------|-------|----------------|
 | `test_models.py` | 21 | All shared dataclasses, field types, optional fields |
-| `test_trace_collector.py` | 35 | JSON parsing, context_delta folding, edge cases |
-| `test_contract_checker.py` | 17 | All 3 contract lambdas, boundary values, step lookup |
+| `test_trace_collector.py` | 30 | JSON parsing, context_delta folding, edge cases |
+| `test_contract_checker.py` | 26 | Contract lambdas, boundary values, step lookup |
 | `test_attribution.py` | 10 | Deterministic fallback, empty violations |
-| `test_repair.py` | 15 | `_pick_primary` severity ranking, full `PRIMITIVE_MAP` coverage |
-| `test_regression_test.py` | 16 | `_parse_status` edge cases, fallback test code executes PASS |
-| `test_reporter.py` | 13 | Report assembly, severity summary, fallback narrative |
+| `test_repair.py` | 20 | Per-violation patch cardinality, scalar alias selection, full `PRIMITIVE_MAP` coverage |
+| `test_regression_test.py` | 20 | `_parse_status` edge cases, fallback test code executes PASS |
+| `test_reporter.py` | 15 | Report assembly, severity summary, repair patch passthrough, fallback narrative |
 | `test_human_gate.py` | 6 | Auto-approve shape, handles empty report |
 | `test_zone_a.py` | 22 | `strip_json_fences`, `_to_trace_event`, all 5 agent return shapes |
-| `test_integration.py` | 14 | Zone A→B schema compatibility, exactly 3 violations, clean trace = 0 |
+| `test_integration.py` | 19 | Zone A→B schema compatibility, exactly 4 violations, clean trace = 0 |
 | `test_rigorous.py` | 57 | Edge cases, error paths, partial violations, data-flow contracts |
+| `test_routing_contract.py` | 3 | Routing contract fails fixture, passes clean trace |
+| `test_schema_contract.py` | 6 | Schema contract fails missing keys, passes fixture |
+| `test_swarm.py` | 27 | Swarm tools, handoffs, guardrails, trace extraction |
 
 ---
 

@@ -361,7 +361,7 @@ Two reasons:
 ### Q38: How do you guarantee determinism in contract checks?
 
 Three layers:
-1. **Lambda-based contracts** (`contract_checker.py:9-33`) — pure code, no LLM in the verdict.
+1. **Lambda-based contracts** (`contract_checker.py:9-88`) — pure code, no LLM in the verdict.
 2. **Deterministic primitive map** (`repair.py:15-21`) — `evidence → Guardrail`, `tool → OnContextCondition`, etc. Same violation type, same primitive, every time.
 3. **Templated fallbacks** — when the LLM fails, every agent has a deterministic fallback path. Confidence drops from 0.85 to 0.5, but the report is still produced.
 
@@ -372,7 +372,7 @@ Same trace in → same violations and same primitive recommendations out. The na
 `zone_b/utils.py:parse_json_body()` raises. Each agent's caller catches and falls back:
 - `attribution.py:96-114` — uses the first violation's `failed_agent`, deterministic step lookup
 - `repair.py:97-102` — stub patch comment, confidence = 0.5
-- `regression_test.py:130-132` — calls `_fallback_test()` which returns hard-coded test code that asserts the three core contracts
+- `regression_test.py:164-178` — calls `_fallback_test()` which returns hard-coded test code that asserts the five enforced contracts
 - `reporter.py:68-74` — uses templated narrative
 
 We never crash on a bad LLM turn.
@@ -486,7 +486,7 @@ Because there is no backend running in the deployed version. If we wired the liv
 
 ### Q57: How do you run the test suite?
 
-`pytest` at the repo root. 226 tests in 11 files (see `README.md` Project Structure). Coverage includes:
+`pytest` at the repo root. The suite currently collects 294 tests across the Zone A, Zone B, integration, routing, and schema coverage (see `README.md` Project Structure). Coverage includes:
 - Dataclass field integrity (`test_models.py`)
 - Trace parsing and folding (`test_trace_collector.py`)
 - Contract lambdas (`test_contract_checker.py`)
@@ -528,11 +528,11 @@ We use AG2 to repair AG2. That's the dogfood.
 
 ### Q62: What if the same agent has multiple violations?
 
-`_pick_primary` (`repair.py:29-31`) picks by severity rank, ties broken by list order. Currently we generate one repair for the primary. The other violations are still recorded in the report — they're just not individually patched. Future work: batch repair generation per unique primitive.
+`run_repair` emits one `patches[]` entry per violation, preserving input order. The legacy scalar fields still mirror the highest-severity patch, with ties broken by list order, so older callers keep working while newer callers consume the plural repair output.
 
 ### Q63: What if two contracts disagree?
 
-Can't happen by construction — each contract checks an independent invariant. `evidence` checks `verified_sources_count`; `tool` checks `tool_call_id` presence; `approval` checks `approval_status`. Orthogonal axes. They can ALL fail simultaneously (and in our demo, three of them do), but they can't contradict.
+Can't happen by construction — each contract checks an independent invariant. `evidence` checks `verified_sources_count`; `tool` checks `tool_call_id` presence; `routing` checks trace order; `approval` checks `approval_status`. Orthogonal axes. They can ALL fail simultaneously (and in our demo, four of them do), but they can't contradict.
 
 ### Q64: What if a trace has no violations?
 
@@ -548,7 +548,7 @@ Contract lambdas reference specific agent names (`VerifierAgent`, `ActionAgent`,
 
 ### Q67: How does fallback test code know what to assert?
 
-`_fallback_test:60-79` hard-codes assertions for the three core contracts (`verified_sources_count > 0`, `approval_status == "approved"`, `verifier_tool_call_id`). The fallback assumes the worst case (all three violated) and asserts they're all fixed. If the actual violations are a subset, the fallback over-tests but doesn't under-test.
+`_fallback_test:60-86` hard-codes assertions for the five enforced contracts (`verified_sources_count > 0`, `approval_status == "approved"`, `verifier_tool_call_id`, ordered Reporter/Action handoffs, and required final output keys). The fallback assumes the worst case and asserts they're all fixed. If the actual violations are a subset, the fallback over-tests but doesn't under-test.
 
 ### Q68: Why is the regression test self-contained Python?
 
