@@ -471,7 +471,7 @@ class TestRunAllErrorHandling:
         result = subprocess.run(
             [sys.executable, "-c",
              f"import sys; sys.path.insert(0, '.'); "
-             f"import run_all; run_all.TRACE_PATH = '{fake_path}'; "
+             f"import run_all; run_all.LEGACY_TRACE_PATH = '{fake_path}'; "
              f"import sys; sys.argv = ['run_all.py', '--fixture']; run_all.main()"],
             capture_output=True, text=True, timeout=10
         )

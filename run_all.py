@@ -14,7 +14,8 @@ import sys
 from pathlib import Path
 
 
-TRACE_PATH = "zone_b/fixtures/sample_trace.json"
+LEGACY_TRACE_PATH = "zone_b/fixtures/sample_trace.json"
+SWARM_TRACE_PATH = "zone_b/fixtures/swarm_trace.json"
 
 
 def _run_zone_a_legacy() -> None:
@@ -26,7 +27,7 @@ def _run_zone_a_legacy() -> None:
 async def _run_zone_a_swarm(interactive: bool) -> dict:
     """AG2 RoundRobinPattern swarm with OnContextCondition handoffs + guardrails."""
     from zone_a.swarm import run_swarm
-    return await run_swarm(interactive=interactive)
+    return await run_swarm(interactive=interactive, output_path=SWARM_TRACE_PATH)
 
 
 async def _run_zone_b_legacy(trace_path: str) -> dict:
@@ -99,17 +100,20 @@ def main() -> None:
     print("=" * 60)
 
     if args.fixture:
-        if not Path(TRACE_PATH).exists():
-            print(f"\n  ERROR: {TRACE_PATH} not found. Run without --fixture first.")
+        trace_for_zone_b = LEGACY_TRACE_PATH
+        if not Path(trace_for_zone_b).exists():
+            print(f"\n  ERROR: {trace_for_zone_b} not found. Run without --fixture first.")
             sys.exit(1)
-        print(f"\n[Zone A] Skipped — using fixture trace at {TRACE_PATH}")
+        print(f"\n[Zone A] Skipped — using fixture trace at {trace_for_zone_b}")
     else:
         print("\n[Zone A] Running...")
         try:
             if args.swarm:
-                asyncio.run(_run_zone_a_swarm(interactive=args.interactive))
+                swarm_result = asyncio.run(_run_zone_a_swarm(interactive=args.interactive))
+                trace_for_zone_b = swarm_result["trace_path"]
             else:
                 _run_zone_a_legacy()
+                trace_for_zone_b = LEGACY_TRACE_PATH
         except EnvironmentError as e:
             print(f"  ERROR: {e}")
             print("  Tip: run with --fixture to use the existing trace without API keys.")
@@ -118,14 +122,14 @@ def main() -> None:
             print(f"  Zone A error: {e}")
             sys.exit(1)
 
-    print("\n[Zone B] Running diagnostic pipeline...")
+    print(f"\n[Zone B] Running diagnostic pipeline on {trace_for_zone_b}...")
     try:
         if args.swarm:
             report = asyncio.run(
-                _run_zone_b_group_chat(TRACE_PATH, interactive=args.interactive)
+                _run_zone_b_group_chat(trace_for_zone_b, interactive=args.interactive)
             )
         else:
-            report = asyncio.run(_run_zone_b_legacy(TRACE_PATH))
+            report = asyncio.run(_run_zone_b_legacy(trace_for_zone_b))
     except Exception as e:
         print(f"  Zone B pipeline error: {e}")
         sys.exit(1)
