@@ -58,6 +58,7 @@ def _print_report(report: dict) -> None:
     print(f"  Root cause        : {report.get('likely_root_cause', '<unknown>')}")
     print(f"  Affected primitive: {report.get('affected_primitive', '<unknown>')}")
     print(f"  Repair patch      : {report.get('repair_patch', '<unknown>')}")
+    print(f"  Repair patches    : {len(report.get('patches', []))}")
     print(f"  Repair confidence : {report.get('repair_confidence', 0):.2f}")
     print(f"  Regression status : {report.get('regression_test_status', '<unknown>')}")
     print(f"  Approval status   : {report.get('approval_status', '<unknown>')}")

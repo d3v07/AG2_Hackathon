@@ -112,7 +112,7 @@ TraceCollector → ContractChecker → Attribution → Repair
 ### B4. Repair (`zone_b/agents/repair.py`)
 
 - **Input:** violations + `failed_agent` + `failed_step`
-- **Output:** `repair_patch` (1-line description), `affected_primitive`, `patch_code` (Python snippet), `expected_impact`, `confidence`
+- **Output:** `patches[]` with one repair entry per violation, plus legacy scalar aliases (`repair_patch`, `affected_primitive`, `patch_code`, `expected_impact`, `confidence`) for current callers.
 - **Deterministic primitive map (`PRIMITIVE_MAP:15-21`):**
 
   | Violation type | AG2 primitive |
@@ -123,8 +123,8 @@ TraceCollector → ContractChecker → Attribution → Repair
   | `approval` | **HumanGate** (UserProxyAgent) |
   | `schema` | **Guardrail** |
 
-- **LLM use:** generates the Python `patch_code` snippet + `expected_impact` sentence. Falls back to a stub comment if parse fails (`run_repair:90-102`). Confidence drops from 0.85 to 0.5 on fallback.
-- `_pick_primary` (line 29-31) selects the highest-severity violation as the one to repair first; future work would batch repair all of them.
+- **LLM use:** generates the Python `patch_code` snippet + `expected_impact` sentence for each patch. Falls back to a stub comment per patch if parse fails (`_build_patch`). Confidence drops from 0.85 to 0.5 on fallback.
+- `_pick_primary` now selects the highest-severity patch only for legacy scalar aliases; `patches[]` preserves violation input order and cardinality.
 
 ### B5. RegressionTest (`zone_b/agents/regression_test.py`) — **Daytona-powered**
 
@@ -220,7 +220,7 @@ The frontend is a self-contained React app served as static assets from Vercel (
 ### Screen 5 — **Repair Patch** (`screen === "repair"`)
 - **Renders:** 4 patch cards with primitive (Guardrail / ToolGate / OnContextCondition / HumanGate), target agent, before/after diff (red removed lines / green added lines), and an APPLY button per patch. Filter buttons (ALL / P-001 / P-002 / P-003 / P-004).
 - **Data sources:** `D.patches[]`.
-- **Backend equivalent:** `report.affected_primitive` + `report.patch_code` from `zone_b/agents/repair.py`. Today the backend produces ONE primary patch per run (`_pick_primary`); the frontend assumes one patch per violation. Bridging that is part of the next sprint — for now the dashboard fixture has all four patches realised.
+- **Backend equivalent:** `report.patches[]` from `zone_b/agents/repair.py`, plus scalar `report.affected_primitive` and `report.patch_code` aliases for current callers. The public dashboard adapter still synthesizes the visual diff rows until #17 wires the plural backend output through.
 
 ### Screen 6 — **Regression Test** (`screen === "regression"`)
 - **Renders:** Daytona terminal stream (every line of the sandbox stdout), sandbox metadata card (sandbox_id, image, runner, duration, status), assertions table (4 PASS rows).
@@ -250,6 +250,7 @@ Zone B Report (backend output, shared/models.py + zone_b/agents/reporter.py)
 ├── repair_patch              str          (1-line description)
 ├── affected_primitive        str          (Guardrail / OnContextCondition / etc)
 ├── patch_code                str          (Python snippet from LLM)
+├── patches                   list[dict]   (one repair patch per violation)
 ├── regression_test_status    str          (pass / fail / error)
 ├── repair_confidence         float        (0.85 nominal, 0.5 fallback)
 ├── approval_status           str          (pending / approved / rejected)
@@ -295,7 +296,7 @@ python run_all.py
 #   plus /api/runs/RUN-041 returns the same CONCORD_DATA shape.
 ```
 
-The 288-test pytest suite covers parsing, contract lambdas, primitive map, fallback paths, and Zone A→B integration.
+The 294-test pytest suite covers parsing, contract lambdas, primitive map, fallback paths, and Zone A→B integration.
 
 ---
 
@@ -307,8 +308,8 @@ Because contract violations need to be *deterministic*. If the same trace produc
 **Q: Why a separate Attribution agent? Doesn't the contract already name the failed agent?**
 Yes for simple cases. But the agent whose contract *failed* is often downstream of the agent who *caused* the failure. Example: Reporter emits final output without verified sources — Reporter's contract failed, but Verifier is responsible for `verified_sources_count=0`. Attribution reasons over the handoff path to surface the upstream cause.
 
-**Q: Why one repair per run, not per violation?**
-Current implementation picks the highest-severity violation (`_pick_primary`). Two reasons: (1) violations often share a root cause — fix the upstream one and the downstream ones go away. (2) running one regression test per repair is bounded; one test per violation explodes Daytona spend. The dashboard intentionally shows what the fully-batched version *would* look like.
+**Q: Why keep scalar repair fields if repairs are per violation?**
+Current callers still read `repair_patch`, `affected_primitive`, `patch_code`, and `confidence`. The backend now emits `patches[]` in violation order, while the scalar fields mirror the highest-severity patch until downstream API and dashboard code finish moving to the plural shape.
 
 **Q: What happens if the LLM returns invalid JSON?**
 Every Zone B agent has a deterministic fallback path — see `run_attribution:96-114`, `run_repair:97-102`, `_fallback_test:60-79`, `reporter._ask_llm_for_narrative`'s except clause. We never crash because the LLM had a bad turn. We mark `confidence=0.5` instead of `0.85` so the operator knows.
@@ -338,7 +339,7 @@ This is a multi-agent observability + repair system. Both tracks fit. Concord is
 
 ## 11. What's Honest to Concede
 
-- **The dashboard's per-violation patches are template-driven** in the fixture — the backend currently emits one patch per run. The mapping from violation → primitive is real (in `PRIMITIVE_MAP`), but the four diffs on the Repair screen are pre-baked for the demo run. Bridging this is next-sprint work.
+- **The dashboard's per-violation patch diffs are still template-driven** in the fixture. The backend now emits one repair entry per violation in `report.patches[]`, but the public dashboard adapter still synthesizes its visual diff rows until the API passthrough work lands.
 - **The topology/routes block on the Workflow DAG screen is not yet derived from a real workflow declaration.** It's a fixture today. Real implementation would parse the operator's AG2 program (or a YAML manifest) to get the declared topology.
 - **We use Daytona as a real, live integration**, not a stub. `_run_in_daytona` calls `daytona_sdk.Daytona(...).create()` and `sandbox.process.code_run(...)`. Without `DAYTONA_API_KEY` it returns `("Daytona credentials missing", "no-sandbox", "error")` — not a fake `pass`.
 - **Tavily is also live.** `zone_a/agents/researcher.py` actually hits `client.search(...)` for every Zone A run.

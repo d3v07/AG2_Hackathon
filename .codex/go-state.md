@@ -3,17 +3,22 @@
 ## Overview
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
-- Phase: Sprint 3 execution
+- Phase: Sprint 4 execution
 - Branch: feat/sprint-3-foundation
-- Current Sprint: Sprint 3
-- Current Task: Sprint 3 local implementation complete
-- Last Checkpoint: #14 implementation verified locally; Sprint 3 gate is next.
+- Current Sprint: Sprint 4
+- Current Task: #15 per-violation repair patches
+- Last Checkpoint: #15 full gate and review passed locally; local commit recorded.
 
 ## Sprint Board
 Sprint 3: Foundation
 - #12 P0 Docs: Audit current state and write NEXT_PHASE_AUDIT.md — local commit complete
 - #13 P0 Zone B: Add C-RTE Routing contract as deterministic lambda — verification complete
 - #14 P0 Zone B: Add C-SCH Schema contract as deterministic lambda — verification complete
+
+Sprint 4: Repair and downstream report compatibility
+- #15 P0 Zone B: Replace primary-only repair generation with one patch per violation — full gate passed, local commit recorded
+- #16 P0 Zone B: Generate per-violation regression outcomes — pending
+- #17 P0 API: Pass backend report patches through to dashboard data — pending
 
 ## What Worked
 - GitHub issue #12 exists and is open.
@@ -44,6 +49,16 @@ Sprint 3: Foundation
 - #14 full gate passed: `pytest -x --tb=short` passed 288 tests.
 - #14 live demo probe returned HTTP 200.
 - #14 review pass found no blocking issues.
+- #15 RED repair tests failed for the expected reason before implementation: `run_repair` did not return `patches`.
+- #15 repair now emits one patch per violation while preserving scalar aliases for legacy callers.
+- #15 reporter now includes `report.patches[]` while preserving existing scalar fields.
+- #15 reviewer pass found no blocking issues; the non-blocking multi-patch reporter coverage note was addressed.
+- #15 focused gate passed: `pytest -q tests/test_repair.py tests/test_reporter.py tests/test_group_chat.py tests/test_integration.py` passed 66 tests.
+- #15 full gate passed: `pytest -x --tb=short` passed 294 tests.
+- #15 fixture gate passed: `python3 run_all.py --fixture` reported `Repair patches    : 4`, `Regression status : pass`, and `Approval status   : approved`.
+- #15 AG2 import smoke passed.
+- #15 live demo probe returned HTTP 200.
+- #15 `git diff --check` passed.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -53,7 +68,8 @@ Sprint 3: Foundation
 
 ## Blockers
 - No regression-gate blocker remains for Sprint 3.
+- No #15 blocker remains.
 - Remaining toolchain gaps: `ruff` unavailable, FastAPI unavailable in this Python environment, `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Run the Sprint 3 gate or start #15 if the user wants to continue. Do not push without fresh approval.
+Wait for fresh approval before pushing or creating a PR to `production`.

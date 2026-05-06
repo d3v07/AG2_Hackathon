@@ -486,7 +486,7 @@ Because there is no backend running in the deployed version. If we wired the liv
 
 ### Q57: How do you run the test suite?
 
-`pytest` at the repo root. 226 tests in 11 files (see `README.md` Project Structure). Coverage includes:
+`pytest` at the repo root. The suite currently collects 294 tests across the Zone A, Zone B, integration, routing, and schema coverage (see `README.md` Project Structure). Coverage includes:
 - Dataclass field integrity (`test_models.py`)
 - Trace parsing and folding (`test_trace_collector.py`)
 - Contract lambdas (`test_contract_checker.py`)
@@ -528,7 +528,7 @@ We use AG2 to repair AG2. That's the dogfood.
 
 ### Q62: What if the same agent has multiple violations?
 
-`_pick_primary` (`repair.py:29-31`) picks by severity rank, ties broken by list order. Currently we generate one repair for the primary. The other violations are still recorded in the report — they're just not individually patched. Future work: batch repair generation per unique primitive.
+`run_repair` emits one `patches[]` entry per violation, preserving input order. The legacy scalar fields still mirror the highest-severity patch, with ties broken by list order, so older callers keep working while newer callers consume the plural repair output.
 
 ### Q63: What if two contracts disagree?
 

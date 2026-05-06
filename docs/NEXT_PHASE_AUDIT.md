@@ -37,7 +37,7 @@ Scope: GitHub issue #12 plus the follow-up regression-gate stabilization request
 
 ## Test Status
 
-All collected pytest tests passed in the fresh baseline run. After the regression-gate stabilization, the suite collects 277 tests because two focused tests were added for the bad-generated-test and Daytona-infrastructure-error paths.
+All collected pytest tests passed in the fresh baseline run. After the regression-gate stabilization and Sprint #15 repair coverage, the suite collects 294 tests.
 
 | Test file | Collected | Status |
 |---|---:|---|
@@ -45,11 +45,11 @@ All collected pytest tests passed in the fresh baseline run. After the regressio
 | `tests/test_contract_checker.py` | 26 | PASS |
 | `tests/test_group_chat.py` | 12 | PASS |
 | `tests/test_human_gate.py` | 6 | PASS |
-| `tests/test_integration.py` | 18 | PASS |
+| `tests/test_integration.py` | 19 | PASS |
 | `tests/test_models.py` | 21 | PASS |
 | `tests/test_regression_test.py` | 18 | PASS |
-| `tests/test_repair.py` | 17 | PASS |
-| `tests/test_reporter.py` | 13 | PASS |
+| `tests/test_repair.py` | 20 | PASS |
+| `tests/test_reporter.py` | 15 | PASS |
 | `tests/test_rigorous.py` | 57 | PASS |
 | `tests/test_swarm.py` | 27 | PASS |
 | `tests/test_trace_collector.py` | 30 | PASS |
@@ -64,7 +64,7 @@ Warnings are dependency deprecations from `autogen.fast_depends` and `daytona_sd
 | Zone A live Tavily path | Live when env is loaded; fixture mode bypasses it | `zone_a/agents/researcher.py:45-58` raises if `TAVILY_API_KEY` is absent, then calls `TavilyClient.search` |
 | Zone A fixture path | Working | `run_all.py:102-107` skips Zone A and uses `zone_b/fixtures/sample_trace.json` |
 | Zone B contract checker | Live | `zone_b/agents/contract_checker.py:9-88` enforces evidence/tool/approval/routing/schema |
-| Zone B repair | Partially live | `zone_b/agents/repair.py:29-31` picks one primary violation; `zone_b/agents/repair.py:83-110` emits one patch |
+| Zone B repair | Live per-violation backend output | `zone_b/agents/repair.py` emits `patches[]` in violation order and keeps scalar aliases for current callers |
 | Zone B regression test | Live Daytona path, but verdict can vary | `zone_b/agents/regression_test.py:91-117` creates, runs, and deletes a Daytona sandbox |
 | Dashboard fixture data | Static and demo-shaped | `api/store.py:12-133` seeds `RUN-041`; `public/data.js` also carries fixture data |
 | API server import | Broken in current environment | `api/index.py:19-22` imports FastAPI, but `fastapi` is not installed |
@@ -97,10 +97,10 @@ Credential names are present in `.env`; no secret values were read or copied int
    - Backend validates those required keys in `zone_b/agents/contract_checker.py:9-88`.
    - Sprint #14 keeps the current fixture passing for C-SCH.
 
-4. Repair emits one primary patch, not one patch per violation.
-   - `_pick_primary` selects a single violation at `zone_b/agents/repair.py:29-31`.
-   - `run_repair` maps only that primary violation into `repair_patch`, `affected_primitive`, and `patch_code` at `zone_b/agents/repair.py:83-110`.
-   - The dashboard creates one patch row per violation by synthesis, not backend-native repair output, at `api/adapter.py:187-202`.
+4. Repair now emits one backend patch per violation.
+   - Sprint #15 changed `run_repair` to return `patches[]` in violation input order and cardinality.
+   - Legacy scalar repair fields still mirror the highest-severity patch for existing callers.
+   - The dashboard adapter still creates visual patch rows by synthesis at `api/adapter.py:187-202`; passthrough of backend `report.patches[]` is assigned to #17.
 
 5. Regression test generation was not deterministic enough for a gate. This has been stabilized in the follow-up fix.
    - Before the fix, if the generation call succeeded but returned a semantically bad test, the fallback was not used.

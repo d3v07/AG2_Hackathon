@@ -95,6 +95,7 @@ def _print_final_report(report: dict) -> None:
     print(f"Likely root cause : {report['likely_root_cause']}")
     print(f"Affected primitive: {report['affected_primitive']}")
     print(f"Repair patch      : {report['repair_patch']}")
+    print(f"Repair patches    : {len(report.get('patches', []))}")
     print(f"Repair confidence : {report['repair_confidence']:.2f}")
     print(f"Regression status : {report['regression_test_status']}")
     print(f"Approval status   : {report['approval_status']}")

@@ -30,7 +30,7 @@ git log HEAD..origin/main --oneline     # what's on remote you don't have
 python3 -m venv .venv 2>/dev/null || true
 source .venv/bin/activate
 pip install -e .                         # or: pip install -r requirements.txt
-pytest -x --tb=short                     # all 226 tests must pass before you touch anything
+pytest -x --tb=short                     # all collected tests must pass before you touch anything
 python run_all.py --fixture              # full pipeline must produce a Contract Violation Report on stdout
 
 # 3. Confirm the live demo still works

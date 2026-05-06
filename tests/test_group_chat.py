@@ -125,5 +125,6 @@ class TestGroupChatEndToEnd:
         assert report["violation_count"] == 4
         assert report["severity_summary"]["high"] == 3
         assert report["severity_summary"]["medium"] == 1
+        assert len(report["patches"]) == 4
         assert report["failed_agent"] in {"VerifierAgent", "ActionAgent"}
         assert report["approval_status"] == "approved"

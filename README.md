@@ -304,7 +304,7 @@ Zone B is the *diagnostic pipeline* — it never runs Zone A's agents, only read
 | B1 | TraceCollector | No | raw JSON | `RunTrace` + `ContextSnapshot` |
 | B2 | ContractChecker | Yes (text only) | `RunTrace` + `ContextSnapshot` | `list[Violation]` |
 | B3 | Attribution | Yes | violations + trace | `failed_agent`, `failed_step`, `likely_root_cause` |
-| B4 | Repair | Yes | violations + attribution | `affected_primitive`, `patch_code`, `confidence` |
+| B4 | Repair | Yes | violations + attribution | `patches[]`, `affected_primitive`, `patch_code`, `confidence` |
 | B5 | RegressionTest | Yes + Daytona | repair patch + violations | `test_status`, `sandbox_id` |
 | B6 | Reporter | Yes | all upstream outputs | Contract Violation Report dict |
 | B7 | HumanGate | No | report | `approval_status = "approved"` |
@@ -321,11 +321,11 @@ approval  →  HumanGate
 schema    →  Guardrail
 ```
 
-The LLM is only used to generate `patch_code` and `expected_impact` text for the chosen primitive.
+The LLM is only used to generate `patch_code` and `expected_impact` text for each violation's mapped primitive.
 
 ### ContractChecker rules
 
-Three rules, all checked deterministically against `ContextSnapshot`:
+Five rules, all checked deterministically against `ContextSnapshot`:
 
 ```python
 # C1 — evidence
@@ -418,12 +418,12 @@ The LLM is called *after* a check fails — only to produce `expected` / `observ
     ├── test_trace_collector.py     30  — parsing, folding, snapshot building
     ├── test_contract_checker.py    26  — contract lambdas + step lookup
     ├── test_attribution.py         10  — deterministic fallback paths
-    ├── test_repair.py              17  — _pick_primary, PRIMITIVE_MAP, patch gen
+    ├── test_repair.py              20  — per-violation patches, PRIMITIVE_MAP, scalar aliases
     ├── test_regression_test.py     20  — _parse_status, fallback test execution
-    ├── test_reporter.py            13  — report assembly, severity summary
+    ├── test_reporter.py            15  — report assembly, severity summary, patches
     ├── test_human_gate.py           6  — approval output shape
     ├── test_zone_a.py              22  — strip_json_fences, _to_trace_event, agent shapes
-    ├── test_integration.py         18  — Zone A→B schema, 4 violations, clean trace = 0
+    ├── test_integration.py         19  — Zone A→B schema, 4 violations, clean trace = 0
     ├── test_rigorous.py            57  — edge cases, error paths, boundary conditions
     ├── test_routing_contract.py     3  — routing contract broken + clean trace cases
     ├── test_schema_contract.py      6  — schema contract missing-key + fixture cases
@@ -544,12 +544,12 @@ pytest tests/
 | `test_trace_collector.py` | 30 | JSON parsing, context_delta folding, edge cases |
 | `test_contract_checker.py` | 26 | Contract lambdas, boundary values, step lookup |
 | `test_attribution.py` | 10 | Deterministic fallback, empty violations |
-| `test_repair.py` | 17 | `_pick_primary` severity ranking, full `PRIMITIVE_MAP` coverage |
+| `test_repair.py` | 20 | Per-violation patch cardinality, scalar alias selection, full `PRIMITIVE_MAP` coverage |
 | `test_regression_test.py` | 20 | `_parse_status` edge cases, fallback test code executes PASS |
-| `test_reporter.py` | 13 | Report assembly, severity summary, fallback narrative |
+| `test_reporter.py` | 15 | Report assembly, severity summary, repair patch passthrough, fallback narrative |
 | `test_human_gate.py` | 6 | Auto-approve shape, handles empty report |
 | `test_zone_a.py` | 22 | `strip_json_fences`, `_to_trace_event`, all 5 agent return shapes |
-| `test_integration.py` | 18 | Zone A→B schema compatibility, exactly 4 violations, clean trace = 0 |
+| `test_integration.py` | 19 | Zone A→B schema compatibility, exactly 4 violations, clean trace = 0 |
 | `test_rigorous.py` | 57 | Edge cases, error paths, partial violations, data-flow contracts |
 | `test_routing_contract.py` | 3 | Routing contract fails fixture, passes clean trace |
 | `test_schema_contract.py` | 6 | Schema contract fails missing keys, passes fixture |

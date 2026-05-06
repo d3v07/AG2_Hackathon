@@ -34,6 +34,14 @@ def fixture_collected(fixture_raw) -> dict:
     return asyncio.run(run_trace_collector(fixture_raw))
 
 
+@pytest.fixture(scope="module")
+def fixture_mode_result():
+    return subprocess.run(
+        [sys.executable, "run_all.py", "--fixture"],
+        capture_output=True, text=True, timeout=240
+    )
+
+
 # ── Zone A trace → Zone B schema compatibility ────────────────────────────────
 
 class TestZoneATraceSchema:
@@ -170,31 +178,19 @@ class TestContractViolationDetection:
 
 @pytest.mark.integration
 class TestRunAllFixtureMode:
-    def test_fixture_mode_exits_zero(self):
+    def test_fixture_mode_exits_zero(self, fixture_mode_result):
         """run_all.py --fixture must complete without error (no API keys needed for Zone A)."""
-        result = subprocess.run(
-            [sys.executable, "run_all.py", "--fixture"],
-            capture_output=True, text=True, timeout=120
-        )
+        result = fixture_mode_result
         assert result.returncode == 0, f"run_all.py failed:\n{result.stderr}"
 
-    def test_fixture_mode_reports_4_violations(self):
-        result = subprocess.run(
-            [sys.executable, "run_all.py", "--fixture"],
-            capture_output=True, text=True, timeout=120
-        )
-        assert "Violations        : 4" in result.stdout
+    def test_fixture_mode_reports_4_violations(self, fixture_mode_result):
+        assert "Violations        : 4" in fixture_mode_result.stdout
 
-    def test_fixture_mode_report_contains_verifier_agent(self):
-        result = subprocess.run(
-            [sys.executable, "run_all.py", "--fixture"],
-            capture_output=True, text=True, timeout=120
-        )
-        assert "VerifierAgent" in result.stdout
+    def test_fixture_mode_report_contains_verifier_agent(self, fixture_mode_result):
+        assert "VerifierAgent" in fixture_mode_result.stdout
 
-    def test_fixture_mode_approval_status_approved(self):
-        result = subprocess.run(
-            [sys.executable, "run_all.py", "--fixture"],
-            capture_output=True, text=True, timeout=120
-        )
-        assert "Approval status   : approved" in result.stdout
+    def test_fixture_mode_approval_status_approved(self, fixture_mode_result):
+        assert "Approval status   : approved" in fixture_mode_result.stdout
+
+    def test_fixture_mode_reports_4_repair_patches(self, fixture_mode_result):
+        assert "Repair patches    : 4" in fixture_mode_result.stdout

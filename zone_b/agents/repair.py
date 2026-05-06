@@ -1,9 +1,9 @@
-"""Repair — maps a violation to an AG2 primitive and proposes a patch.
+"""Repair — maps violations to AG2 primitives and proposes patches.
 
 Per issue #2: the violation_type → affected_primitive map is deterministic
-(no LLM). A single ConversableAgent call generates the patch_code snippet
-and expected_impact text. Confidence reverts to a low baseline if the LLM
-cannot produce parseable JSON.
+(no LLM). ConversableAgent calls generate patch_code snippets and
+expected_impact text. Confidence reverts to a low baseline per patch if
+the LLM cannot produce parseable JSON.
 """
 import asyncio
 import json
@@ -29,6 +29,18 @@ from zone_b.utils import parse_json_body as _parse_json_body, make_proxy as _mak
 def _pick_primary(violations: list[Violation]) -> Violation:
     """Highest severity, ties broken by first occurrence in list."""
     return max(violations, key=lambda v: SEVERITY_RANK.get(v.severity, 0))
+
+
+def _violation_location(
+    violation: Violation,
+    fallback_agent: str,
+    fallback_step: int,
+) -> tuple[str, int]:
+    agent = violation.failed_agent or fallback_agent
+    step = violation.failed_step
+    if step is None or step < 0:
+        step = fallback_step
+    return agent, step
 
 
 def _ask_llm_for_patch(
@@ -65,49 +77,76 @@ def _ask_llm_for_patch(
     return _parse_json_body(body)
 
 
-async def run_repair(
-    violations: list[Violation],
-    failed_agent: str,
-    failed_step: int,
+def _build_patch(
+    violation: Violation,
+    fallback_agent: str,
+    fallback_step: int,
 ) -> dict:
-    """Map the primary violation to an AG2 primitive and generate a patch."""
-    if not violations:
-        return {
-            "repair_patch": "no repair required",
-            "affected_primitive": "",
-            "patch_code": "",
-            "expected_impact": "no violations to repair",
-            "confidence": 0.0,
-        }
-
-    primary = _pick_primary(violations)
-    primitive = PRIMITIVE_MAP.get(primary.contract_type, "Guardrail")
+    primitive = PRIMITIVE_MAP.get(violation.contract_type, "Guardrail")
+    failed_agent, failed_step = _violation_location(
+        violation, fallback_agent, fallback_step
+    )
     repair_patch = (
-        f"Add {primitive} to enforce: {primary.rule} "
+        f"Add {primitive} to enforce: {violation.rule} "
         f"(failed at {failed_agent}, step {failed_step})"
     )
 
     try:
-        data = _ask_llm_for_patch(primary, primitive, failed_agent, failed_step)
+        data = _ask_llm_for_patch(violation, primitive, failed_agent, failed_step)
         patch_code = data.get("patch_code", "").strip() or f"# Apply {primitive}"
         expected_impact = data.get("expected_impact", "").strip() or (
-            f"{primitive} prevents {primary.contract_type} contract from being violated again"
+            f"{primitive} prevents {violation.contract_type} contract from being violated again"
         )
         confidence = 0.85
     except Exception:
-        patch_code = f"# TODO: apply {primitive} to fix {primary.contract_type} violation"
+        patch_code = f"# TODO: apply {primitive} to fix {violation.contract_type} violation"
         expected_impact = (
-            f"{primitive} prevents {primary.contract_type} contract from being violated again"
+            f"{primitive} prevents {violation.contract_type} contract from being violated again"
         )
         confidence = 0.5
 
     return {
+        "contract_type": violation.contract_type,
+        "severity": violation.severity,
+        "rule": violation.rule,
+        "failed_agent": failed_agent,
+        "failed_step": failed_step,
         "repair_patch": repair_patch,
         "affected_primitive": primitive,
         "patch_code": patch_code,
         "expected_impact": expected_impact,
         "confidence": confidence,
     }
+
+
+def _with_legacy_aliases(patches: list[dict], primary_patch: dict | None = None) -> dict:
+    patch = primary_patch or {}
+    return {
+        "patches": patches,
+        "repair_patch": patch.get("repair_patch", "no repair required"),
+        "affected_primitive": patch.get("affected_primitive", ""),
+        "patch_code": patch.get("patch_code", ""),
+        "expected_impact": patch.get("expected_impact", "no violations to repair"),
+        "confidence": patch.get("confidence", 0.0),
+    }
+
+
+async def run_repair(
+    violations: list[Violation],
+    failed_agent: str,
+    failed_step: int,
+) -> dict:
+    """Map each violation to an AG2 primitive and generate repair patches."""
+    if not violations:
+        return _with_legacy_aliases([])
+
+    patches = [
+        _build_patch(violation, failed_agent, failed_step)
+        for violation in violations
+    ]
+    primary = _pick_primary(violations)
+    primary_index = violations.index(primary)
+    return _with_legacy_aliases(patches, patches[primary_index])
 
 
 if __name__ == "__main__":
@@ -129,6 +168,7 @@ if __name__ == "__main__":
         repaired = await run_repair(
             checked["violations"], attributed["failed_agent"], attributed["failed_step"]
         )
+        print(f"\npatches            : {len(repaired['patches'])}")
         print(f"\naffected_primitive : {repaired['affected_primitive']}")
         print(f"repair_patch       : {repaired['repair_patch']}")
         print(f"expected_impact    : {repaired['expected_impact']}")

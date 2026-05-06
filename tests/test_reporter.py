@@ -103,8 +103,13 @@ class TestRunReporterShape:
                 "likely_root_cause": "VerifierAgent broke contract", "attributions": []}
 
     def _repair(self):
-        return {"repair_patch": "Add Guardrail", "affected_primitive": "Guardrail",
-                "patch_code": "# patch", "expected_impact": "fixes it", "confidence": 0.85}
+        patch = {"contract_type": "evidence", "severity": "high", "rule": "test rule",
+                 "failed_agent": "VerifierAgent", "failed_step": 3,
+                 "repair_patch": "Add Guardrail", "affected_primitive": "Guardrail",
+                 "patch_code": "# patch", "expected_impact": "fixes it", "confidence": 0.85}
+        return {"patches": [patch], "repair_patch": "Add Guardrail",
+                "affected_primitive": "Guardrail", "patch_code": "# patch",
+                "expected_impact": "fixes it", "confidence": 0.85}
 
     def _regression(self):
         return {"test_name": "test_fix", "test_code": "print('PASS')", "assertions": [],
@@ -122,8 +127,44 @@ class TestRunReporterShape:
         required = {"run_id", "workflow_name", "violation_count", "severity_summary",
                     "failed_agent", "failed_step", "likely_root_cause", "repair_patch",
                     "affected_primitive", "patch_code", "regression_test_status",
-                    "repair_confidence", "approval_status", "violations", "narrative"}
+                    "repair_confidence", "approval_status", "violations", "patches",
+                    "narrative"}
         assert required.issubset(set(report.keys()))
+
+    def test_report_includes_repair_patches(self, monkeypatch):
+        monkeypatch.setattr("zone_b.agents.reporter._ask_llm_for_narrative", lambda _: "x")
+        result = asyncio.run(run_reporter(
+            _trace(), [_v()], self._attribution(), self._repair(), self._regression(), _snap()
+        ))
+
+        assert result["report"]["patches"] == self._repair()["patches"]
+
+    def test_report_preserves_multiple_repair_patches(self, monkeypatch):
+        monkeypatch.setattr("zone_b.agents.reporter._ask_llm_for_narrative", lambda _: "x")
+        repair = self._repair()
+        second_patch = dict(repair["patches"][0])
+        second_patch.update({
+            "contract_type": "tool",
+            "severity": "high",
+            "rule": "tool rule",
+            "repair_patch": "Add OnContextCondition",
+            "affected_primitive": "OnContextCondition",
+            "patch_code": "# second patch",
+        })
+        repair["patches"] = [repair["patches"][0], second_patch]
+
+        result = asyncio.run(run_reporter(
+            _trace(),
+            [_v(), _v("tool")],
+            self._attribution(),
+            repair,
+            self._regression(),
+            _snap(),
+        ))
+
+        assert result["report"]["patches"] == repair["patches"]
+        assert result["report"]["patches"][1]["repair_patch"] == "Add OnContextCondition"
+        assert result["report"]["repair_patch"] == "Add Guardrail"
 
     def test_violation_count_matches(self, monkeypatch):
         monkeypatch.setattr("zone_b.agents.reporter._ask_llm_for_narrative", lambda _: "x")
