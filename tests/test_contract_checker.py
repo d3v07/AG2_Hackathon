@@ -118,6 +118,7 @@ class TestContractLambdas:
         assert "tool" in types
         assert "approval" in types
         assert "routing" in types
+        assert "schema" in types
 
     def test_all_contracts_have_required_keys(self):
         for c in CONTRACTS:
@@ -134,6 +135,7 @@ class TestContractLambdas:
         assert severities["tool"] == "high"
         assert severities["approval"] == "high"
         assert severities["routing"] == "medium"
+        assert severities["schema"] == "medium"
 
 
 # ---------------------------------------------------------------------------

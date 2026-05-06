@@ -83,6 +83,12 @@ class TestFallbackTest:
         assert "routing violation still present" in result["test_code"]
         assert "routing contract is satisfied post-repair" in result["assertions"]
 
+    def test_test_code_covers_schema_contract(self):
+        result = _fallback_test("patch", [_v("schema")])
+        assert "final_output" in result["test_code"]
+        assert "schema violation still present" in result["test_code"]
+        assert "schema contract is satisfied post-repair" in result["assertions"]
+
     def test_test_name_is_snake_case(self):
         result = _fallback_test("patch", [_v()])
         assert " " not in result["test_name"]

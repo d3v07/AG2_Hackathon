@@ -7,7 +7,7 @@ Covers gaps not addressed by existing test files:
 - zone_b/agents/repair.py: _pick_primary, PRIMITIVE_MAP completeness
 - zone_b/agents/regression_test.py: _parse_status edge cases, fallback path
 - zone_b/agents/attribution.py: fallback path with multiple violations
-- Contract checker: 1-of-3 and 2-of-3 partial failures, boundary values
+- Contract checker: partial failures, boundary values
 - Zone A→B data flow: context_delta folding, unknown keys, minimal trace
 - run_all.py: missing fixture file exit code
 """
@@ -64,7 +64,8 @@ def _make_run_trace(events=None) -> RunTrace:
 def _make_context_snapshot(**overrides) -> ContextSnapshot:
     defaults = dict(
         retrieved_sources=[], verified_sources_count=0, tool_events=[],
-        approval_status="pending", failed_agent=None, failed_step=None, final_output=None,
+        approval_status="pending", failed_agent=None, failed_step=None,
+        final_output={"summary": "s", "claims": [], "citations": [], "risks": [], "next_steps": []},
     )
     defaults.update(overrides)
     return ContextSnapshot(**defaults)

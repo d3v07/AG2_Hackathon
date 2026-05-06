@@ -6,14 +6,14 @@
 - Phase: Sprint 3 execution
 - Branch: feat/sprint-3-foundation
 - Current Sprint: Sprint 3
-- Current Task: #14 Add C-SCH Schema contract as deterministic lambda
-- Last Checkpoint: #13 implementation verified locally; next work item is #14.
+- Current Task: Sprint 3 local implementation complete
+- Last Checkpoint: #14 implementation verified locally; Sprint 3 gate is next.
 
 ## Sprint Board
 Sprint 3: Foundation
 - #12 P0 Docs: Audit current state and write NEXT_PHASE_AUDIT.md — local commit complete
 - #13 P0 Zone B: Add C-RTE Routing contract as deterministic lambda — verification complete
-- #14 P0 Zone B: Add C-SCH Schema contract as deterministic lambda — next
+- #14 P0 Zone B: Add C-SCH Schema contract as deterministic lambda — verification complete
 
 ## What Worked
 - GitHub issue #12 exists and is open.
@@ -34,6 +34,16 @@ Sprint 3: Foundation
 - #13 integration gate passed: `pytest tests/test_integration.py::TestContractViolationDetection tests/test_integration.py::TestRunAllFixtureMode tests/test_group_chat.py -q` passed 22 tests.
 - #13 full gate passed: `pytest -x --tb=short` passed 281 tests.
 - #13 live demo probe returned HTTP 200.
+- #14 RED tests failed for the expected reason before implementation: no schema contract existed.
+- #14 schema contract now enforces required `final_output` keys from `ContextSnapshot.final_output`.
+- #14 keeps fixture C-SCH passing and fixture violation count at 4.
+- Deterministic regression fallback now covers schema as well as evidence/tool/routing/approval.
+- #14 focused gate passed: `pytest tests/test_schema_contract.py tests/test_contract_checker.py tests/test_regression_test.py tests/test_rigorous.py::TestPartialContractFailures -q` passed 59 tests.
+- #14 fixture gate passed: `python3 run_all.py --fixture` reported `Regression status : pass`.
+- #14 integration gate passed: `pytest tests/test_schema_contract.py tests/test_contract_checker.py tests/test_integration.py::TestContractViolationDetection tests/test_integration.py::TestRunAllFixtureMode tests/test_group_chat.py -q` passed 54 tests.
+- #14 full gate passed: `pytest -x --tb=short` passed 288 tests.
+- #14 live demo probe returned HTTP 200.
+- #14 review pass found no blocking issues.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -42,8 +52,8 @@ Sprint 3: Foundation
 - `docs/PLAN_VS_REALITY.md` is referenced by the handoff but missing locally.
 
 ## Blockers
-- No regression-gate blocker remains for #13.
+- No regression-gate blocker remains for Sprint 3.
 - Remaining toolchain gaps: `ruff` unavailable, FastAPI unavailable in this Python environment, `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Start #14 with a RED schema-contract test. Do not push without fresh approval.
+Run the Sprint 3 gate or start #15 if the user wants to continue. Do not push without fresh approval.

@@ -79,7 +79,7 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 27. **"Contracts are enforced in Zone B's `contract_checker.py` as deterministic Python lambdas. The verdict is pure code — never delegated to an LLM. Same trace, same violations, every time."**
 
-28. **"Today four of five contracts are enforced: evidence, tool, routing, approval. Schema is still declared but scheduled for the next contract slice."**
+28. **"Today all five contracts are enforced: evidence, tool, routing, approval, and schema. The fixture fails four of them and passes schema."**
 
 29. **"Why this separation? A workflow can't grade its own homework. Zone A could lie in its narrative; Zone B reads the trace and catches the lie."**
 
@@ -160,7 +160,7 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 ## HONEST CONCESSIONS — say these BEFORE the judge catches them
 
-54. **"Four of five contracts are enforced in code today; schema is declared in Zone A and comes next."**
+54. **"All five contracts are enforced in code today. The current fixture passes schema, so the demo reports four violations rather than five."**
 
 55. **"The four per-violation patches on the Repair screen are template-driven from a contract-type-to-primitive map; the backend currently emits one primary patch per run. The mapping is real, the diffs are pre-baked for this demo run."**
 

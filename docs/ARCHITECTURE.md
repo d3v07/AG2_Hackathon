@@ -295,14 +295,14 @@ python run_all.py
 #   plus /api/runs/RUN-041 returns the same CONCORD_DATA shape.
 ```
 
-The 281-test pytest suite covers parsing, contract lambdas, primitive map, fallback paths, and Zone A→B integration.
+The 288-test pytest suite covers parsing, contract lambdas, primitive map, fallback paths, and Zone A→B integration.
 
 ---
 
 ## 10. Q&A — Likely Judge Questions
 
 **Q: Why not let the LLM decide if a contract is violated?**
-Because contract violations need to be *deterministic*. If the same trace produces a different violation count on different runs, you can't trust the report. The lambdas in `contract_checker.py:9-74` are pure code; the LLM is only used for the human-readable `expected` / `observed` strings.
+Because contract violations need to be *deterministic*. If the same trace produces a different violation count on different runs, you can't trust the report. The lambdas in `contract_checker.py:9-88` are pure code; the LLM is only used for the human-readable `expected` / `observed` strings.
 
 **Q: Why a separate Attribution agent? Doesn't the contract already name the failed agent?**
 Yes for simple cases. But the agent whose contract *failed* is often downstream of the agent who *caused* the failure. Example: Reporter emits final output without verified sources — Reporter's contract failed, but Verifier is responsible for `verified_sources_count=0`. Attribution reasons over the handoff path to surface the upstream cause.

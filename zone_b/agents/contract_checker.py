@@ -6,6 +6,9 @@ from zone_b.config import get_llm_config
 from zone_b.utils import parse_json_body as _parse_json_body, make_proxy as _make_proxy
 
 
+REQUIRED_FINAL_OUTPUT_KEYS = {"summary", "claims", "citations", "risks", "next_steps"}
+
+
 CONTRACTS = [
     {
         "type": "evidence",
@@ -40,6 +43,13 @@ CONTRACTS = [
         "failed_agent": "ReporterAgent",
         "check": lambda trace, snap: _check_routing_contract(trace),
     },
+    {
+        "type": "schema",
+        "severity": "medium",
+        "rule": "final_output must include summary, claims, citations, risks, and next_steps",
+        "failed_agent": "ReporterAgent",
+        "check": lambda trace, snap: _check_schema_contract(snap),
+    },
 ]
 
 
@@ -70,6 +80,12 @@ def _check_routing_contract(run_trace: RunTrace) -> bool:
             return False
 
     return True
+
+
+def _check_schema_contract(snap: ContextSnapshot) -> bool:
+    if not isinstance(snap.final_output, dict):
+        return False
+    return REQUIRED_FINAL_OUTPUT_KEYS.issubset(snap.final_output.keys())
 
 
 def _find_failed_step(run_trace: RunTrace, agent_name: str) -> int:

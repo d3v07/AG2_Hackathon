@@ -114,7 +114,7 @@ Zone B: Concord diagnostic (detects, attributes, repairs)
                              │
                              ▼
               ┌────────────────────────────┐
-              │  ContractChecker  [B2]     │    checks 4 rules
+              │  ContractChecker  [B2]     │    checks 5 rules
               │  (deterministic + LLM      │    → 4 Violation objects
               │   for human text)          │    3 HIGH, 1 MEDIUM
               └──────────────┬─────────────┘
@@ -391,7 +391,7 @@ The LLM is called *after* a check fails — only to produce `expected` / `observ
 │   │   └── sample_trace.json       pre-baked run_041 trace (4 violations)
 │   └── agents/
 │       ├── trace_collector.py      JSON → RunTrace + ContextSnapshot (no LLM)
-│       ├── contract_checker.py     4 rules, deterministic + LLM text
+│       ├── contract_checker.py     5 rules, deterministic + LLM text
 │       ├── attribution.py          LLM → failed_agent + root cause
 │       ├── repair.py               primitive map + LLM patch code
 │       ├── regression_test.py      LLM test gen + Daytona execution
@@ -419,16 +419,17 @@ The LLM is called *after* a check fails — only to produce `expected` / `observ
     ├── test_contract_checker.py    26  — contract lambdas + step lookup
     ├── test_attribution.py         10  — deterministic fallback paths
     ├── test_repair.py              17  — _pick_primary, PRIMITIVE_MAP, patch gen
-    ├── test_regression_test.py     19  — _parse_status, fallback test execution
+    ├── test_regression_test.py     20  — _parse_status, fallback test execution
     ├── test_reporter.py            13  — report assembly, severity summary
     ├── test_human_gate.py           6  — approval output shape
     ├── test_zone_a.py              22  — strip_json_fences, _to_trace_event, agent shapes
     ├── test_integration.py         18  — Zone A→B schema, 4 violations, clean trace = 0
     ├── test_rigorous.py            57  — edge cases, error paths, boundary conditions
     ├── test_routing_contract.py     3  — routing contract broken + clean trace cases
+    ├── test_schema_contract.py      6  — schema contract missing-key + fixture cases
     └── test_swarm.py               27  — AG2 swarm tools, handoffs, guardrails, trace extraction
                                    ────
-                                   281  total (267 non-integration + 14 integration-marked)
+                                   288  total (274 non-integration + 14 integration-marked)
 ```
 
 ---
@@ -528,7 +529,7 @@ python zone_a/run.py
 ## Tests
 
 ```bash
-# Fast — no API calls (~0.5s, 267 tests)
+# Fast — no API calls (~0.5s, 274 tests)
 pytest tests/ -m "not integration"
 
 # Full suite including LLM + Daytona integration tests
@@ -544,13 +545,14 @@ pytest tests/
 | `test_contract_checker.py` | 26 | Contract lambdas, boundary values, step lookup |
 | `test_attribution.py` | 10 | Deterministic fallback, empty violations |
 | `test_repair.py` | 17 | `_pick_primary` severity ranking, full `PRIMITIVE_MAP` coverage |
-| `test_regression_test.py` | 19 | `_parse_status` edge cases, fallback test code executes PASS |
+| `test_regression_test.py` | 20 | `_parse_status` edge cases, fallback test code executes PASS |
 | `test_reporter.py` | 13 | Report assembly, severity summary, fallback narrative |
 | `test_human_gate.py` | 6 | Auto-approve shape, handles empty report |
 | `test_zone_a.py` | 22 | `strip_json_fences`, `_to_trace_event`, all 5 agent return shapes |
 | `test_integration.py` | 18 | Zone A→B schema compatibility, exactly 4 violations, clean trace = 0 |
 | `test_rigorous.py` | 57 | Edge cases, error paths, partial violations, data-flow contracts |
 | `test_routing_contract.py` | 3 | Routing contract fails fixture, passes clean trace |
+| `test_schema_contract.py` | 6 | Schema contract fails missing keys, passes fixture |
 | `test_swarm.py` | 27 | Swarm tools, handoffs, guardrails, trace extraction |
 
 ---

@@ -271,9 +271,9 @@ These work today. Don't replace them; integrate around them.
 - Tavily live integration — `zone_a/agents/researcher.py:46-58`
 - Daytona live integration — `zone_b/agents/regression_test.py:98-123`
 - Gemini 2.5 Flash via OpenRouter — `zone_a/config.py:7-17`
-- 4 of 5 deterministic contracts (Evidence, Tool, Routing, Approval) — `zone_b/agents/contract_checker.py:9-74`
+- 5 of 5 deterministic contracts (Evidence, Tool, Routing, Approval, Schema) — `zone_b/agents/contract_checker.py:9-88`
 - AG2 swarm with `OnContextCondition` + `RegexGuardrail` runtime enforcement — `zone_a/swarm.py:201-231`
-- 281 unit + integration tests — `tests/`
+- 288 unit + integration tests — `tests/`
 - Static dashboard on Vercel (fixture-driven) — `public/index.html`, https://concord-lite.vercel.app/
 - Local FastAPI + adapter — `api/index.py`, `api/adapter.py`, `api/store.py`
 - Three reference docs — `docs/ARCHITECTURE.md`, `docs/DEMO_SCRIPT.md`, `docs/QA_DEEP.md`
