@@ -102,12 +102,13 @@ Sprint 5: API persistence and run APIs
 - Operator steering: read automated review comments on recent PRs and apply any critical changes before landing the active sprint.
 - Sprint 5 review blockers were addressed: API routes now pass authenticated non-local tenant context into storage and background processing, queued/analyzing runs are marked failed during API startup recovery, and approval updates preserve status history.
 - Sprint 5 regression gate is stable in pytest via `CONCORD_REGRESSION_RUNNER=local`; the direct `python3 run_all.py --fixture` gate still exercises the live sandbox path and passed.
-- Sprint 5 focused review gate passed: `pytest -q tests/test_api_persistence.py tests/test_api_workflows.py tests/test_api_runs.py tests/test_api_adapter_multi_patch.py tests/test_per_violation_repairs.py tests/test_regression_test.py tests/test_contract_checker.py tests/test_reporter.py tests/test_integration.py` passed 112 tests.
-- Sprint 5 full gate passed: `pytest -x --tb=short` passed 326 tests.
+- Sprint 5 focused review gate passed: `pytest -q tests/test_api_persistence.py tests/test_api_workflows.py tests/test_api_runs.py tests/test_api_adapter_multi_patch.py tests/test_per_violation_repairs.py tests/test_regression_test.py tests/test_contract_checker.py tests/test_reporter.py tests/test_integration.py` passed 114 tests.
+- Sprint 5 full gate passed: `pytest -x --tb=short` passed 328 tests.
 - Sprint 5 fixture gate passed: `python3 run_all.py --fixture` reported `Repair patches    : 4`, `Regression status : pass`, and `Regression tests   : 4 pass / 0 fail / 0 error`.
 - Sprint 5 `git diff --check` passed.
 - Sprint 5 AG2 import smoke passed.
 - Sprint 5 local API probe passed: `GET /api/health` returned 200, `GET /api/runs/RUN-041` returned 4 patches with `completed`, and unauthenticated `X-Tenant-ID: tenant-a` was rejected with 401.
+- PR #46 inline comments were addressed locally with tests: local regression runner errors report `error`, JSONP escapes JS-sensitive output, API startup uses explicit store initialization, and reporter summary naming now matches per-violation status semantics.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.

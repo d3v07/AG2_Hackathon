@@ -486,7 +486,7 @@ Because there is no backend running in the deployed version. If we wired the liv
 
 ### Q57: How do you run the test suite?
 
-`pytest` at the repo root. The suite currently collects 326 tests across the API, Zone A, Zone B, integration, routing, schema, and per-violation regression coverage (see `README.md` Project Structure). Coverage includes:
+`pytest` at the repo root. The suite currently collects 328 tests across the API, Zone A, Zone B, integration, routing, schema, and per-violation regression coverage (see `README.md` Project Structure). Coverage includes:
 - API persistence, workflow, and run submission behavior (`test_api_*.py`)
 - Dataclass field integrity (`test_models.py`)
 - Trace parsing and folding (`test_trace_collector.py`)

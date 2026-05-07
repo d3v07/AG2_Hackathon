@@ -185,6 +185,31 @@ def test_approval_on_queued_run_returns_conflict_not_500(tmp_path, clean_trace_r
     assert "completed" in response.json()["detail"]
 
 
+def test_jsonp_run_payload_escapes_javascript_sensitive_characters(tmp_path):
+    from api.store import put_run
+
+    client = _client(tmp_path)
+    put_run(
+        "RUN-JS",
+        {
+            "run": {"id": "RUN-JS", "workflow": "JS"},
+            "patches": [],
+            "violations": [],
+            "report": {
+                "summary": "line\u2028break<script>",
+                "approval": {"status": "PENDING_OPERATOR"},
+            },
+        },
+    )
+
+    response = client.get("/api/runs/RUN-JS.js")
+
+    assert response.status_code == 200
+    assert "\\u2028" in response.text
+    assert "\\u003cscript>" in response.text
+    assert "line\u2028break<script>" not in response.text
+
+
 def test_run_routes_are_tenant_isolated_with_same_run_id(tmp_path, clean_trace_raw, monkeypatch):
     client = _client(tmp_path)
     monkeypatch.setenv(

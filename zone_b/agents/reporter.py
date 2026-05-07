@@ -72,10 +72,10 @@ def _regression_tests(regression_out: dict, violations: list[Violation]) -> list
     ]
 
 
-def _regression_summary(regression_tests: list[dict]) -> dict:
+def _violation_status_summary(violations: list[dict]) -> dict:
     summary = {"pass": 0, "fail": 0, "error": 0}
-    for test in regression_tests:
-        status = test.get("test_status", "error")
+    for violation in violations:
+        status = violation.get("test_status", "error")
         summary[status if status in summary else "error"] += 1
     return summary
 
@@ -155,7 +155,7 @@ async def run_reporter(
         "violations": violation_dicts,
         "patches": _repair_patches(repair_out),
         "regression_tests": regression_tests,
-        "regression_summary": _regression_summary(violation_dicts),
+        "regression_summary": _violation_status_summary(violation_dicts),
     }
 
     try:

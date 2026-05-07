@@ -25,16 +25,14 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from api.db import init_db  # noqa: E402
 from api.routes.runs import router as runs_router  # noqa: E402
 from api.routes.workflows import router as workflows_router  # noqa: E402
-from api.store import list_runs, recover_interrupted_runs  # noqa: E402
+from api.store import ensure_store, recover_interrupted_runs  # noqa: E402
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    init_db()
-    list_runs()
+    ensure_store()
     recover_interrupted_runs()
     yield
 

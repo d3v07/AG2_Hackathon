@@ -55,7 +55,7 @@ def get_run_jsonp(run_id: str, tenant_id: str = Depends(get_tenant_id)) -> Respo
     data = get_run(run_id, tenant_id=tenant_id)
     if data is None:
         raise HTTPException(status_code=404, detail=f"run {run_id} not found")
-    payload = json.dumps(data, ensure_ascii=False)
+    payload = json.dumps(data, ensure_ascii=True).replace("<", "\\u003c")
     body = f"window.CONCORD_DATA = {payload};"
     return Response(content=body, media_type="application/javascript")
 

@@ -332,10 +332,14 @@ def _seed_fixture(session: Session, tenant_id: str = "local") -> None:
     session.commit()
 
 
-def _ensure_store() -> None:
+def ensure_store() -> None:
     init_db()
     with session_scope() as session:
         _seed_fixture(session)
+
+
+def _ensure_store() -> None:
+    ensure_store()
 
 
 def _replace_child_rows(session: Session, run_id: str, tenant_id: str, data: dict[str, Any]) -> None:

@@ -208,3 +208,26 @@ class TestRunRegressionTest:
         assert result["fallback_used"] is True
         assert result["fallback_reason"] == "local_regression_runner"
         assert result["sandbox_id"] == "local-regression"
+
+    def test_local_runner_timeout_reports_error(self, monkeypatch):
+        import subprocess
+
+        monkeypatch.setenv("CONCORD_REGRESSION_RUNNER", "local")
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test.subprocess.run",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                subprocess.TimeoutExpired(cmd="python", timeout=10)
+            ),
+        )
+
+        result = asyncio.run(
+            run_regression_test(
+                "patch",
+                [_v("evidence")],
+                RunTrace("r", "w", [], None),
+            )
+        )
+
+        assert result["sandbox_id"] == "local-regression"
+        assert result["test_status"] == "error"
+        assert "timeout" in result["stdout"].lower()

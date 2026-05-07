@@ -208,16 +208,21 @@ def _run_in_daytona(test_code: str) -> tuple[str, str, str]:
 
 
 def _run_locally(test_code: str) -> tuple[str, str, str]:
-    proc = subprocess.run(
-        [sys.executable, "-c", test_code],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    stdout = proc.stdout
-    if proc.stderr:
-        stdout = f"{stdout}{proc.stderr}"
-    return stdout, "local-regression", _parse_status(stdout)
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", test_code],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        stdout = proc.stdout
+        if proc.stderr:
+            stdout = f"{stdout}{proc.stderr}"
+        return stdout, "local-regression", _parse_status(stdout)
+    except subprocess.TimeoutExpired as exc:
+        return f"Local regression timeout: {exc!r}", "local-regression", "error"
+    except OSError as exc:
+        return f"Local regression error: {exc!r}", "local-regression", "error"
 
 
 def _use_local_regression_runner() -> bool:
