@@ -61,6 +61,14 @@ def _print_report(report: dict) -> None:
     print(f"  Repair patches    : {len(report.get('patches', []))}")
     print(f"  Repair confidence : {report.get('repair_confidence', 0):.2f}")
     print(f"  Regression status : {report.get('regression_test_status', '<unknown>')}")
+    regression_summary = report.get("regression_summary", {})
+    if regression_summary:
+        print(
+            "  Regression tests   : "
+            f"{regression_summary.get('pass', 0)} pass / "
+            f"{regression_summary.get('fail', 0)} fail / "
+            f"{regression_summary.get('error', 0)} error"
+        )
     print(f"  Approval status   : {report.get('approval_status', '<unknown>')}")
     narrative = report.get("narrative", "")
     print(

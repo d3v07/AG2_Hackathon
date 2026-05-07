@@ -63,6 +63,14 @@ async def run_diagnostic_pipeline(trace_path: str) -> dict:
         f"      test_status={tested['test_status']} "
         f"sandbox={tested['sandbox_id']}"
     )
+    summary = tested.get("per_violation_summary", {})
+    if summary:
+        print(
+            "      per_violation="
+            f"{summary.get('pass', 0)} pass/"
+            f"{summary.get('fail', 0)} fail/"
+            f"{summary.get('error', 0)} error"
+        )
 
     print(f"\n[6/7] Reporter — assembling Contract Violation Report")
     reported = await run_reporter(
@@ -98,6 +106,14 @@ def _print_final_report(report: dict) -> None:
     print(f"Repair patches    : {len(report.get('patches', []))}")
     print(f"Repair confidence : {report['repair_confidence']:.2f}")
     print(f"Regression status : {report['regression_test_status']}")
+    regression_summary = report.get("regression_summary", {})
+    if regression_summary:
+        print(
+            "Regression tests  : "
+            f"{regression_summary.get('pass', 0)} pass / "
+            f"{regression_summary.get('fail', 0)} fail / "
+            f"{regression_summary.get('error', 0)} error"
+        )
     print(f"Approval status   : {report['approval_status']}")
     print(f"\nNarrative:\n{report['narrative']}")
     print("=" * 60)
