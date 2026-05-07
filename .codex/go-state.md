@@ -4,10 +4,10 @@
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
 - Phase: Sprint 4 execution
-- Branch: feat/issue-16-per-violation-regression
+- Branch: feat/sprint-4-repair-api
 - Current Sprint: Sprint 4
-- Current Task: #16 per-violation regression test generation
-- Last Checkpoint: #16 full gate passed locally; local commit recorded.
+- Current Task: #17 API adapter multi-patch passthrough
+- Last Checkpoint: #17 full Sprint 4 gate passed locally; local commit recorded.
 
 ## Sprint Board
 Sprint 3: Foundation
@@ -72,6 +72,17 @@ Sprint 4: Repair and downstream report compatibility
 - #16 AG2 import smoke passed.
 - #16 live demo probe returned HTTP 200.
 - #16 `git diff --check` passed.
+- User steered the active Sprint 4 run to continue after an interrupted focused test wait.
+- #17 RED adapter test failed for the expected reason: `api/adapter.py` still used template primitives instead of backend `report.patches[]`.
+- #17 adapter now passes native backend repair patches through to dashboard `CONCORD_DATA.patches[]` when present, while preserving legacy scalar patch synthesis when `report.patches` is absent.
+- #17 seeded dashboard fixture compatibility is covered through `api.store.get_run("RUN-041")`.
+- #17 targeted gate passed: `pytest tests/test_api_adapter_multi_patch.py -q` passed 3 tests.
+- #17 focused gate passed: `pytest -q tests/test_api_adapter_multi_patch.py tests/test_per_violation_repairs.py tests/test_repair.py tests/test_reporter.py tests/test_integration.py` passed 61 tests.
+- #17 full gate passed: `pytest -x --tb=short` passed 301 tests.
+- #17 fixture gate passed: `python3 run_all.py --fixture` reported `Repair patches    : 4`, `Regression status : pass`, and `Regression tests   : 4 pass / 0 fail / 0 error`.
+- #17 `git diff --check` passed.
+- #17 AG2 import smoke passed using repo-valid group chat, handoff, guardrail, Daytona executor, and Daytona SDK import paths.
+- #17 live API probe passed after starting `.venv/bin/uvicorn api.index:app --port 8765`: `GET /api/runs/RUN-041` returned HTTP 200 with 4 patches.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -83,7 +94,7 @@ Sprint 4: Repair and downstream report compatibility
 - No regression-gate blocker remains for Sprint 3.
 - No #15 blocker remains.
 - No #16 blocker remains.
-- Remaining toolchain gaps: `ruff` unavailable, FastAPI unavailable in this Python environment, `docs/PLAN_VS_REALITY.md` missing.
+- Remaining toolchain gaps: `ruff` unavailable in the current Python environment; FastAPI is available through `.venv`; `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Wait for fresh approval before pushing or creating a PR for #16.
+Stop for fresh approval before any push, PR, merge, or remote branch deletion. Next public step is pushing `feat/sprint-4-repair-api` and opening a PR to `production` for Sprint 4 (#16/#17).
