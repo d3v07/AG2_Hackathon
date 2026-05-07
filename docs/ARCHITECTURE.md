@@ -129,7 +129,7 @@ TraceCollector → ContractChecker → Attribution → Repair
 ### B5. RegressionTest (`zone_b/agents/regression_test.py`) — **Daytona-powered**
 
 - **Input:** `repair_patch` + violations + run trace
-- **Output:** `test_name`, `test_code`, `assertions`, `test_status` (pass/fail/error), `stdout`, `sandbox_id`
+- **Output:** `test_name`, `test_code`, `assertions`, `test_status` (pass/fail/error), `stdout`, `sandbox_id`, `per_violation_results[]`, `per_violation_summary`
 - **Two-step:**
   1. `_ask_llm_for_test:19-57` — `ConversableAgent` writes a self-contained Python script that simulates post-repair state and asserts each violation is no longer reachable. Script must print `PASS` or `FAIL: <reason>`. Standard library only.
   2. `_run_in_daytona:98-123` — creates a fresh Daytona sandbox via `daytona_sdk.Daytona(DaytonaConfig(...)).create()`, runs the test with `sandbox.process.code_run(test_code)`, parses stdout, **always deletes the sandbox in `finally`**.
@@ -139,7 +139,7 @@ TraceCollector → ContractChecker → Attribution → Repair
 ### B6. Reporter (`zone_b/agents/reporter.py`)
 
 - **Input:** trace + violations + attribution + repair + regression result + snapshot
-- **Output:** `report` dict with 14+ fields including the violation list, severity summary, repair details, regression status, and a human-readable `narrative`
+- **Output:** `report` dict with 14+ fields including the violation list, severity summary, repair details, per-violation regression status, and a human-readable `narrative`
 - **LLM use:** narrative only (`_ask_llm_for_narrative`). Every other field is direct dict assembly.
 - Falls back to a templated narrative on LLM failure.
 
@@ -225,7 +225,7 @@ The frontend is a self-contained React app served as static assets from Vercel (
 ### Screen 6 — **Regression Test** (`screen === "regression"`)
 - **Renders:** Daytona terminal stream (every line of the sandbox stdout), sandbox metadata card (sandbox_id, image, runner, duration, status), assertions table (4 PASS rows).
 - **Data sources:** `D.test.{sandbox_id, lines, assertions}`.
-- **Backend equivalent:** `regression_test.run_regression_test()` returns `{test_name, test_code, assertions, test_status, stdout, sandbox_id}` — directly maps. The terminal `lines[]` are the captured stdout split per line; assertions come from the LLM's structured response or fallback.
+- **Backend equivalent:** `regression_test.run_regression_test()` returns `{test_name, test_code, assertions, test_status, stdout, sandbox_id, per_violation_results[], per_violation_summary}` — directly maps. The terminal `lines[]` are the captured stdout split per line; assertions come from the LLM's structured response or fallback.
 - **Why Daytona shows up here:** this is where it earns its keep. Per-run sandbox, isolated exec, deterministic cleanup.
 
 ### Screen 7 — **Final Report** (`screen === "report"`)
@@ -252,6 +252,8 @@ Zone B Report (backend output, shared/models.py + zone_b/agents/reporter.py)
 ├── patch_code                str          (Python snippet from LLM)
 ├── patches                   list[dict]   (one repair patch per violation)
 ├── regression_test_status    str          (pass / fail / error)
+├── regression_tests          list[dict]   (one regression result per violation)
+├── regression_summary        {pass, fail, error}
 ├── repair_confidence         float        (0.85 nominal, 0.5 fallback)
 ├── approval_status           str          (pending / approved / rejected)
 ├── violations                list[dict]
@@ -296,7 +298,7 @@ python run_all.py
 #   plus /api/runs/RUN-041 returns the same CONCORD_DATA shape.
 ```
 
-The 294-test pytest suite covers parsing, contract lambdas, primitive map, fallback paths, and Zone A→B integration.
+The 298-test pytest suite covers parsing, contract lambdas, primitive map, fallback paths, per-violation regression status, and Zone A→B integration.
 
 ---
 

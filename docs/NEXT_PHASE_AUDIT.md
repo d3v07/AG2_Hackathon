@@ -37,7 +37,7 @@ Scope: GitHub issue #12 plus the follow-up regression-gate stabilization request
 
 ## Test Status
 
-All collected pytest tests passed in the fresh baseline run. After the regression-gate stabilization and Sprint #15 repair coverage, the suite collects 294 tests.
+All collected pytest tests passed in the fresh baseline run. After the regression-gate stabilization and Sprint #16 regression coverage, the suite collects 298 tests.
 
 | Test file | Collected | Status |
 |---|---:|---|
@@ -45,11 +45,12 @@ All collected pytest tests passed in the fresh baseline run. After the regressio
 | `tests/test_contract_checker.py` | 26 | PASS |
 | `tests/test_group_chat.py` | 12 | PASS |
 | `tests/test_human_gate.py` | 6 | PASS |
-| `tests/test_integration.py` | 19 | PASS |
+| `tests/test_integration.py` | 20 | PASS |
 | `tests/test_models.py` | 21 | PASS |
 | `tests/test_regression_test.py` | 18 | PASS |
 | `tests/test_repair.py` | 20 | PASS |
 | `tests/test_reporter.py` | 15 | PASS |
+| `tests/test_per_violation_repairs.py` | 3 | PASS |
 | `tests/test_rigorous.py` | 57 | PASS |
 | `tests/test_swarm.py` | 27 | PASS |
 | `tests/test_trace_collector.py` | 30 | PASS |
@@ -65,7 +66,7 @@ Warnings are dependency deprecations from `autogen.fast_depends` and `daytona_sd
 | Zone A fixture path | Working | `run_all.py:102-107` skips Zone A and uses `zone_b/fixtures/sample_trace.json` |
 | Zone B contract checker | Live | `zone_b/agents/contract_checker.py:9-88` enforces evidence/tool/approval/routing/schema |
 | Zone B repair | Live per-violation backend output | `zone_b/agents/repair.py` emits `patches[]` in violation order and keeps scalar aliases for current callers |
-| Zone B regression test | Live Daytona path, but verdict can vary | `zone_b/agents/regression_test.py:91-117` creates, runs, and deletes a Daytona sandbox |
+| Zone B regression test | Live Daytona path with per-violation result rows | `zone_b/agents/regression_test.py` creates, runs, and deletes a Daytona sandbox, then emits `per_violation_results[]` |
 | Dashboard fixture data | Static and demo-shaped | `api/store.py:12-133` seeds `RUN-041`; `public/data.js` also carries fixture data |
 | API server import | Broken in current environment | `api/index.py:19-22` imports FastAPI, but `fastapi` is not installed |
 

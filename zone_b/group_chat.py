@@ -114,9 +114,13 @@ async def _regression_test_stage(ctx: ContextVariables) -> str:
         repair.get("repair_patch", ""), violations, run_trace
     )
     ctx.set("regression", tested)
+    summary = tested.get("per_violation_summary", {})
+    suffix = ""
+    if summary:
+        suffix = f" tests={summary.get('pass', 0)} pass"
     return (
         f"RegressionTest: status={tested['test_status']} "
-        f"sandbox={tested['sandbox_id']}"
+        f"sandbox={tested['sandbox_id']}{suffix}"
     )
 
 
