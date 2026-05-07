@@ -165,3 +165,69 @@ class TestRunRegressionTest:
         assert result["fallback_used"] is False
         assert result["generated_test_status"] == "error"
         assert len(calls) == 1
+
+    def test_non_list_generated_assertions_fall_back_to_default_assertions(self, monkeypatch):
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._ask_llm_for_test",
+            lambda *_: {
+                "test_name": "test_generated",
+                "test_code": "print('PASS evidence')",
+                "assertions": "not-a-list",
+            },
+        )
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._run_in_daytona",
+            lambda _: ("PASS evidence\nPASS", "sb-001", "pass"),
+        )
+
+        result = asyncio.run(
+            run_regression_test("patch", [_v("evidence")], RunTrace("r", "w", [], None))
+        )
+
+        assert result["assertions"] == []
+        assert result["per_violation_results"][0]["assertion"] == (
+            "evidence contract is satisfied post-repair"
+        )
+
+    def test_local_runner_uses_deterministic_test_without_daytona(self, monkeypatch):
+        monkeypatch.setenv("CONCORD_REGRESSION_RUNNER", "local")
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._ask_llm_for_test",
+            lambda *_: (_ for _ in ()).throw(AssertionError("should not call generator")),
+        )
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._run_in_daytona",
+            lambda *_: (_ for _ in ()).throw(AssertionError("should not call sandbox")),
+        )
+
+        result = asyncio.run(
+            run_regression_test("patch", [_v("evidence")], RunTrace("r", "w", [], None))
+        )
+
+        assert result["test_status"] == "pass"
+        assert result["fallback_used"] is True
+        assert result["fallback_reason"] == "local_regression_runner"
+        assert result["sandbox_id"] == "local-regression"
+
+    def test_local_runner_timeout_reports_error(self, monkeypatch):
+        import subprocess
+
+        monkeypatch.setenv("CONCORD_REGRESSION_RUNNER", "local")
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test.subprocess.run",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                subprocess.TimeoutExpired(cmd="python", timeout=10)
+            ),
+        )
+
+        result = asyncio.run(
+            run_regression_test(
+                "patch",
+                [_v("evidence")],
+                RunTrace("r", "w", [], None),
+            )
+        )
+
+        assert result["sandbox_id"] == "local-regression"
+        assert result["test_status"] == "error"
+        assert "timeout" in result["stdout"].lower()

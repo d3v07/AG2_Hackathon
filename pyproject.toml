@@ -11,11 +11,15 @@ dependencies = [
     "python-dotenv",
     "tavily-python",
     "daytona-sdk",
+    "fastapi==0.136.1",
+    "pydantic==2.13.4",
+    "sqlmodel==0.0.38",
+    "uvicorn==0.38.0",
 ]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["shared*", "zone_a*", "zone_b*"]
+include = ["api*", "shared*", "zone_a*", "zone_b*"]
 
 [tool.pytest.ini_options]
 markers = [

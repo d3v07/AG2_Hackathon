@@ -97,28 +97,28 @@ def _find_failed_step(run_trace: RunTrace, agent_name: str) -> int:
 
 def _generate_violation_text(contract: dict, run_trace: RunTrace, snap: ContextSnapshot) -> tuple[str, str]:
     """Use ConversableAgent to generate human-readable expected/observed strings."""
-    checker = ConversableAgent(
-        name="ContractCheckerAgent",
-        llm_config=get_llm_config(),
-        system_message=(
-            "You are a contract violation analyst for AG2 multi-agent workflows. "
-            "When given a contract violation, return ONLY a JSON object with keys "
-            "'expected' and 'observed' — one sentence each. No other text."
-        ),
-        human_input_mode="NEVER",
-        max_consecutive_auto_reply=1,
-    )
-    user = _make_proxy("ContractCheckerProxy")
-    prompt = (
-        f"Contract type: {contract['type']}\n"
-        f"Rule: {contract['rule']}\n"
-        f"Context: verified_sources_count={snap.verified_sources_count}, "
-        f"approval_status={snap.approval_status}, "
-        f"handoff_path={[e.agent for e in run_trace.events]}\n"
-        f"Return JSON with 'expected' and 'observed' keys only."
-    )
-    result = user.initiate_chat(checker, message=prompt, max_turns=1)
     try:
+        checker = ConversableAgent(
+            name="ContractCheckerAgent",
+            llm_config=get_llm_config(),
+            system_message=(
+                "You are a contract violation analyst for AG2 multi-agent workflows. "
+                "When given a contract violation, return ONLY a JSON object with keys "
+                "'expected' and 'observed' — one sentence each. No other text."
+            ),
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=1,
+        )
+        user = _make_proxy("ContractCheckerProxy")
+        prompt = (
+            f"Contract type: {contract['type']}\n"
+            f"Rule: {contract['rule']}\n"
+            f"Context: verified_sources_count={snap.verified_sources_count}, "
+            f"approval_status={snap.approval_status}, "
+            f"handoff_path={[e.agent for e in run_trace.events]}\n"
+            f"Return JSON with 'expected' and 'observed' keys only."
+        )
+        result = user.initiate_chat(checker, message=prompt, max_turns=1)
         data = _parse_json_body(result.chat_history[-1]["content"])
         return data.get("expected", contract["rule"]), data.get("observed", "contract check failed")
     except Exception:
