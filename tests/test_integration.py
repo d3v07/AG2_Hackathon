@@ -194,3 +194,6 @@ class TestRunAllFixtureMode:
 
     def test_fixture_mode_reports_4_repair_patches(self, fixture_mode_result):
         assert "Repair patches    : 4" in fixture_mode_result.stdout
+
+    def test_fixture_mode_reports_4_regression_tests(self, fixture_mode_result):
+        assert "Regression tests   : 4 pass" in fixture_mode_result.stdout

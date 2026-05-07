@@ -305,7 +305,7 @@ Zone B is the *diagnostic pipeline* — it never runs Zone A's agents, only read
 | B2 | ContractChecker | Yes (text only) | `RunTrace` + `ContextSnapshot` | `list[Violation]` |
 | B3 | Attribution | Yes | violations + trace | `failed_agent`, `failed_step`, `likely_root_cause` |
 | B4 | Repair | Yes | violations + attribution | `patches[]`, `affected_primitive`, `patch_code`, `confidence` |
-| B5 | RegressionTest | Yes + Daytona | repair patch + violations | `test_status`, `sandbox_id` |
+| B5 | RegressionTest | Yes + Daytona | repair patch + violations | `test_status`, `per_violation_results`, `sandbox_id` |
 | B6 | Reporter | Yes | all upstream outputs | Contract Violation Report dict |
 | B7 | HumanGate | No | report | `approval_status = "approved"` |
 
@@ -350,7 +350,7 @@ The LLM is called *after* a check fails — only to produce `expected` / `observ
 
 ### RegressionTest + Daytona
 
-`RegressionTest` uses an LLM to generate a self-contained Python script that simulates the post-repair state and asserts each violation is no longer reachable. The script is executed in a fresh Daytona sandbox via `daytona.process.code_run()`. The sandbox is always deleted, even on error. If `DAYTONA_API_KEY` or `DAYTONA_API_URL` are absent, the stage returns `test_status="error"` and `sandbox_id="no-sandbox"` without crashing the pipeline.
+`RegressionTest` uses an LLM to generate a self-contained Python script that simulates the post-repair state and asserts each violation is no longer reachable. The script is executed in a fresh Daytona sandbox via `daytona.process.code_run()`. The sandbox is always deleted, even on error. The stage returns aggregate `test_status` plus one `per_violation_results[]` row per violation. If `DAYTONA_API_KEY` or `DAYTONA_API_URL` are absent, the stage returns `test_status="error"` and `sandbox_id="no-sandbox"` without crashing the pipeline.
 
 ---
 
@@ -423,7 +423,8 @@ The LLM is called *after* a check fails — only to produce `expected` / `observ
     ├── test_reporter.py            15  — report assembly, severity summary, patches
     ├── test_human_gate.py           6  — approval output shape
     ├── test_zone_a.py              22  — strip_json_fences, _to_trace_event, agent shapes
-    ├── test_integration.py         19  — Zone A→B schema, 4 violations, clean trace = 0
+    ├── test_integration.py         20  — Zone A→B schema, 4 violations, clean trace = 0
+    ├── test_per_violation_repairs.py 3 — per-violation regression statuses
     ├── test_rigorous.py            57  — edge cases, error paths, boundary conditions
     ├── test_routing_contract.py     3  — routing contract broken + clean trace cases
     ├── test_schema_contract.py      6  — schema contract missing-key + fixture cases
@@ -506,6 +507,7 @@ python zone_a/run.py
       affected_primitive=Guardrail confidence=0.85
 [5/7] RegressionTest — running in Daytona
       test_status=pass sandbox=<id>
+      per_violation=4 pass/0 fail/0 error
 [6/7] Reporter — assembling Contract Violation Report
 [7/7] HumanGate — approval check
       Decision: APPROVED
@@ -549,7 +551,8 @@ pytest tests/
 | `test_reporter.py` | 15 | Report assembly, severity summary, repair patch passthrough, fallback narrative |
 | `test_human_gate.py` | 6 | Auto-approve shape, handles empty report |
 | `test_zone_a.py` | 22 | `strip_json_fences`, `_to_trace_event`, all 5 agent return shapes |
-| `test_integration.py` | 19 | Zone A→B schema compatibility, exactly 4 violations, clean trace = 0 |
+| `test_integration.py` | 20 | Zone A→B schema compatibility, exactly 4 violations, clean trace = 0 |
+| `test_per_violation_repairs.py` | 3 | Per-violation regression status and reporter aggregation |
 | `test_rigorous.py` | 57 | Edge cases, error paths, partial violations, data-flow contracts |
 | `test_routing_contract.py` | 3 | Routing contract fails fixture, passes clean trace |
 | `test_schema_contract.py` | 6 | Schema contract fails missing keys, passes fixture |

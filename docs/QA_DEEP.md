@@ -486,7 +486,7 @@ Because there is no backend running in the deployed version. If we wired the liv
 
 ### Q57: How do you run the test suite?
 
-`pytest` at the repo root. The suite currently collects 294 tests across the Zone A, Zone B, integration, routing, and schema coverage (see `README.md` Project Structure). Coverage includes:
+`pytest` at the repo root. The suite currently collects 298 tests across the Zone A, Zone B, integration, routing, schema, and per-violation regression coverage (see `README.md` Project Structure). Coverage includes:
 - Dataclass field integrity (`test_models.py`)
 - Trace parsing and folding (`test_trace_collector.py`)
 - Contract lambdas (`test_contract_checker.py`)
@@ -494,6 +494,7 @@ Because there is no backend running in the deployed version. If we wired the liv
 - Repair primitive map (`test_repair.py`)
 - Regression test fallback (`test_regression_test.py`)
 - Reporter assembly (`test_reporter.py`)
+- Per-violation regression status (`test_per_violation_repairs.py`)
 - HumanGate output shape (`test_human_gate.py`)
 - Zone A integration (`test_zone_a.py`)
 - Zone A→B end-to-end (`test_integration.py`)

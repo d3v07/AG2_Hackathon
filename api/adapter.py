@@ -2,12 +2,12 @@
 
 The Zone B pipeline emits a flat report dict; the frontend expects a
 9-section shape with per-agent rollups, per-violation patches, and a
-regression test timeline. This module synthesises the missing fields
+regression test timeline. This module synthesizes the missing fields
 deterministically from the raw run trace + violations + report.
 
-Synthesis is presentational: contracts list is canonical, per-violation
-patches use templates keyed by contract type. When backend agents grow
-to emit these natively, swap the synthesis for direct passthroughs.
+Backend repair patches are passed through when present. Template-based
+patch synthesis remains only for legacy reports that do not include
+native `patches`.
 """
 from __future__ import annotations
 
@@ -184,12 +184,52 @@ def _build_violations_block(violations: list[dict]) -> list[dict]:
     return out
 
 
-def _build_patches_block(violations_block: list[dict], patch_code: str) -> list[dict]:
-    """Synthesise one patch per violation using contract-keyed templates."""
+def _patch_code_lines(patch_code: Any) -> list[str]:
+    if not isinstance(patch_code, str):
+        return []
+    return [line.rstrip() for line in patch_code.splitlines() if line.strip()]
+
+
+def _fallback_patch_template(contract_id: str) -> dict[str, Any]:
+    return _PATCH_TEMPLATE_BY_CONTRACT.get(contract_id, {"primitive": "Patch", "title": "Apply repair"})
+
+
+def _build_native_patches_block(
+    violations_block: list[dict],
+    native_patches: list[Any],
+) -> list[dict]:
     patches = []
-    code_lines = [l for l in (patch_code or "").splitlines() if l.strip()]
+    for i, raw_patch in enumerate(native_patches, start=1):
+        patch = raw_patch if isinstance(raw_patch, dict) else {}
+        violation = violations_block[i - 1] if i <= len(violations_block) else {}
+        contract_id = _CONTRACT_TYPE_BY_KEY.get(
+            str(patch.get("contract_type", "")).lower(),
+            violation.get("contract", "C-???"),
+        )
+        template = _fallback_patch_template(contract_id)
+
+        item = {
+            "id": f"P-{i:03d}",
+            "violation": violation.get("id", f"V-{i:03d}"),
+            "primitive": patch.get("affected_primitive") or template["primitive"],
+            "target": patch.get("failed_agent") or violation.get("failed_agent", ""),
+            "title": patch.get("repair_patch") or template["title"],
+            "removed": [],
+            "added": _patch_code_lines(patch.get("patch_code", "")),
+        }
+        for key in ("contract_type", "severity", "rule", "expected_impact", "confidence", "failed_step"):
+            if key in patch:
+                item[key] = patch[key]
+        patches.append(item)
+    return patches
+
+
+def _build_legacy_patches_block(violations_block: list[dict], patch_code: str) -> list[dict]:
+    """Synthesize one patch per violation using contract-keyed templates."""
+    patches = []
+    code_lines = _patch_code_lines(patch_code)
     for i, v in enumerate(violations_block, start=1):
-        template = _PATCH_TEMPLATE_BY_CONTRACT.get(v["contract"], {"primitive": "Patch", "title": "Apply repair"})
+        template = _fallback_patch_template(v["contract"])
         patches.append({
             "id": f"P-{i:03d}",
             "violation": v["id"],
@@ -200,6 +240,13 @@ def _build_patches_block(violations_block: list[dict], patch_code: str) -> list[
             "added": code_lines if i == 1 else [],
         })
     return patches
+
+
+def _build_patches_block(violations_block: list[dict], report: dict[str, Any]) -> list[dict]:
+    native_patches = report.get("patches")
+    if isinstance(native_patches, list):
+        return _build_native_patches_block(violations_block, native_patches)
+    return _build_legacy_patches_block(violations_block, report.get("patch_code", ""))
 
 
 def _build_test_block(regression_status: str, sandbox_id: str, violations_block: list[dict]) -> dict[str, Any]:
@@ -273,7 +320,7 @@ def report_to_concord_data(
     contracts_block = _build_contracts_block(violation_contract_ids)
     agents_block = _build_agents_block(events, failed_agents)
     violations_block = _build_violations_block(violations)
-    patches_block = _build_patches_block(violations_block, report.get("patch_code", ""))
+    patches_block = _build_patches_block(violations_block, report)
 
     return {
         "run": _build_run_block(run_trace_dict, started_at),

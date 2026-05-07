@@ -50,6 +50,36 @@ def _repair_patches(repair_out: dict) -> list[dict]:
     return []
 
 
+def _regression_tests(regression_out: dict, violations: list[Violation]) -> list[dict]:
+    results = regression_out.get("per_violation_results")
+    if isinstance(results, list):
+        return results
+    status = regression_out.get("test_status", "error")
+    return [
+        {
+            "contract_type": v.contract_type,
+            "severity": v.severity,
+            "rule": v.rule,
+            "failed_agent": v.failed_agent,
+            "failed_step": v.failed_step,
+            "test_name": regression_out.get("test_name", ""),
+            "assertion": "",
+            "test_status": status,
+            "stdout": regression_out.get("stdout", ""),
+            "sandbox_id": regression_out.get("sandbox_id", ""),
+        }
+        for v in violations
+    ]
+
+
+def _regression_summary(regression_tests: list[dict]) -> dict:
+    summary = {"pass": 0, "fail": 0, "error": 0}
+    for test in regression_tests:
+        status = test.get("test_status", "error")
+        summary[status if status in summary else "error"] += 1
+    return summary
+
+
 def _ask_llm_for_narrative(report_core: dict) -> str:
     narrator = ConversableAgent(
         name="ReporterAgent",
@@ -84,7 +114,10 @@ async def run_reporter(
     approval_status: str = "pending",
 ) -> dict:
     """Assemble the final Contract Violation Report."""
+    regression_tests = _regression_tests(regression_out, violations)
     violation_dicts = _violations_to_dicts(violations)
+    for violation, regression_test in zip(violation_dicts, regression_tests):
+        violation["test_status"] = regression_test.get("test_status", "error")
 
     report_core = {
         "run_id": run_trace.run_id,
@@ -102,6 +135,8 @@ async def run_reporter(
         "approval_status": approval_status,
         "violations": violation_dicts,
         "patches": _repair_patches(repair_out),
+        "regression_tests": regression_tests,
+        "regression_summary": _regression_summary(regression_tests),
     }
 
     try:

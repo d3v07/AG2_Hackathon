@@ -5,7 +5,8 @@ Per issue #2:
    repair would prevent the violations.
 2. Daytona sandbox executes the test via process.code_run.
 3. stdout is parsed for PASS / FAIL markers to set test_status.
-4. Sandbox is always deleted, even on errors.
+4. Per-violation result rows preserve the contract order from the report.
+5. Sandbox is always deleted, even on errors.
 """
 import asyncio
 import json
@@ -70,14 +71,19 @@ def _fallback_test(repair_patch: str, violations: list[Violation]) -> dict:
         "'ReporterAgent', 'HumanGateAgent', 'ActionAgent']\n"
         "try:\n"
         "    assert verified_sources_count > 0, 'evidence violation still present'\n"
+        "    print('PASS evidence')\n"
         "    assert approval_status == 'approved', 'approval violation still present'\n"
+        "    print('PASS approval')\n"
         "    assert verifier_tool_call_id, 'tool violation still present'\n"
+        "    print('PASS tool')\n"
         "    assert handoff_path.index('VerifierAgent') < "
         "handoff_path.index('ReporterAgent'), 'routing violation still present'\n"
         "    assert handoff_path.index('HumanGateAgent') < "
         "handoff_path.index('ActionAgent'), 'routing approval gate still missing'\n"
+        "    print('PASS routing')\n"
         "    assert {'summary', 'claims', 'citations', 'risks', 'next_steps'} <= "
         "set(final_output), 'schema violation still present'\n"
+        "    print('PASS schema')\n"
         "    print('PASS')\n"
         "except AssertionError as e:\n"
         "    print(f'FAIL: {e}')\n"
@@ -103,6 +109,66 @@ def _is_infrastructure_error(stdout: str) -> bool:
     return out.startswith("Daytona credentials missing") or out.startswith(
         "Daytona error:"
     )
+
+
+def _status_for_violation(stdout: str, overall_status: str, contract_type: str) -> str:
+    marker = contract_type.lower()
+    lines = [line.strip().lower() for line in (stdout or "").splitlines()]
+    matching = [
+        line for line in lines
+        if marker in line and line.startswith(("pass", "fail", "error"))
+    ]
+    if any(line.startswith("fail") for line in matching):
+        return "fail"
+    if any(line.startswith("error") for line in matching):
+        return "error"
+    if any(line.startswith("pass") for line in matching):
+        return "pass"
+    if overall_status in {"pass", "fail", "error"}:
+        return overall_status
+    return "error"
+
+
+def _per_violation_results(
+    violations: list[Violation],
+    test_name: str,
+    assertions: list[str],
+    test_status: str,
+    stdout: str,
+    sandbox_id: str,
+    fallback_used: bool,
+) -> list[dict]:
+    results = []
+    for index, violation in enumerate(violations):
+        assertion = (
+            assertions[index]
+            if index < len(assertions)
+            else f"{violation.contract_type} contract is satisfied post-repair"
+        )
+        results.append({
+            "contract_type": violation.contract_type,
+            "severity": violation.severity,
+            "rule": violation.rule,
+            "failed_agent": violation.failed_agent,
+            "failed_step": violation.failed_step,
+            "test_name": f"{test_name}_{index + 1}_{violation.contract_type}",
+            "assertion": assertion,
+            "test_status": _status_for_violation(
+                stdout, test_status, violation.contract_type
+            ),
+            "stdout": stdout,
+            "sandbox_id": sandbox_id,
+            "fallback_used": fallback_used,
+        })
+    return results
+
+
+def _status_summary(results: list[dict]) -> dict:
+    summary = {"pass": 0, "fail": 0, "error": 0}
+    for result in results:
+        status = result.get("test_status", "error")
+        summary[status if status in summary else "error"] += 1
+    return summary
 
 
 def _run_in_daytona(test_code: str) -> tuple[str, str, str]:
@@ -181,6 +247,16 @@ async def run_regression_test(
         fallback_reason = f"generated_test_{test_status}"
         stdout, sandbox_id, test_status = _run_in_daytona(test_code)
 
+    per_violation_results = _per_violation_results(
+        violations,
+        test_name,
+        assertions,
+        test_status,
+        stdout,
+        sandbox_id,
+        fallback_used,
+    )
+
     return {
         "test_name": test_name,
         "test_code": test_code,
@@ -193,6 +269,8 @@ async def run_regression_test(
         "generated_test_status": generated_test_status,
         "generated_stdout": generated_stdout,
         "generated_sandbox_id": generated_sandbox_id,
+        "per_violation_results": per_violation_results,
+        "per_violation_summary": _status_summary(per_violation_results),
     }
 
 
