@@ -126,6 +126,23 @@ def test_adapter_keeps_scalar_patch_fallback_when_native_patches_absent():
     assert data["patches"][1]["added"] == []
 
 
+def test_adapter_treats_pass_regression_status_as_success():
+    report = {
+        "narrative": "repair passed",
+        "patch_code": "legacy_patch()",
+        "regression_test_status": "pass",
+        "approval_status": "approved",
+    }
+
+    data = report_to_concord_data(report, _run_trace(), _violations(), sandbox_id="dt-test")
+
+    assert [a["status"] for a in data["test"]["assertions"]] == ["PASS", "PASS"]
+    assert [line["k"] for line in data["test"]["lines"] if line["k"] in {"pass", "fail"}] == [
+        "pass",
+        "pass",
+    ]
+
+
 def test_seeded_dashboard_fixture_still_serves_patch_shape():
     run = get_run("RUN-041")
 

@@ -6,8 +6,15 @@ output into this shape; see api/adapter.py.
 """
 from __future__ import annotations
 
+import json
+import uuid
 from copy import deepcopy
 from typing import Any
+
+from sqlmodel import Session, select
+
+from api.db import init_db, session_scope
+from api.models import PatchRecord, RunRecord, TestRecord, ViolationRecord, WorkflowRecord, _utc_now
 
 _FIXTURE_RUN_041: dict[str, Any] = {
     "run": {
@@ -277,19 +284,387 @@ _FIXTURE_RUN_041: dict[str, Any] = {
 }
 
 
-_runs: dict[str, dict[str, Any]] = {"RUN-041": _FIXTURE_RUN_041}
+def _to_json(data: Any) -> str:
+    return json.dumps(data, ensure_ascii=False, sort_keys=True)
 
 
-def get_run(run_id: str) -> dict[str, Any] | None:
-    """Return a deep copy of the run data, or None if missing."""
-    data = _runs.get(run_id)
-    return deepcopy(data) if data is not None else None
+def _from_json(raw: str, default: Any) -> Any:
+    if not raw:
+        return deepcopy(default)
+    return json.loads(raw)
 
 
-def put_run(run_id: str, data: dict[str, Any]) -> None:
-    """Insert or replace a run."""
-    _runs[run_id] = deepcopy(data)
+def _get_run_record(session: Session, run_id: str, tenant_id: str) -> RunRecord | None:
+    return session.get(RunRecord, (run_id, tenant_id))
 
 
-def list_runs() -> list[str]:
-    return list(_runs.keys())
+def _get_workflow_record(
+    session: Session, workflow_id: str, tenant_id: str
+) -> WorkflowRecord | None:
+    return session.get(WorkflowRecord, (workflow_id, tenant_id))
+
+
+def _seed_fixture(session: Session, tenant_id: str = "local") -> None:
+    existing = _get_run_record(session, "RUN-041", tenant_id)
+    if existing is not None:
+        return
+
+    workflow = WorkflowRecord(
+        workflow_id="WF-RUN-041",
+        tenant_id=tenant_id,
+        name="LITERATURE_REVIEW_ASSISTANT",
+        owner="d3v07",
+        declared_topology_json=_to_json(_FIXTURE_RUN_041.get("topology", {})),
+        agents_json=_to_json(_FIXTURE_RUN_041.get("agents", [])),
+        tools_json=_to_json([{"name": "tavily_search"}]),
+        contracts_json=_to_json(_FIXTURE_RUN_041.get("contracts", [])),
+    )
+    session.add(workflow)
+    _upsert_run_record(
+        session,
+        "RUN-041",
+        deepcopy(_FIXTURE_RUN_041),
+        tenant_id=tenant_id,
+        workflow_id=workflow.workflow_id,
+        status="completed",
+        status_history=["queued", "analyzing", "completed"],
+    )
+    session.commit()
+
+
+def ensure_store() -> None:
+    init_db()
+    with session_scope() as session:
+        _seed_fixture(session)
+
+
+def _ensure_store() -> None:
+    ensure_store()
+
+
+def _replace_child_rows(session: Session, run_id: str, tenant_id: str, data: dict[str, Any]) -> None:
+    for model in (ViolationRecord, PatchRecord, TestRecord):
+        rows = session.exec(
+            select(model).where(model.run_id == run_id, model.tenant_id == tenant_id)
+        ).all()
+        for row in rows:
+            session.delete(row)
+
+    for violation in data.get("violations", []):
+        session.add(
+            ViolationRecord(
+                tenant_id=tenant_id,
+                run_id=run_id,
+                contract_type=violation.get("type") or violation.get("contract_type", ""),
+                severity=violation.get("severity", ""),
+                failed_agent=violation.get("failed_agent", ""),
+                failed_step=violation.get("failed_step", -1),
+                payload_json=_to_json(violation),
+            )
+        )
+
+    for patch in data.get("patches", []):
+        session.add(
+            PatchRecord(
+                tenant_id=tenant_id,
+                run_id=run_id,
+                violation_id=patch.get("violation", ""),
+                primitive=patch.get("primitive") or patch.get("affected_primitive", ""),
+                target=patch.get("target") or patch.get("failed_agent", ""),
+                payload_json=_to_json(patch),
+            )
+        )
+
+    report = data.get("report", {})
+    regression_tests = report.get("regression_tests") if isinstance(report, dict) else None
+    test_rows = regression_tests if isinstance(regression_tests, list) else []
+    if data.get("test"):
+        test_rows = [data["test"], *test_rows]
+    for test in test_rows:
+        session.add(
+            TestRecord(
+                tenant_id=tenant_id,
+                run_id=run_id,
+                status=test.get("status") or test.get("test_status", ""),
+                payload_json=_to_json(test),
+            )
+        )
+
+
+def _upsert_run_record(
+    session: Session,
+    run_id: str,
+    data: dict[str, Any] | None,
+    *,
+    tenant_id: str = "local",
+    workflow_id: str = "",
+    status: str = "completed",
+    raw_trace: dict[str, Any] | None = None,
+    task_spec: dict[str, Any] | None = None,
+    error: str = "",
+    status_history: list[str] | None = None,
+) -> RunRecord:
+    record = _get_run_record(session, run_id, tenant_id)
+    if record is None:
+        record = RunRecord(run_id=run_id, tenant_id=tenant_id)
+    record.workflow_id = workflow_id or record.workflow_id
+    record.status = status
+    record.raw_trace_json = _to_json(raw_trace) if raw_trace is not None else record.raw_trace_json
+    record.task_spec_json = _to_json(task_spec) if task_spec is not None else record.task_spec_json
+    record.report_json = _to_json(data) if data is not None else record.report_json
+    record.error = error
+    record.status_history_json = _to_json(status_history or [status])
+    record.updated_at = _utc_now()
+    session.add(record)
+    if data is not None:
+        _replace_child_rows(session, run_id, tenant_id, data)
+    return record
+
+
+def _record_to_run(record: RunRecord) -> dict[str, Any]:
+    data = _from_json(record.report_json, _empty_run_payload(record))
+    data["status"] = record.status
+    data["error"] = record.error
+    data["status_history"] = _from_json(record.status_history_json, [])
+    return deepcopy(data)
+
+
+def _empty_run_payload(record: RunRecord) -> dict[str, Any]:
+    return {
+        "run": {
+            "id": record.run_id,
+            "workflow": record.workflow_id,
+            "started": record.created_at,
+            "duration_ms": 0,
+            "final_output_status": "PENDING",
+        },
+        "stats": {
+            "violations": 0,
+            "agents_run": 0,
+            "repair_ready": 0,
+            "contracts_total": 0,
+            "contracts_passed": 0,
+            "events_total": 0,
+            "tool_events": 0,
+        },
+        "agents": [],
+        "contracts": [],
+        "trace": [],
+        "violations": [],
+        "patches": [],
+        "test": {"assertions": [], "lines": []},
+        "report": {
+            "summary": "",
+            "patches_applied": [],
+            "approval": {"status": "UNAVAILABLE"},
+        },
+    }
+
+
+def get_run(run_id: str, tenant_id: str = "local") -> dict[str, Any] | None:
+    _ensure_store()
+    with session_scope() as session:
+        record = _get_run_record(session, run_id, tenant_id)
+        if record is None:
+            return None
+        return _record_to_run(record)
+
+
+def put_run(
+    run_id: str,
+    data: dict[str, Any],
+    *,
+    status: str = "completed",
+    tenant_id: str = "local",
+    workflow_id: str = "",
+    raw_trace: dict[str, Any] | None = None,
+    task_spec: dict[str, Any] | None = None,
+    error: str = "",
+    status_history: list[str] | None = None,
+) -> None:
+    _ensure_store()
+    with session_scope() as session:
+        _upsert_run_record(
+            session,
+            run_id,
+            deepcopy(data),
+            tenant_id=tenant_id,
+            workflow_id=workflow_id,
+            status=status,
+            raw_trace=raw_trace,
+            task_spec=task_spec,
+            error=error,
+            status_history=status_history or [status],
+        )
+        session.commit()
+
+
+def list_runs(tenant_id: str = "local") -> list[str]:
+    _ensure_store()
+    with session_scope() as session:
+        rows = session.exec(
+            select(RunRecord).where(RunRecord.tenant_id == tenant_id).order_by(RunRecord.created_at)
+        ).all()
+        return [row.run_id for row in rows]
+
+
+def create_workflow(payload: dict[str, Any], tenant_id: str = "local") -> dict[str, Any]:
+    _ensure_store()
+    workflow_id = f"WF-{uuid.uuid4().hex[:8].upper()}"
+    record = WorkflowRecord(
+        workflow_id=workflow_id,
+        tenant_id=tenant_id,
+        name=payload["name"],
+        owner=payload.get("owner", ""),
+        declared_topology_json=_to_json(payload.get("declared_topology", {})),
+        agents_json=_to_json(payload.get("agents", [])),
+        tools_json=_to_json(payload.get("tools", [])),
+        contracts_json=_to_json(payload.get("contracts", [])),
+    )
+    with session_scope() as session:
+        session.add(record)
+        session.commit()
+    return get_workflow(workflow_id, tenant_id) or {}
+
+
+def _workflow_to_dict(record: WorkflowRecord) -> dict[str, Any]:
+    return {
+        "workflow_id": record.workflow_id,
+        "tenant_id": record.tenant_id,
+        "name": record.name,
+        "owner": record.owner,
+        "declared_topology": _from_json(record.declared_topology_json, {}),
+        "agents": _from_json(record.agents_json, []),
+        "tools": _from_json(record.tools_json, []),
+        "contracts": _from_json(record.contracts_json, []),
+        "created_at": record.created_at,
+    }
+
+
+def get_workflow(workflow_id: str, tenant_id: str = "local") -> dict[str, Any] | None:
+    _ensure_store()
+    with session_scope() as session:
+        record = _get_workflow_record(session, workflow_id, tenant_id)
+        if record is None:
+            return None
+        return _workflow_to_dict(record)
+
+
+def list_workflows(tenant_id: str = "local") -> list[dict[str, Any]]:
+    _ensure_store()
+    with session_scope() as session:
+        rows = session.exec(
+            select(WorkflowRecord)
+            .where(WorkflowRecord.tenant_id == tenant_id)
+            .order_by(WorkflowRecord.created_at)
+        ).all()
+        return [_workflow_to_dict(row) for row in rows]
+
+
+def workflow_exists(workflow_id: str, tenant_id: str = "local") -> bool:
+    return get_workflow(workflow_id, tenant_id) is not None
+
+
+def create_run(
+    *,
+    workflow_id: str,
+    raw_trace: dict[str, Any] | None = None,
+    task_spec: dict[str, Any] | None = None,
+    tenant_id: str = "local",
+) -> dict[str, str]:
+    _ensure_store()
+    run_id = f"RUN-{uuid.uuid4().hex[:8].upper()}"
+    with session_scope() as session:
+        _upsert_run_record(
+            session,
+            run_id,
+            None,
+            tenant_id=tenant_id,
+            workflow_id=workflow_id,
+            status="queued",
+            raw_trace=raw_trace,
+            task_spec=task_spec,
+            status_history=["queued"],
+        )
+        session.commit()
+    return {"run_id": run_id, "status": "queued"}
+
+
+def get_run_inputs(run_id: str, tenant_id: str = "local") -> dict[str, Any] | None:
+    _ensure_store()
+    with session_scope() as session:
+        record = _get_run_record(session, run_id, tenant_id)
+        if record is None:
+            return None
+        return {
+            "run_id": record.run_id,
+            "workflow_id": record.workflow_id,
+            "raw_trace": _from_json(record.raw_trace_json, None),
+            "task_spec": _from_json(record.task_spec_json, None),
+            "status_history": _from_json(record.status_history_json, []),
+        }
+
+
+def set_run_status(
+    run_id: str,
+    status: str,
+    *,
+    tenant_id: str = "local",
+    error: str = "",
+    report: dict[str, Any] | None = None,
+) -> None:
+    _ensure_store()
+    with session_scope() as session:
+        record = _get_run_record(session, run_id, tenant_id)
+        if record is None:
+            return
+        history = _from_json(record.status_history_json, [])
+        if not history or history[-1] != status:
+            history.append(status)
+        _upsert_run_record(
+            session,
+            run_id,
+            report,
+            tenant_id=tenant_id,
+            workflow_id=record.workflow_id,
+            status=status,
+            error=error,
+            status_history=history,
+        )
+        session.commit()
+
+
+def get_run_status(run_id: str, tenant_id: str = "local") -> dict[str, Any] | None:
+    _ensure_store()
+    with session_scope() as session:
+        record = _get_run_record(session, run_id, tenant_id)
+        if record is None:
+            return None
+        return {
+            "run_id": record.run_id,
+            "workflow_id": record.workflow_id,
+            "status": record.status,
+            "error": record.error,
+            "status_history": _from_json(record.status_history_json, []),
+        }
+
+
+def recover_interrupted_runs() -> int:
+    _ensure_store()
+    recovered = 0
+    with session_scope() as session:
+        rows = session.exec(
+            select(RunRecord).where(RunRecord.status.in_(["queued", "analyzing"]))
+        ).all()
+        for record in rows:
+            history = _from_json(record.status_history_json, [])
+            if not history or history[-1] != "failed":
+                history.append("failed")
+            record.status = "failed"
+            record.error = record.error or "run interrupted before completion; resubmit trace"
+            record.status_history_json = _to_json(history)
+            record.updated_at = _utc_now()
+            session.add(record)
+            recovered += 1
+        session.commit()
+    return recovered

@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from shared.models import RunTrace, TraceEvent, ContextSnapshot, Violation
 from zone_b.agents.contract_checker import (
-    CONTRACTS, _find_failed_step, run_contract_checker
+    CONTRACTS, _find_failed_step, _generate_violation_text, run_contract_checker
 )
 from zone_b.agents.trace_collector import run_trace_collector
 
@@ -136,6 +136,18 @@ class TestContractLambdas:
         assert severities["approval"] == "high"
         assert severities["routing"] == "medium"
         assert severities["schema"] == "medium"
+
+    def test_violation_text_falls_back_when_llm_config_fails(self, monkeypatch):
+        monkeypatch.setattr(
+            "zone_b.agents.contract_checker.get_llm_config",
+            lambda: (_ for _ in ()).throw(RuntimeError("missing config")),
+        )
+        contract = self._contract("evidence")
+
+        expected, observed = _generate_violation_text(contract, self._trace(), self._snap())
+
+        assert expected == contract["rule"]
+        assert observed == "contract check failed"
 
 
 # ---------------------------------------------------------------------------

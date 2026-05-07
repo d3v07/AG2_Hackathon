@@ -72,12 +72,25 @@ def _regression_tests(regression_out: dict, violations: list[Violation]) -> list
     ]
 
 
-def _regression_summary(regression_tests: list[dict]) -> dict:
+def _violation_status_summary(violations: list[dict]) -> dict:
     summary = {"pass": 0, "fail": 0, "error": 0}
-    for test in regression_tests:
-        status = test.get("test_status", "error")
+    for violation in violations:
+        status = violation.get("test_status", "error")
         summary[status if status in summary else "error"] += 1
     return summary
+
+
+def _test_status_by_violation(regression_tests: list[dict]) -> dict[tuple, str]:
+    statuses = {}
+    for test in regression_tests:
+        key = (
+            test.get("contract_type"),
+            test.get("failed_agent"),
+            test.get("failed_step"),
+        )
+        if all(part is not None for part in key):
+            statuses[key] = test.get("test_status", "error")
+    return statuses
 
 
 def _ask_llm_for_narrative(report_core: dict) -> str:
@@ -116,8 +129,14 @@ async def run_reporter(
     """Assemble the final Contract Violation Report."""
     regression_tests = _regression_tests(regression_out, violations)
     violation_dicts = _violations_to_dicts(violations)
-    for violation, regression_test in zip(violation_dicts, regression_tests):
-        violation["test_status"] = regression_test.get("test_status", "error")
+    status_by_violation = _test_status_by_violation(regression_tests)
+    for violation in violation_dicts:
+        key = (
+            violation.get("contract_type"),
+            violation.get("failed_agent"),
+            violation.get("failed_step"),
+        )
+        violation["test_status"] = status_by_violation.get(key, "error")
 
     report_core = {
         "run_id": run_trace.run_id,
@@ -136,7 +155,7 @@ async def run_reporter(
         "violations": violation_dicts,
         "patches": _repair_patches(repair_out),
         "regression_tests": regression_tests,
-        "regression_summary": _regression_summary(regression_tests),
+        "regression_summary": _violation_status_summary(violation_dicts),
     }
 
     try:
