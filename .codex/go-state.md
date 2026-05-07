@@ -3,11 +3,11 @@
 ## Overview
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
-- Phase: Sprint 4 execution
-- Branch: feat/sprint-4-repair-api
-- Current Sprint: Sprint 4
-- Current Task: #17 API adapter multi-patch passthrough
-- Last Checkpoint: #17 full Sprint 4 gate passed locally; local commit recorded.
+- Phase: Sprint 5 landing
+- Branch: feat/sprint-5-api-persistence
+- Current Sprint: Sprint 5
+- Current Task: #18-#20 API persistence, workflow registration, and run submission
+- Last Checkpoint: Sprint 5 full verification gate passed locally.
 
 ## Sprint Board
 Sprint 3: Foundation
@@ -17,8 +17,13 @@ Sprint 3: Foundation
 
 Sprint 4: Repair and downstream report compatibility
 - #15 P0 Zone B: Replace primary-only repair generation with one patch per violation — closed on `main`
-- #16 P0 Zone B: Generate per-violation regression outcomes — full gate passed, local commit recorded
-- #17 P0 API: Pass backend report patches through to dashboard data — pending
+- #16 P0 Zone B: Generate per-violation regression outcomes — closed on `main`
+- #17 P0 API: Pass backend report patches through to dashboard data — closed on `main`
+
+Sprint 5: API persistence and run APIs
+- #18 P0 API: Add SQLite + SQLModel persistence layer — full gate passed locally
+- #19 P0 API: Implement POST /api/workflows + listing endpoints — full gate passed locally
+- #20 P0 API: Implement POST /api/runs with status state machine — full gate passed locally
 
 ## What Worked
 - GitHub issues #12-#15 are closed on `main`.
@@ -83,18 +88,40 @@ Sprint 4: Repair and downstream report compatibility
 - #17 `git diff --check` passed.
 - #17 AG2 import smoke passed using repo-valid group chat, handoff, guardrail, Daytona executor, and Daytona SDK import paths.
 - #17 live API probe passed after starting `.venv/bin/uvicorn api.index:app --port 8765`: `GET /api/runs/RUN-041` returned HTTP 200 with 4 patches.
+- PR #44 merged Sprint 4 into `production`; PR #45 merged `production` into `main`.
+- GitHub issues #16 and #17 are closed on `main`.
+- Sprint 5 branch `feat/sprint-5-api-persistence` was created from updated `production`.
+- #18/#19/#20 RED tests failed for the expected reason before implementation: `api.db`, `api.models`, persistence-backed store, workflow routes, and run submission routes were missing.
+- API dependencies were pinned to Python 3.14-compatible versions: FastAPI 0.136.1, Pydantic 2.13.4, SQLModel 0.0.38.
+- #18 now stores workflows, runs, violations, patches, and tests in SQLite-backed SQLModel records with `tenant_id` on every table.
+- #19 now supports `POST /api/workflows`, `GET /api/workflows`, and `GET /api/workflows/{workflow_id}` with deterministic contract schema validation.
+- #20 now supports `POST /api/runs`, `GET /api/runs/{run_id}/status`, and status history `queued -> analyzing -> completed|failed`.
+- Sprint 5 targeted gate passed: `pytest tests/test_api_persistence.py tests/test_api_workflows.py tests/test_api_runs.py -q` passed 11 tests.
+- Sprint 5 focused gate passed: `pytest -q tests/test_api_persistence.py tests/test_api_workflows.py tests/test_api_runs.py tests/test_api_adapter_multi_patch.py tests/test_integration.py` passed 34 tests.
+- Operator steering: use multiple agents for subsequent sprint work where they can reduce risk, and continue the branch -> `production` -> `main` landing loop after each sprint before starting the next sprint.
+- Operator steering: read automated review comments on recent PRs and apply any critical changes before landing the active sprint.
+- Sprint 5 review blockers were addressed: API routes now pass authenticated non-local tenant context into storage and background processing, queued/analyzing runs are marked failed during API startup recovery, and approval updates preserve status history.
+- Sprint 5 regression gate is stable in pytest via `CONCORD_REGRESSION_RUNNER=local`; the direct `python3 run_all.py --fixture` gate still exercises the live sandbox path and passed.
+- Sprint 5 focused review gate passed: `pytest -q tests/test_api_persistence.py tests/test_api_workflows.py tests/test_api_runs.py tests/test_api_adapter_multi_patch.py tests/test_per_violation_repairs.py tests/test_regression_test.py tests/test_contract_checker.py tests/test_reporter.py tests/test_integration.py` passed 112 tests.
+- Sprint 5 full gate passed: `pytest -x --tb=short` passed 326 tests.
+- Sprint 5 fixture gate passed: `python3 run_all.py --fixture` reported `Repair patches    : 4`, `Regression status : pass`, and `Regression tests   : 4 pass / 0 fail / 0 error`.
+- Sprint 5 `git diff --check` passed.
+- Sprint 5 AG2 import smoke passed.
+- Sprint 5 local API probe passed: `GET /api/health` returned 200, `GET /api/runs/RUN-041` returned 4 patches with `completed`, and unauthenticated `X-Tenant-ID: tenant-a` was rejected with 401.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
 - `python3 -m ruff check .` failed because `ruff` is not installed.
-- `api.index` import failed because `fastapi` is not installed in the current Python environment.
+- Older FastAPI/Pydantic pins failed to install on Python 3.14 because `pydantic-core==2.23.4` only supports through Python 3.13.
+- Sprint 5 focused gate initially exposed a flaky pytest fixture path that depended on live sandbox execution; fixed by adding an explicit local regression runner for subprocess tests while preserving the live direct fixture gate.
 - `docs/PLAN_VS_REALITY.md` is referenced by the handoff but missing locally.
 
 ## Blockers
 - No regression-gate blocker remains for Sprint 3.
 - No #15 blocker remains.
-- No #16 blocker remains.
-- Remaining toolchain gaps: `ruff` unavailable in the current Python environment; FastAPI is available through `.venv`; `docs/PLAN_VS_REALITY.md` missing.
+- No #16/#17 blocker remains.
+- No Sprint 5 blocker remains.
+- Remaining toolchain gaps: `ruff` unavailable in the current Python environment; `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Stop for fresh approval before any push, PR, merge, or remote branch deletion. Next public step is pushing `feat/sprint-4-repair-api` and opening a PR to `production` for Sprint 4 (#16/#17).
+Review the Sprint 5 diff, commit locally with `Closes #18`, `Closes #19`, and `Closes #20`, then land through `production` and `main` before starting Sprint 6. Use child agents for parallel review/research on later sprints after Sprint 5 lands.

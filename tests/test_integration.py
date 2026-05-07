@@ -5,6 +5,7 @@ Tests marked integration require live API keys and are skipped in CI.
 """
 import asyncio
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -36,9 +37,11 @@ def fixture_collected(fixture_raw) -> dict:
 
 @pytest.fixture(scope="module")
 def fixture_mode_result():
+    env = os.environ.copy()
+    env["CONCORD_REGRESSION_RUNNER"] = "local"
     return subprocess.run(
         [sys.executable, "run_all.py", "--fixture"],
-        capture_output=True, text=True, timeout=240
+        capture_output=True, text=True, timeout=240, env=env
     )
 
 

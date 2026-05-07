@@ -37,21 +37,27 @@ Scope: GitHub issue #12 plus the follow-up regression-gate stabilization request
 
 ## Test Status
 
-All collected pytest tests passed in the fresh baseline run. After the regression-gate stabilization and Sprint #16 regression coverage, the suite collects 298 tests.
+All collected pytest tests passed in the fresh baseline run. As of the Sprint 5 local verification branch, the suite collects 326 tests.
 
 | Test file | Collected | Status |
 |---|---:|---|
+| `tests/test_api_adapter_multi_patch.py` | 4 | PASS |
+| `tests/test_api_persistence.py` | 5 | PASS |
+| `tests/test_api_runs.py` | 10 | PASS |
+| `tests/test_api_workflows.py` | 5 | PASS |
 | `tests/test_attribution.py` | 10 | PASS |
-| `tests/test_contract_checker.py` | 26 | PASS |
+| `tests/test_contract_checker.py` | 27 | PASS |
 | `tests/test_group_chat.py` | 12 | PASS |
 | `tests/test_human_gate.py` | 6 | PASS |
 | `tests/test_integration.py` | 20 | PASS |
 | `tests/test_models.py` | 21 | PASS |
-| `tests/test_regression_test.py` | 18 | PASS |
+| `tests/test_regression_test.py` | 22 | PASS |
 | `tests/test_repair.py` | 20 | PASS |
 | `tests/test_reporter.py` | 15 | PASS |
-| `tests/test_per_violation_repairs.py` | 3 | PASS |
+| `tests/test_per_violation_repairs.py` | 4 | PASS |
 | `tests/test_rigorous.py` | 57 | PASS |
+| `tests/test_routing_contract.py` | 3 | PASS |
+| `tests/test_schema_contract.py` | 6 | PASS |
 | `tests/test_swarm.py` | 27 | PASS |
 | `tests/test_trace_collector.py` | 30 | PASS |
 | `tests/test_zone_a.py` | 22 | PASS |

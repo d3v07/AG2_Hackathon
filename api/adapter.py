@@ -249,9 +249,14 @@ def _build_patches_block(violations_block: list[dict], report: dict[str, Any]) -
     return _build_legacy_patches_block(violations_block, report.get("patch_code", ""))
 
 
+def _regression_passed(regression_status: str) -> bool:
+    return str(regression_status).lower() in {"pass", "passed"}
+
+
 def _build_test_block(regression_status: str, sandbox_id: str, violations_block: list[dict]) -> dict[str, Any]:
+    status = "PASS" if _regression_passed(regression_status) else "FAIL"
     assertions = [
-        {"id": f"A{i}", "name": f"assert_{v['contract'].lower()}_repair_holds", "time_ms": 200 + 100 * i, "status": "PASS" if regression_status == "passed" else "FAIL"}
+        {"id": f"A{i}", "name": f"assert_{v['contract'].lower()}_repair_holds", "time_ms": 200 + 100 * i, "status": status}
         for i, v in enumerate(violations_block, start=1)
     ]
     return {

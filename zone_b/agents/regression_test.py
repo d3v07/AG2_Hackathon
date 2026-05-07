@@ -11,6 +11,8 @@ Per issue #2:
 import asyncio
 import json
 import os
+import subprocess
+import sys
 from autogen import ConversableAgent
 from shared.models import RunTrace, Violation
 from zone_b.config import get_llm_config
@@ -163,6 +165,12 @@ def _per_violation_results(
     return results
 
 
+def _normalize_assertions(assertions) -> list[str]:
+    if not isinstance(assertions, list):
+        return []
+    return [str(assertion) for assertion in assertions]
+
+
 def _status_summary(results: list[dict]) -> dict:
     summary = {"pass": 0, "fail": 0, "error": 0}
     for result in results:
@@ -199,6 +207,23 @@ def _run_in_daytona(test_code: str) -> tuple[str, str, str]:
                 pass
 
 
+def _run_locally(test_code: str) -> tuple[str, str, str]:
+    proc = subprocess.run(
+        [sys.executable, "-c", test_code],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    stdout = proc.stdout
+    if proc.stderr:
+        stdout = f"{stdout}{proc.stderr}"
+    return stdout, "local-regression", _parse_status(stdout)
+
+
+def _use_local_regression_runner() -> bool:
+    return os.environ.get("CONCORD_REGRESSION_RUNNER", "").strip().lower() == "local"
+
+
 async def run_regression_test(
     repair_patch: str,
     violations: list[Violation],
@@ -212,40 +237,49 @@ async def run_regression_test(
     generated_sandbox_id = ""
     generated_test_ran = False
 
-    try:
-        gen = _ask_llm_for_test(repair_patch, violations, run_trace)
-        test_name = gen.get("test_name", "test_repair_resolves_violations")
-        test_code = gen.get("test_code", "")
-        assertions = gen.get("assertions", [])
-        if not test_code.strip():
-            raise ValueError("LLM returned empty test_code")
-    except Exception:
+    if _use_local_regression_runner():
         fallback = _fallback_test(repair_patch, violations)
         test_name = fallback["test_name"]
         test_code = fallback["test_code"]
         assertions = fallback["assertions"]
         fallback_used = True
-        fallback_reason = "generation_error"
+        fallback_reason = "local_regression_runner"
+        stdout, sandbox_id, test_status = _run_locally(test_code)
+    else:
+        try:
+            gen = _ask_llm_for_test(repair_patch, violations, run_trace)
+            test_name = gen.get("test_name", "test_repair_resolves_violations")
+            test_code = gen.get("test_code", "")
+            assertions = _normalize_assertions(gen.get("assertions", []))
+            if not test_code.strip():
+                raise ValueError("LLM returned empty test_code")
+        except Exception:
+            fallback = _fallback_test(repair_patch, violations)
+            test_name = fallback["test_name"]
+            test_code = fallback["test_code"]
+            assertions = fallback["assertions"]
+            fallback_used = True
+            fallback_reason = "generation_error"
 
-    stdout, sandbox_id, test_status = _run_in_daytona(test_code)
-    if not fallback_used:
-        generated_test_ran = True
-        generated_test_status = test_status
-        generated_stdout = stdout
-        generated_sandbox_id = sandbox_id
-
-    if (
-        generated_test_ran
-        and test_status != "pass"
-        and not _is_infrastructure_error(stdout)
-    ):
-        fallback = _fallback_test(repair_patch, violations)
-        test_name = fallback["test_name"]
-        test_code = fallback["test_code"]
-        assertions = fallback["assertions"]
-        fallback_used = True
-        fallback_reason = f"generated_test_{test_status}"
         stdout, sandbox_id, test_status = _run_in_daytona(test_code)
+        if not fallback_used:
+            generated_test_ran = True
+            generated_test_status = test_status
+            generated_stdout = stdout
+            generated_sandbox_id = sandbox_id
+
+        if (
+            generated_test_ran
+            and test_status != "pass"
+            and not _is_infrastructure_error(stdout)
+        ):
+            fallback = _fallback_test(repair_patch, violations)
+            test_name = fallback["test_name"]
+            test_code = fallback["test_code"]
+            assertions = fallback["assertions"]
+            fallback_used = True
+            fallback_reason = f"generated_test_{test_status}"
+            stdout, sandbox_id, test_status = _run_in_daytona(test_code)
 
     per_violation_results = _per_violation_results(
         violations,

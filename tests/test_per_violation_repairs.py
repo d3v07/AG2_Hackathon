@@ -168,3 +168,38 @@ def test_reporter_adds_test_status_to_each_violation(monkeypatch):
         "pass",
         "pass",
     ]
+
+
+def test_reporter_defaults_missing_per_violation_status_to_error(monkeypatch):
+    monkeypatch.setattr("zone_b.agents.reporter._ask_llm_for_narrative", lambda _: "x")
+    violations = _violations()
+    regression = {
+        "test_status": "pass",
+        "per_violation_results": [
+            {
+                "contract_type": "evidence",
+                "failed_agent": "VerifierAgent",
+                "failed_step": 3,
+                "test_status": "pass",
+            }
+        ],
+    }
+
+    result = asyncio.run(run_reporter(
+        _trace(),
+        violations,
+        {
+            "failed_agent": "VerifierAgent",
+            "failed_step": 3,
+            "likely_root_cause": "VerifierAgent broke contract",
+        },
+        {"repair_patch": "repair", "affected_primitive": "Guardrail"},
+        regression,
+    ))
+
+    assert [v["test_status"] for v in result["report"]["violations"]] == [
+        "pass",
+        "error",
+        "error",
+        "error",
+    ]
