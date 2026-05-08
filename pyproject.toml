@@ -27,4 +27,5 @@ include = ["api*", "graph*", "shared*", "zone_a*", "zone_b*"]
 [tool.pytest.ini_options]
 markers = [
     "integration: tests that call external APIs (LLM, Daytona, Tavily)",
+    "live_smoke: end-to-end smoke against a real backend; opt-in via -m live_smoke",
 ]
