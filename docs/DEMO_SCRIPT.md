@@ -182,6 +182,6 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 - **If live demo URL fails on stage:** `python run_all.py --fixture` produces the same report on stdout — fall back to that.
 - **If REPLAY animation glitches:** click END STATE, walk through the static screens manually.
-- **If asked "show me the API":** open `api/index.py` in the repo — point to the four endpoints (`/api/health`, `/api/runs`, `/api/runs/{id}`, `/api/runs/{id}/approval`).
+- **If asked "show me the API":** open `api/index.py` in the repo — point to `/api/health`, `/api/api-keys`, `/api/workflows`, `/api/runs`, `/api/runs/{id}/events`, and `/api/tenant/usage`.
 - **If asked "show me the contracts":** open `zone_b/agents/contract_checker.py` lines 9-33 — that's the entire enforcement layer.
 - **If asked "show me Daytona":** open `zone_b/agents/regression_test.py` lines 91-117 — `_run_in_daytona`.

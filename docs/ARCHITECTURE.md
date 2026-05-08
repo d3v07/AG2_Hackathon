@@ -197,13 +197,13 @@ We use AG2 deliberately, not as a library skin over LLM calls. Specific primitiv
 
 ## 7. The 7 Frontend Screens — What They Show & Where the Data Comes From
 
-The frontend is a self-contained React app served as static assets from Vercel (`public/index.html`). All seven screens default to the inlined `window.CONCORD_DATA` fixture, and local API mode can switch to live data through `GET /api/runs/{run_id}` plus a short-lived stream token for `GET /api/runs/{run_id}/events`.
+The frontend is a self-contained React app served as static assets from Vercel (`public/index.html`). All seven screens default to the inlined `window.CONCORD_DATA` fixture, and local API mode can switch to live data through `GET /api/runs/{run_id}` plus a short-lived stream token for `GET /api/runs/{run_id}/events`. The Overview screen also renders run and tenant cost data from the run payload and `GET /api/tenant/usage`.
 
 > **Honest framing for Q&A:** The deployed demo still opens in fixture mode for stage reliability. The local FastAPI app serves the same dashboard with a FIXTURE/LIVE toggle; LIVE fetches the persisted run payload and subscribes to the run's SSE lifecycle stream.
 
 ### Screen 1 — **Overview** (`screen === "overview"`)
 - **Renders:** run metadata strip, 3 stat blocks (4 violations / 5 agents run / 4 patches ready), animated 5-node pipeline graph with REPLAY/PLAY/END STATE controls, contract status table (1/5 passing), run task card.
-- **Data sources:** `D.run`, `D.stats`, `D.agents`, `D.contracts`, `D.trace`.
+- **Data sources:** `D.run`, `D.stats`, `D.agents`, `D.contracts`, `D.trace`, `D.cost`, and tenant usage aggregates.
 - **Backend equivalent:** Zone B `report.run_id`, `report.violation_count`, `report.severity_summary`, derived per-agent rollups.
 - **Interactivity:** clicking any pipeline node navigates to **Agent Trace**. Replay button steps through 12 events at ~520ms/step.
 

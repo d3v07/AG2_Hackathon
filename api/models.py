@@ -1,6 +1,7 @@
 """SQLModel persistence records for Concord API state."""
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 
 from sqlmodel import Field, SQLModel
@@ -22,6 +23,19 @@ class WorkflowRecord(SQLModel, table=True):
     tools_json: str = "[]"
     contracts_json: str = "[]"
     created_at: str = Field(default_factory=_utc_now)
+
+
+class ApiKeyRecord(SQLModel, table=True):
+    __tablename__ = "api_keys"
+
+    api_key_id: str = Field(default_factory=lambda: f"AK-{uuid.uuid4().hex[:12].upper()}", primary_key=True)
+    tenant_id: str = Field(index=True)
+    name: str = ""
+    key_hash: str = Field(index=True)
+    key_prefix: str = Field(index=True)
+    created_at: str = Field(default_factory=_utc_now)
+    last_used_at: str = ""
+    revoked_at: str = ""
 
 
 class RunRecord(SQLModel, table=True):

@@ -835,6 +835,26 @@ def list_runs(tenant_id: str = "local") -> list[str]:
         return [row.run_id for row in rows]
 
 
+def get_tenant_usage(tenant_id: str = "local", period: str = "all") -> dict[str, Any]:
+    _ensure_store()
+    with session_scope() as session:
+        rows = session.exec(select(RunRecord).where(RunRecord.tenant_id == tenant_id)).all()
+    daytona_seconds = round(sum(float(row.daytona_seconds or 0) for row in rows), 8)
+    llm_tokens = sum(int(row.llm_tokens or 0) for row in rows)
+    llm_cost_usd = round(sum(float(row.llm_cost_usd or 0) for row in rows), 8)
+    daytona_cost_usd = round(sum(float(row.daytona_cost_usd or 0) for row in rows), 8)
+    return {
+        "tenant_id": tenant_id,
+        "period": period,
+        "run_count": len(rows),
+        "daytona_seconds": daytona_seconds,
+        "llm_tokens": llm_tokens,
+        "llm_cost_usd": llm_cost_usd,
+        "daytona_cost_usd": daytona_cost_usd,
+        "total_cost_usd": round(llm_cost_usd + daytona_cost_usd, 8),
+    }
+
+
 def create_workflow(payload: dict[str, Any], tenant_id: str = "local") -> dict[str, Any]:
     _ensure_store()
     workflow_id = f"WF-{uuid.uuid4().hex[:8].upper()}"
@@ -1023,13 +1043,14 @@ def get_run_status(run_id: str, tenant_id: str = "local") -> dict[str, Any] | No
         }
 
 
-def recover_interrupted_runs() -> int:
+def recover_interrupted_runs(tenant_id: str | None = None) -> int:
     _ensure_store()
     recovered = 0
     with session_scope() as session:
-        rows = session.exec(
-            select(RunRecord).where(RunRecord.status.in_(["queued", "analyzing"]))
-        ).all()
+        statement = select(RunRecord).where(RunRecord.status.in_(["queued", "analyzing"]))
+        if tenant_id is not None:
+            statement = statement.where(RunRecord.tenant_id == tenant_id)
+        rows = session.exec(statement).all()
         for record in rows:
             history = _from_json(record.status_history_json, [])
             if not history or history[-1] != "failed":

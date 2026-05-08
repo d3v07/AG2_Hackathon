@@ -26,9 +26,9 @@ session.complete(run_trace)
 }
 ```
 
-For local demo runs, Concord accepts the `local` tenant without a key. For
-non-local tenants, pass both `tenant_id` and `api_key`; the client sends
-`X-Tenant-ID` and `X-Concord-API-Key`.
+For local demo runs before keys are configured, Concord accepts the `local`
+tenant without a key. For tenant-scoped runs, pass both `tenant_id` and
+`api_key`; the client sends a bearer token plus tenant headers.
 
 ```python
 session = instrument(

@@ -161,6 +161,11 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .stat-accent.brick { background: var(--brick); }
 .stat-accent.gold  { background: var(--gold); }
 .stat-accent.sage  { background: var(--sage); }
+.cost-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cost-metric { border: 1px solid var(--border); padding: 10px; background: var(--surface); min-width: 0; }
+.cost-metric .lbl { color: var(--text-3); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; }
+.cost-metric .val { color: var(--text); font-size: 18px; margin-top: 4px; white-space: nowrap; }
+.cost-metric.total .val { color: var(--gold); }
 
 /* ---------- Agent pipeline ---------- */
 .pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; }
@@ -704,6 +709,12 @@ window.CONCORD_DATA = {
     events_total: 12,
     tool_events: 1
   },
+  cost: {
+    daytona_seconds: 4.128,
+    llm_tokens: 0,
+    llm_cost_usd: 0,
+    daytona_cost_usd: 0.0008256
+  },
   agents: [
     { id: "RES", name: "ResearcherAgent",  steps: 3, status: "PASS", note: "tavily_search x1" },
     { id: "CRT", name: "CriticAgent",      steps: 2, status: "PASS", note: "3 critique notes" },
@@ -976,6 +987,13 @@ window.CONCORD_DATA = {
   },
   report: {
     summary: "Run #041 of LITERATURE_REVIEW_ASSISTANT emitted a final memo despite four violated contracts. The Verifier recorded a verdict without a tool event and wrote verified_sources_count=0; the Reporter then produced a final output and the Action Agent attempted a save_report side effect with approval_status=pending. Concord mapped each violation to an AG2-native repair (Guardrail, ToolGate, OnContextCondition, UserProxyAgent/HumanGate) and a Daytona-run regression test confirmed all four repairs hold. The workflow is rerun-ready pending operator approval.",
+    usage_summary: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    cost_summary: {
+      daytona_seconds: 4.128,
+      llm_tokens: 0,
+      llm_cost_usd: 0,
+      daytona_cost_usd: 0.0008256
+    },
     patches_applied: [
       "P-001  Guardrail              ReporterAgent",
       "P-002  ToolGate               VerifierAgent",
@@ -1002,15 +1020,37 @@ function normalizeDashboardData(data, options = {}) {
   const fallbackFixture = options.fallbackFixture !== false;
   const fixture = fallbackFixture ? BOOT_DATA : {};
   const emptyTest = { name: "pending", runner: "", sandbox_id: "", duration_ms: 0, lines: [], assertions: [] };
+  const emptyCost = { daytona_seconds: 0, llm_tokens: 0, llm_cost_usd: 0, daytona_cost_usd: 0 };
+  const sourceReport = source.report || {};
+  const fixtureReport = fixture.report || {};
+  const cost = {
+    ...emptyCost,
+    ...(fixture.cost || fixtureReport.cost_summary || {}),
+    ...(source.cost || sourceReport.cost_summary || {}),
+  };
   const emptyReport = {
     summary: "",
     patches_applied: [],
+    usage_summary: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    cost_summary: emptyCost,
     approval: { status: "UNAVAILABLE", operator: "", requested_at: "", sla: "" },
+  };
+  const report = {
+    ...emptyReport,
+    ...fixtureReport,
+    ...sourceReport,
+    usage_summary: {
+      ...emptyReport.usage_summary,
+      ...(fixtureReport.usage_summary || {}),
+      ...(sourceReport.usage_summary || {}),
+    },
+    cost_summary: cost,
   };
   return {
     ...source,
     run: { ...(fixture.run || {}), ...(source.run || {}) },
     stats: { ...(fixture.stats || {}), ...(source.stats || {}) },
+    cost,
     agents: Array.isArray(source.agents) ? source.agents : (fixture.agents || []),
     topology: source.topology || fixture.topology || { entry: "", nodes: [], edges: [] },
     routes: Array.isArray(source.routes) ? source.routes : (fixture.routes || []),
@@ -1020,7 +1060,7 @@ function normalizeDashboardData(data, options = {}) {
     violations: Array.isArray(source.violations) ? source.violations : (fixture.violations || []),
     patches: Array.isArray(source.patches) ? source.patches : (fixture.patches || []),
     test: { ...(fixture.test || emptyTest), ...(source.test || {}) },
-    report: { ...(fixture.report || emptyReport), ...(source.report || {}) },
+    report,
     status: source.status || fixture.status || "queued",
     error: source.error || "",
   };
@@ -1029,7 +1069,10 @@ function normalizeDashboardData(data, options = {}) {
 function liveHeaders() {
   const headers = {};
   if (window.CONCORD_TENANT_ID) headers["X-Tenant-ID"] = window.CONCORD_TENANT_ID;
-  if (window.CONCORD_API_KEY) headers["X-Concord-API-Key"] = window.CONCORD_API_KEY;
+  if (window.CONCORD_API_KEY) {
+    headers["Authorization"] = `Bearer ${window.CONCORD_API_KEY}`;
+    headers["X-Concord-API-Key"] = window.CONCORD_API_KEY;
+  }
   return headers;
 }
 
@@ -1472,8 +1515,61 @@ function PipelineGraph({ setScreen }) {
   );
 }
 
+function costMetric(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function formatUsd(value) {
+  const amount = costMetric(value);
+  if (amount === 0) return "$0.00";
+  if (amount < 0.01) return `$${amount.toFixed(5)}`;
+  return `$${amount.toFixed(2)}`;
+}
+
+function formatSeconds(value) {
+  return `${costMetric(value).toFixed(2)}s`;
+}
+
+function CostPanel({ usage }) {
+  const runCost = D.cost || D.report?.cost_summary || {};
+  const tenantUsage = usage || {};
+  const llmCost = costMetric(runCost.llm_cost_usd);
+  const daytonaCost = costMetric(runCost.daytona_cost_usd);
+  const totalCost = costMetric(runCost.total_cost_usd, llmCost + daytonaCost);
+  const runCount = tenantUsage.run_count ?? 1;
+  return (
+    <div className="card" style={{width: 360}}>
+      <div className="card-head">
+        <span>Run Cost</span>
+        <span className="right">tenant total: {runCount} run{runCount === 1 ? "" : "s"}</span>
+      </div>
+      <div className="card-body">
+        <div className="cost-grid">
+          <div className="cost-metric total">
+            <div className="lbl">Total Cost</div>
+            <div className="val">{formatUsd(totalCost)}</div>
+          </div>
+          <div className="cost-metric">
+            <div className="lbl">LLM Tokens</div>
+            <div className="val">{Number(runCost.llm_tokens ?? 0).toLocaleString()}</div>
+          </div>
+          <div className="cost-metric">
+            <div className="lbl">Daytona Time</div>
+            <div className="val">{formatSeconds(runCost.daytona_seconds)}</div>
+          </div>
+          <div className="cost-metric">
+            <div className="lbl">Daytona Cost</div>
+            <div className="val">{formatUsd(daytonaCost)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- OVERVIEW ---------------- */
-function Overview({ setScreen }) {
+function Overview({ setScreen, tenantUsage }) {
   return (
     <>
       <div className="section-head">
@@ -1525,6 +1621,7 @@ function Overview({ setScreen }) {
             ))}
           </div>
         </div>
+        <CostPanel usage={tenantUsage} />
         <div className="card" style={{width: 360}}>
           <div className="card-head"><span>Run Task</span><span className="right">user input</span></div>
           <div className="card-body">
@@ -2515,6 +2612,7 @@ function App() {
   const [sourceMode, setSourceMode] = useState("fixture");
   const [connectionState, setConnectionState] = useState("idle");
   const [liveStatus, setLiveStatus] = useState(FIXTURE_DATA.status || "completed");
+  const [tenantUsage, setTenantUsage] = useState(null);
   D = data;
 
   // when leaving repair screen, clear filter
@@ -2525,6 +2623,7 @@ function App() {
       setConnectionState("idle");
       setLiveStatus(FIXTURE_DATA.status || "completed");
       setData(FIXTURE_DATA);
+      setTenantUsage(null);
       return;
     }
 
@@ -2543,6 +2642,12 @@ function App() {
       if (cancelled) return;
       setData(normalizeDashboardData(liveData, { fallbackFixture: false }));
       setLiveStatus(liveData.status || "loaded");
+      try {
+        const usageResponse = await fetch("/api/tenant/usage", { headers });
+        if (usageResponse.ok && !cancelled) setTenantUsage(await usageResponse.json());
+      } catch (_error) {
+        if (!cancelled) setTenantUsage(null);
+      }
     }
 
     async function openLiveRun() {
@@ -2610,7 +2715,7 @@ function App() {
       />
       <MetaStrip sourceMode={sourceMode} connectionState={connectionState} />
       <main className="main">
-        {screen === "overview"   && <Overview setScreen={setScreen} />}
+        {screen === "overview"   && <Overview setScreen={setScreen} tenantUsage={tenantUsage} />}
         {screen === "topology"   && <Topology setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
         {screen === "trace"      && <Trace />}
         {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}

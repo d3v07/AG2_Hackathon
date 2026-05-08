@@ -32,3 +32,8 @@ class ApprovalBody(BaseModel):
     decision: str
     operator: str = "j.kowalski"
     comments: str = ""
+
+
+class ApiKeyCreate(BaseModel):
+    tenant_id: str | None = None
+    name: str = ""

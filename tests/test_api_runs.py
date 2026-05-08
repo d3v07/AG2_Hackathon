@@ -210,6 +210,35 @@ def test_jsonp_run_payload_escapes_javascript_sensitive_characters(tmp_path):
     assert "line\u2028break<script>" not in response.text
 
 
+def test_jsonp_run_payload_supports_script_loader_stream_token_after_auth(tmp_path):
+    from api.auth import create_api_key
+    from api.store import put_run
+
+    client = _client(tmp_path)
+    api_key = create_api_key(tenant_id="local", name="local browser")["api_key"]
+    put_run(
+        "RUN-JS",
+        {
+            "run": {"id": "RUN-JS", "workflow": "JS"},
+            "patches": [],
+            "violations": [],
+            "report": {"approval": {"status": "PENDING_OPERATOR"}},
+        },
+    )
+
+    denied = client.get("/api/runs/RUN-JS.js")
+    token = client.post(
+        "/api/runs/RUN-JS/events/token",
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+    allowed = client.get(f"/api/runs/RUN-JS.js?stream_token={token.json()['stream_token']}")
+
+    assert denied.status_code == 401
+    assert token.status_code == 200
+    assert allowed.status_code == 200
+    assert "window.CONCORD_DATA" in allowed.text
+
+
 def test_run_routes_are_tenant_isolated_with_same_run_id(tmp_path, clean_trace_raw, monkeypatch):
     client = _client(tmp_path)
     monkeypatch.setenv(
