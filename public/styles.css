@@ -1138,6 +1138,73 @@ select:focus-visible,
   outline-offset: -2px;
 }
 
+/* ---------- Sprint 18 #88 — reusable state components ---------- */
+.state-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 22px;
+  background: var(--surface);
+  border: 1px dashed var(--border-2);
+  color: var(--text-2);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+.state-loading.inline {
+  padding: 8px 12px;
+  display: inline-flex;
+}
+.state-spinner {
+  display: inline-block;
+  font-size: 14px;
+  color: var(--gold);
+  animation: state-spin 1.4s linear infinite;
+}
+@keyframes state-spin { to { transform: rotate(360deg); } }
+.state-empty,
+.state-error {
+  padding: 22px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.state-empty h3,
+.state-error h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.state-empty p,
+.state-error p {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  line-height: 1.6;
+  font-size: 12.5px;
+}
+.state-error {
+  border-left: 3px solid var(--brick);
+}
+.state-error h3 { color: var(--brick); }
+.state-action,
+.state-error .btn-retry {
+  margin-top: 8px;
+}
+.state-error .btn-retry {
+  background: transparent;
+  border: 1px solid var(--brick);
+  color: var(--brick);
+  padding: 6px 14px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: inherit;
+}
+.state-error .btn-retry:hover {
+  background: var(--brick);
+  color: white;
+}
+
 /* ---------- Sprint 18 #87 — responsive layouts (375 / 768 / 1440) ---------- */
 /* Tablet: collapse 6-column meta strip + simplify forensic panes */
 @media (max-width: 1024px) {

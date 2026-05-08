@@ -14,6 +14,73 @@ const SCREENS = [
   { id: "workflows",  num: "08", label: "Workflows" },
 ];
 
+/* ---------- Sprint 18 #88 — reusable state components ---------- */
+function LoadingState({ message = "Loading…", inline = false }) {
+  return (
+    <div
+      className={`state-loading ${inline ? "inline" : ""}`}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <span className="state-spinner" aria-hidden="true">◐</span>
+      <span>{message}</span>
+    </div>
+  );
+}
+
+function EmptyState({ title, body, action }) {
+  return (
+    <div className="state-empty" role="status">
+      <h3>{title}</h3>
+      {body && <p>{body}</p>}
+      {action && <div className="state-action">{action}</div>}
+    </div>
+  );
+}
+
+/**
+ * Specific error copy per HTTP status (per global taste rules — never
+ * "Something went wrong"). The status code informs whether retry is
+ * useful: 4xx user-error usually requires intervention, 5xx is retryable.
+ */
+function _errorCopy(error) {
+  if (!error) return null;
+  const status = error.status || error.statusCode || 0;
+  if (status === 401 || status === 403) {
+    return { title: "Session expired", body: "Please re-authenticate to continue.", retryable: false };
+  }
+  if (status === 404) {
+    return { title: "Not found", body: error.message || "This resource doesn't exist or was deleted.", retryable: false };
+  }
+  if (status === 409) {
+    return { title: "Conflict", body: error.message || "The current state doesn't allow this operation.", retryable: false };
+  }
+  if (status >= 500 && status < 600) {
+    return { title: `Server error ${status}`, body: "Click retry. If it persists, check the API status.", retryable: true };
+  }
+  if (error.name === "TypeError" || /network|fetch|offline/i.test(error.message || "")) {
+    return { title: "Network error", body: error.message || "Could not reach the API.", retryable: true };
+  }
+  return { title: "Error", body: error.message || String(error), retryable: true };
+}
+
+function ErrorState({ error, onRetry }) {
+  const copy = _errorCopy(error);
+  if (!copy) return null;
+  return (
+    <div className="state-error" role="alert" aria-live="polite">
+      <h3>{copy.title}</h3>
+      {copy.body && <p>{copy.body}</p>}
+      {copy.retryable && onRetry && (
+        <button type="button" className="btn-retry" onClick={onRetry}>
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
 /* Deep-link helper: find the matching forensic span for a violation /
    patch / regression test. First tries explicit span_id (set in #75 by
    Zone B's contract checker), then falls back to agent-name match. */
@@ -1930,6 +1997,7 @@ export {
   App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun,
   WorkflowsScreen, Forensic, SpanTree, TimelineWaterfall, SpanInspector,
   ViewSpanLink,
+  LoadingState, EmptyState, ErrorState,
   RunProgress, useRunEventStream, fetchStreamToken,
   ApprovalPanel,
   TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS, FORENSIC_KIND_ICONS,
