@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from api.adapter import report_to_concord_data
 from api.store import get_run_inputs, set_run_status
+from zone_a.swarm import run_swarm
 from zone_b.agents.attribution import run_attribution
 from zone_b.agents.contract_checker import run_contract_checker
 from zone_b.agents.reporter import run_reporter
@@ -27,13 +31,22 @@ async def _process_run(run_id: str, tenant_id: str) -> None:
 
     set_run_status(run_id, "analyzing", tenant_id=tenant_id)
     raw_trace = inputs.get("raw_trace")
+    task_spec = inputs.get("task_spec")
+
+    if raw_trace is None and task_spec is not None:
+        raw_trace = await _execute_zone_a_from_task_spec(task_spec, run_id)
+
     if raw_trace is None:
-        raise ValueError("task_spec execution requires Zone A runtime credentials")
+        raise ValueError("run has neither raw_trace nor task_spec")
     if not isinstance(raw_trace.get("events"), list):
         raise ValueError("raw_trace.events must be a list")
 
     collected = await run_trace_collector(raw_trace)
-    checked = run_contract_checker(collected["run_trace"], collected["context_snapshot"])
+    checked = run_contract_checker(
+        collected["run_trace"],
+        collected["context_snapshot"],
+        spans=collected.get("spans"),
+    )
     violations = checked["violations"]
 
     if violations:
@@ -67,6 +80,35 @@ async def _process_run(run_id: str, tenant_id: str) -> None:
     data["run"]["id"] = run_id
     data["status"] = "completed"
     set_run_status(run_id, "completed", tenant_id=tenant_id, report=data)
+
+
+async def _execute_zone_a_from_task_spec(
+    task_spec: dict[str, Any], run_id: str
+) -> dict[str, Any]:
+    """Run the Zone A swarm from a task_spec and return the resulting raw_trace dict.
+
+    Stub mode is the default — fully deterministic, no LLM, no Tavily. Live mode
+    drives the real AG2 swarm. The swarm writes the trace JSON to a temp file;
+    we read it back, parse it, and hand it off to the existing Zone B pipeline.
+    """
+    task = task_spec.get("task")
+    research_question = task_spec.get("research_question")
+    mode = task_spec.get("mode", "stub")
+
+    if not task or not research_question:
+        raise ValueError("task_spec requires non-empty task and research_question")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        trace_path = Path(tmpdir) / f"{run_id}.json"
+        await run_swarm(
+            task=task,
+            research_question=research_question,
+            run_id=run_id,
+            fixture_path=None,
+            output_path=trace_path,
+            mode=mode,
+        )
+        return json.loads(trace_path.read_text())
 
 
 def _clean_report(raw_trace: dict[str, Any]) -> dict[str, Any]:
