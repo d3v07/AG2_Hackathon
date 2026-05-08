@@ -1,0 +1,16 @@
+{
+  "name": "concord-lite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Concord Lite dashboard frontend tooling",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:install": "playwright install chromium firefox",
+    "test:visual": "playwright test tests/e2e/visual --project=chromium",
+    "test:visual:update": "playwright test tests/e2e/visual --project=chromium --update-snapshots"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
