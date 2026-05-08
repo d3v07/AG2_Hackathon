@@ -355,3 +355,74 @@ This is a multi-agent observability + repair system. Both tracks fit. Concord is
 - **We use Daytona as a real, live integration**, not a stub. `_run_in_daytona` calls the AG2 `DaytonaCodeExecutor` runner. Without `DAYTONA_API_KEY`/`DAYTONA_API_URL` it returns `("Daytona credentials missing", "no-sandbox", "error")` — not a fake `pass`.
 - **Tavily is also live.** `zone_a/agents/researcher.py` actually hits `client.search(...)` for every Zone A run.
 - **Live LLM is Gemini 2.5 Flash.** Not local, not stubbed.
+
+---
+
+## 12. Spans data model (Sprint 15)
+
+Concord ships a 16-field span shape exposed at `CONCORD_DATA.spans` for the
+forensic trace UI. Sourced exclusively from AG2 OTel instrumentation —
+no custom tracing layer.
+
+### 16 fields
+
+| Field | Type | Source |
+|---|---|---|
+| `trace_id`, `span_id`, `parent_span_id` | string | OTel context |
+| `name`, `kind`, `agent`, `tool` | string | AG2 attributes (`gen_ai.*`, `ag2.*`) |
+| `status` | `"ok"` \| `"error"` | OTel status |
+| `start_time`, `end_time` | seconds (float) | OTel ns / 1e9 |
+| `duration_ms` | int | end-start in ms |
+| `attributes` | dict | full OTel attributes bag |
+| `input`, `output` | parsed JSON or `{}` | `gen_ai.input.messages` / `output.messages` |
+| `error` | `{type, message}` or `null` | `error.type` / `error.message` |
+| `contract_refs` | list | Zone B stamps via `_build_spans_block` |
+
+### 10 kinds
+
+`workflow`, `agent`, `tool`, `handoff`, `guardrail`, `human_gate`,
+`action`, `contract_check`, `repair`, `regression`.
+
+### End-to-end flow
+
+```
+zone_a swarm (AG2 OTel)
+  └─ ConcordSpanExporter.to_spans_payload()    [zone_a/trace_adapter.py]
+     └─ raw_trace["spans"]                     [emitted by emit_trace]
+        └─ Zone B trace_collector preserves    [zone_b/agents/trace_collector.py]
+           └─ contract_checker stamps span_id   [#75 — zone_b/agents/contract_checker.py]
+              └─ api/adapter._build_spans_block [#74 — joins contract_refs]
+                 └─ CONCORD_DATA.spans          [forensic UI consumes]
+```
+
+### Zone A modes (Sprint 13/14)
+
+`run_swarm(mode="live")` runs the real AG2 swarm with `RoundRobinPattern`,
+`OnContextCondition` handoffs, `RegexGuardrail`, `ContextVariables`, and
+`register_for_llm`-registered tools. Tavily is the only search source;
+failures fall back to a committed offline fixture (Sprint 14 #71).
+
+`run_swarm(mode="stub")` synthesizes a deterministic trace with no LLM
+or Tavily call. The `failure_mode` parameter (Sprint 14 #70) flips
+exactly one knob to trigger one Zone B contract violation type:
+
+| `failure_mode` | Triggers |
+|---|---|
+| `force_no_evidence` | `evidence` |
+| `force_no_tool_call` | `tool` |
+| `force_routing_break` | `routing` |
+| `force_no_approval` | `approval` |
+| `force_malformed_output` | `schema` |
+
+### AG2 primitives surface
+
+| Primitive | Where |
+|---|---|
+| `ConversableAgent` | `zone_a/swarm.py` (6 agents) |
+| `RoundRobinPattern` | swarm execution order |
+| `OnContextCondition` | Verifier→Reporter, HumanGate→Action gates |
+| `RegexGuardrail` | C2 second-line check (missing tool_call_id) |
+| `ContextVariables` | only state carrier between agents |
+| `register_for_llm` | tool registration (5 record_* tools) |
+| `register_handoffs` | conditional handoff routing |
+| `autogen.coding.DaytonaCodeExecutor` | sandboxed regression in Zone B |

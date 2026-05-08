@@ -22,6 +22,19 @@ health check passed: http://localhost:8000/api/health status=ok
 
 The dashboard is available at `http://localhost:8000`.
 
+### Run modes
+
+| Mode | Command | What runs | Credentials needed |
+|------|---------|-----------|-------------------|
+| stub | `python run_all.py --fixture` | Zone B pipeline on pre-baked trace | none |
+| live | `python run_all.py` | Zone A + Zone B end-to-end | `OPENROUTER_API_KEY`, `TAVILY_API_KEY` |
+| swarm stub | `python run_all.py --swarm --fixture` | Zone B GroupChat on pre-baked trace | `OPENROUTER_API_KEY` |
+| swarm live | `python run_all.py --swarm` | Zone A swarm + Zone B GroupChat | `OPENROUTER_API_KEY`, `TAVILY_API_KEY` |
+
+**stub mode** uses `zone_b/fixtures/sample_trace.json` — 5 pre-baked agent turns with 4 violations, always produces the same deterministic output. Use this to explore the pipeline without spending LLM credits or standing up Tavily.
+
+**live mode** calls Tavily for real web search results, then runs all seven Zone B agents through Gemini 2.5 Flash. Set `DAYTONA_API_KEY` to enable the sandboxed regression test stage; without it the stage returns `test_status=error` rather than silently passing.
+
 ## 2. Create an API Key
 
 Local development allows the first key to be created from localhost.
@@ -89,9 +102,16 @@ Confirm registration:
 curl -fsS "$CONCORD_API/api/workflows/$WORKFLOW_ID" -H "$AUTH_HEADER"
 ```
 
-## 4. Submit a Trace
+## 4. Submit a Run
 
 Endpoint: `POST /api/runs`
+
+The body accepts exactly one of `raw_trace` or `task_spec`:
+
+- `raw_trace`: a full AG2-shaped trace dict. Runs Zone B only. Fully wired today.
+- `task_spec`: task metadata that drives Zone A end-to-end. Schema is accepted but runtime execution requires Zone A credentials; currently returns HTTP 400 until Zone A runtime wiring lands.
+
+### Submit via raw_trace (fully supported)
 
 ```bash
 export RUN_ID="$(
@@ -109,6 +129,31 @@ print(json.dumps({"workflow_id": os.environ["WORKFLOW_ID"], "raw_trace": trace})
 PY
 )"
 ```
+
+### Submit via task_spec (schema target — Zone A wiring pending)
+
+Once Zone A runtime wiring lands, you will be able to submit a task specification directly:
+
+```bash
+curl -X POST "$CONCORD_API/api/runs" \
+  -H "$AUTH_HEADER" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "workflow_id": "'"$WORKFLOW_ID"'",
+    "task_spec": {
+      "task": "Create a literature review memo on whether multi-agent systems improve reliability in research workflows.",
+      "research_question": "Do multi-agent systems improve reliability in research workflows?",
+      "mode": "stub"
+    }
+  }'
+```
+
+`mode` controls Zone A execution:
+
+- `stub`: deterministic run on the pre-baked fixture trace — no LLM credentials needed, output is reproducible.
+- `live`: runs Zone A end-to-end with Tavily search and Gemini LLM — requires `TAVILY_API_KEY` and `OPENROUTER_API_KEY`.
+
+The `force_verifier_fail`, `force_approval_fail`, and `force_tool_fail` flags (part of the `task_spec` schema) inject specific contract violations for testing Zone B detection without touching Zone A code.
 
 Poll status:
 
@@ -132,7 +177,42 @@ http://localhost:8000/?run=<RUN_ID>
 
 Hosted static pages must not embed tenant API keys. Keep the dashboard in fixture mode, or put a small authenticated backend in front of LIVE mode that keeps the tenant key server-side and returns only a run payload plus short-lived stream token.
 
-## 5. Review Usage
+## 5. Reading the Forensic Span Tree (available once PRs #110-#113 land)
+
+The Forensic screen displays the full execution trace as a tree of spans. Each span represents one unit of work in the pipeline.
+
+### Span kinds
+
+| Kind | What it represents |
+|------|-------------------|
+| `workflow` | Top-level workflow execution envelope |
+| `agent` | A single agent's reasoning turn |
+| `tool` | A tool call (Tavily search, Daytona exec, etc.) |
+| `handoff` | Agent-to-agent transfer |
+| `guardrail` | Output guardrail check (e.g., RegexGuardrail) |
+| `human_gate` | Human approval gate |
+| `action` | Side-effect agent action |
+| `contract_check` | Zone B contract enforcement check |
+| `repair` | Zone B repair patch generation |
+| `regression` | Zone B Daytona sandbox regression test |
+
+### Reading the inspector
+
+Click any span in the tree to open the inspector panel. Sections:
+
+- **Identity**: span ID, parent span ID, trace ID, name, kind, agent, tool.
+- **Timing**: start time, end time, duration in milliseconds.
+- **Error**: error message if the span failed, otherwise empty.
+- **Input**: the input payload the span received.
+- **Output**: the output the span produced.
+- **Attributes**: all additional span attributes as key-value pairs.
+- **Contract violations**: any contract IDs that this span is linked to, with severity and a deep-link to the Violations screen.
+- **Repair**: the repair patch associated with this span's violation, if one exists.
+- **Regression**: the regression test result for this span's repair patch.
+
+Violation badges on a span indicate the contract was checked against that span's output and failed. Click the badge to jump directly to the violation detail.
+
+## 6. Review Usage
 
 Endpoint: `GET /api/tenant/usage`
 
@@ -158,6 +238,8 @@ The response includes:
 ## Troubleshooting
 
 - `401 missing API key`: send `Authorization: Bearer <key>`.
+- `400 task_spec submission requires Zone A runtime wiring`: use `raw_trace` instead until Zone A wiring lands.
 - `404 workflow not found`: the workflow belongs to another tenant or the ID is wrong.
 - `Regression status: error`: check `DAYTONA_API_KEY` and `DAYTONA_API_URL`.
 - Graph data missing: check `CONCORD_GRAPH_ENABLED`, `FALKORDB_HOST`, and `FALKORDB_PORT`.
+- Zone A errors with `--fixture` flag absent: check `OPENROUTER_API_KEY` is set; use `--fixture` to skip Zone A.

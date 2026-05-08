@@ -28,48 +28,54 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 ## SCREEN-BY-SCREEN WALK (the live demo)
 
-### Screen 1 — Overview
-8. **"This is Zone B's report rendered on top of Zone A's execution. The 5 agents you see ARE Zone A — Researcher, Critic, Verifier, Reporter, Action. Zone B added the violation count, the contract status table, and the severity breakdown."**
+### Screen 1 — Workflows
+8. **(open Workflows screen)** **"This is the workflow registry. Pick Literature Review Assistant."**
 
-9. **(click REPLAY RUN)** **"This is the recorded trace playing back. Twelve events, ~520 milliseconds per step. Researcher and Critic pass. Verifier turns red — that's where the contract failure happens. Reporter and Action both fail downstream."**
+9. **(click Submit Run)** **"The run form pre-fills with the Literature Review task. Mode defaults to stub — deterministic, no LLM credentials needed. Click Submit."**
 
-10. **"Bottom-right of each agent: the per-agent footer. 'no tool_event' under Verifier, 'verified=0' under Reporter, 'approval=pending' under Action. These are the failures we'll trace through the rest of the demo."**
+10. **"Watch the SSE progress strip: queued → analyzing → completed. That's the full Zone B pipeline running live — TraceCollector, ContractChecker, Attribution, Repair, RegressionTest, Reporter, HumanGate — seven agents in sequence."**
 
-### Screen 2 — Workflow DAG
-11. **(click 02 Workflow DAG)** **"This is the declared topology versus the observed path. Eight nodes — five agents, the GroupChat manager, the Tavily tool, and a proposed HumanGate that doesn't exist in the original program."**
+### Screen 2 — Overview
+11. **"This is Zone B's report rendered on top of Zone A's execution. The 5 agents you see ARE Zone A — Researcher, Critic, Verifier, Reporter, Action. Zone B added the violation count, the contract status table, and the severity breakdown."**
 
-12. **"Color-coded edges. Sage means OK. Orange means SKIPPED GUARD — the handoff from Verifier to Reporter fired without satisfying its precondition. Red means MISSING APPROVAL — Reporter handed off to Action with `approval_status=pending`. Gold dashed is PROPOSED — that's the HumanGate Concord wants to add."**
+12. **(click REPLAY RUN)** **"This is the recorded trace playing back. Twelve events, ~520 milliseconds per step. Researcher and Critic pass. Verifier turns red — that's where the contract failure happens. Reporter and Action both fail downstream."**
 
-13. **"Routing violations are structural — you can see them in the graph before you read the contract definitions."**
+13. **"Bottom-right of each agent: the per-agent footer. 'no tool_event' under Verifier, 'verified=0' under Reporter, 'approval=pending' under Action. These are the failures we'll trace through the rest of the demo."**
 
-### Screen 3 — Agent Trace
-14. **(click 03 Agent Trace)** **"Twelve events from the trace JSON. Each row is one TraceEvent — step number, timestamp, agent, event type, context delta, status. The flagged rows show which contract tripped."**
+### Screen 3 — Forensic (available once PR #110-#113 land)
+14. **(click Forensic screen)** **"This is the span tree for the workflow run. Every agent turn, tool call, handoff, and guardrail check is a span. The tree shows the full execution path."**
 
-15. **"Step 8: Verifier says 'I verified the key claims' — flagged C-TOL because there's no matching tool event. Step 9: Verifier writes verified_sources_count=0 — flagged C-EVD. Step 12: Action runs save_report with approval_status=pending — flagged C-APR."**
+15. **(click VerifierAgent span)** **"The inspector opens on the right. Eight sections: Identity, Timing, Error, Input, Output, Attributes, Contract violations, Repair, Regression. VerifierAgent has two contract violations — C-TOL and C-EVD — with deep-links."**
+
+16. **(click a violation in the inspector)** **"That deep-link jumps directly to the Violations screen with the matching violation highlighted."**
 
 ### Screen 4 — Violations
-16. **(click 04 Violations)** **"Four violations, three HIGH severity, one MED. Each card has the contract that failed, what was expected, what was observed, the failed agent, and an evidence chain pointing back to the trace steps."**
+17. **(click 04 Violations)** **"Four violations, three HIGH severity, one MED. Each card has the contract that failed, what was expected, what was observed, the failed agent, and an evidence chain pointing back to the trace steps."**
 
-17. **(click any violation row)** **"Clicking a violation jumps you straight to the proposed repair patch — that's the operator workflow."**
+18. **(click any violation row)** **"Clicking a violation jumps you straight to the proposed repair patch — that's the operator workflow."**
 
 ### Screen 5 — Repair Patch
-18. **"Four AG2-native primitive patches. Guardrail, ToolGate, OnContextCondition, and UserProxyAgent slash HumanGate. Each one shows before / after — red lines are removed, green lines are added."**
+19. **"Four AG2-native primitive patches. Guardrail, ToolGate, OnContextCondition, and UserProxyAgent slash HumanGate. Each one shows before / after — red lines are removed, green lines are added."**
 
-19. **"These aren't pseudo-code. The added lines paste straight into the operator's `ConversableAgent(...)` constructor or `Handoffs(...)` call. The repair targets the AG2 framework primitive, not the user's business logic."**
+20. **"These aren't pseudo-code. The added lines paste straight into the operator's `ConversableAgent(...)` constructor or `Handoffs(...)` call. The repair targets the AG2 framework primitive, not the user's business logic."**
 
-20. **"P-001 adds a Guardrail to Reporter — `condition=lambda ctx: ctx['verified_sources_count'] > 0`. P-002 wraps Verifier's `emit_verdict` in a tool-event check. P-003 gates the Verifier→Reporter handoff with `OnContextCondition`. P-004 inserts a UserProxyAgent with `human_input_mode='ALWAYS'` before Action."**
+21. **"P-001 adds a Guardrail to Reporter — `condition=lambda ctx: ctx['verified_sources_count'] > 0`. P-002 wraps Verifier's `emit_verdict` in a tool-event check. P-003 gates the Verifier→Reporter handoff with `OnContextCondition`. P-004 inserts a UserProxyAgent with `human_input_mode='ALWAYS'` before Action."**
+
+22. **(click patch link "Open on Regression screen")** **"That link jumps directly to the Regression screen for this patch."**
 
 ### Screen 6 — Regression
-21. **(click 06 Regression)** **"This is the Daytona sandbox. Per-run isolation, fresh `python:3.11-slim` image, sandbox ID `dt-9f3a-2b71`. The terminal stream is captured stdout from `sandbox.process.code_run`."**
+23. **(click 06 Regression)** **"This is the Daytona sandbox. Per-run isolation, fresh `python:3.11-slim` image, sandbox ID `dt-9f3a-2b71`. The terminal stream is captured stdout from `sandbox.process.code_run`."**
 
-22. **"Four assertions, all PASS. The LLM generated the test code. Daytona executed it. We always delete the sandbox in `finally` — no resource leak, no cleanup burden on the operator."**
+24. **"Four assertions, all PASS. The LLM generated the test code. Daytona executed it. We always delete the sandbox in `finally` — no resource leak, no cleanup burden on the operator."**
 
-23. **"This is where Daytona earns its keep. We're executing LLM-generated code — running that on the operator's machine is unsafe."**
+25. **"This is where Daytona earns its keep. We're executing LLM-generated code — running that on the operator's machine is unsafe."**
 
 ### Screen 7 — Final Report
-24. **(click 07 Final Report)** **"Notice the top-right status flipped from '4 VIOLATIONS DETECTED' in red to 'RERUN READY' in green. That's the explicit signal the loop is closed."**
+26. **(click 07 Final Report)** **"Notice the top-right status flipped from '4 VIOLATIONS DETECTED' in red to 'RERUN READY' in green. That's the explicit signal the loop is closed."**
 
-25. **"Executive summary is LLM-generated narrative. Approval block shows PENDING_OPERATOR — in interactive mode that triggers a real `UserProxyAgent` prompt. Patches Applied table is the deterministic part — four AG2 primitives mapped to four contract types."**
+27. **"Executive summary is LLM-generated narrative. Approval block shows PENDING_OPERATOR. Click Approve — the status flips to APPROVED and the decision is persisted via `POST /api/runs/{run_id}/approval`."**
+
+28. **"Patches Applied table is the deterministic part — four AG2 primitives mapped to four contract types."**
 
 ---
 
@@ -87,13 +93,13 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 ## INPUT / OUTPUT (anticipated Q&A)
 
-30. **"Input is one of two things. Either a research task in `zone_a/fixtures/task.json` — that drives the full Zone A then Zone B pipeline. Or an existing AG2-shaped trace JSON — that skips Zone A and runs only the Zone B diagnostic."**
+30. **"Input is one of two things. A `raw_trace` dict — an AG2-shaped trace JSON that skips Zone A and runs only the Zone B diagnostic. Or a `task_spec` dict — which drives Zone A end-to-end. Today `raw_trace` submission is fully wired; `task_spec` submission is schema-validated but requires Zone A runtime credentials to execute."**
 
-31. **"Output is a Contract Violation Report — same dict shape regardless of input mode. Fourteen fields including the violation list, severity summary, repair details, regression status, and an LLM-generated narrative."**
+31. **"Output is a Contract Violation Report — same dict shape regardless of input mode. Fourteen-plus fields including the violation list, severity summary, repair details, regression status, and an LLM-generated narrative."**
 
 32. **"The dashboard renders that report via `window.CONCORD_DATA`. The API serves the same shape via `GET /api/runs/{run_id}` — the `api/adapter.py` module does the conversion."**
 
-33. **(if asked about workflow submission)** **"Workflow submission is an API contract. `GET /api/runs/{run_id}` returns the report. The submission endpoint — `POST /api/runs` — is the obvious next layer; the adapter that would feed it is already in `api/adapter.py`."**
+33. **(if asked about workflow submission)** **"Submit a run via `POST /api/runs` with `workflow_id` and `raw_trace`. The background task runs the full Zone B pipeline and updates the run status via SSE. Fetch the completed report with `GET /api/runs/{run_id}`."**
 
 ---
 
@@ -166,15 +172,17 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 56. **"The Workflow DAG topology block is fixture-first for the stage demo, and live mode can now render observed topology plus recurrence badges from persisted run history. Registered workflow declarations are also projected to FalkorDB when graph persistence is enabled."**
 
-57. **"Tavily, Daytona, and Gemini are real live integrations — not stubs. Without `DAYTONA_API_KEY` we return an explicit `(stdout='Daytona credentials missing', sandbox_id='no-sandbox', status='error')` — never a fake PASS."**
+57. **"The Forensic screen — span tree, inspector, and deep-links — is queued in PRs #110-#113. It renders once those PRs land on production."**
+
+58. **"Tavily, Daytona, and Gemini are real live integrations — not stubs. Without `DAYTONA_API_KEY` we return an explicit `(stdout='Daytona credentials missing', sandbox_id='no-sandbox', status='error')` — never a fake PASS."**
 
 ---
 
 ## CLOSER (last 15 seconds)
 
-58. **"Concord Lite — declare your contracts in Zone A, get verdicts and AG2-native repairs from Zone B. Live demo at concord-lite.vercel.app, code at github.com/d3v07/AG2_Hackathon."**
+59. **"Concord Lite — declare your contracts in Zone A, get verdicts and AG2-native repairs from Zone B. Live demo at concord-lite.vercel.app, code at github.com/d3v07/AG2_Hackathon."**
 
-59. **"Multi-agent systems fail silently. Concord makes them fail loudly — and tells you exactly which AG2 primitive fixes it."**
+60. **"Multi-agent systems fail silently. Concord makes them fail loudly — and tells you exactly which AG2 primitive fixes it."**
 
 ---
 
@@ -185,3 +193,5 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 - **If asked "show me the API":** open `api/index.py` in the repo — point to `/api/health`, `/api/api-keys`, `/api/workflows`, `/api/runs`, `/api/runs/{id}/events`, and `/api/tenant/usage`.
 - **If asked "show me the contracts":** open `zone_b/agents/contract_checker.py` lines 9-33 — that's the entire enforcement layer.
 - **If asked "show me Daytona":** open `zone_b/agents/regression_test.py` lines 91-117 — `_run_in_daytona`.
+- **If asked "show me the swarm":** open `zone_a/swarm.py` — point to `RoundRobinPattern`, `OnContextCondition`, `RegexGuardrail`, `register_handoffs`, `register_for_llm`.
+- **If asked "show me task_spec submission":** the `RunCreate` schema in `api/schemas.py` accepts `task_spec`; the runtime check in `api/routes/runs.py:48-52` returns HTTP 400 until Zone A runtime wiring lands.
