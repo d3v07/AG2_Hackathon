@@ -1,12 +1,17 @@
-.PHONY: dev test lint fixture smoke clean
+.PHONY: dev test test-backend test-frontend lint fixture smoke clean
 
 API_BASE_URL ?= http://localhost:8000
 
 dev:
 	docker compose up --build api
 
-test:
+test: test-backend test-frontend
+
+test-backend:
 	pytest -x --tb=short
+
+test-frontend:
+	npm test
 
 lint:
 	python3 -m ruff check .
