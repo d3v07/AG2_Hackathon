@@ -97,6 +97,7 @@ async def run_trace_collector(raw: dict) -> dict:
         "handoff_path": handoff_path,
         "tool_events": tool_events,
         "summary": summary,
+        "spans": raw.get("spans") or [],
     }
 
 
