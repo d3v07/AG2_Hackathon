@@ -390,6 +390,7 @@ def _build_violations_block(violations: list[dict]) -> list[dict]:
             "observed": v.get("observed", ""),
             "failed_agent": v.get("failed_agent", ""),
             "failed_step": v.get("failed_step", -1),
+            "span_id": v.get("span_id"),
             "evidence": [
                 f"step {v.get('failed_step', '?')}: {v.get('observed', '')}",
             ],

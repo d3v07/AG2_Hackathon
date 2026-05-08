@@ -196,7 +196,8 @@ class TestRunTraceCollector:
     def test_returns_correct_keys(self, sample_trace_raw):
         result = asyncio.run(run_trace_collector(sample_trace_raw))
         assert set(result.keys()) == {"run_trace", "context_snapshot",
-                                       "handoff_path", "tool_events", "summary"}
+                                       "handoff_path", "tool_events", "summary",
+                                       "spans"}
 
     def test_run_trace_shape(self, sample_trace_raw):
         result = asyncio.run(run_trace_collector(sample_trace_raw))
