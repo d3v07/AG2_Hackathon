@@ -1,7 +1,7 @@
 """Pydantic request/response schemas for the API layer."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -16,10 +16,16 @@ class WorkflowCreate(BaseModel):
     owner: str = ""
 
 
+class TaskSpec(BaseModel):
+    task: str = Field(..., min_length=1)
+    research_question: str = Field(..., min_length=1)
+    mode: Literal["stub", "live"] = "stub"
+
+
 class RunCreate(BaseModel):
     workflow_id: str
     raw_trace: dict[str, Any] | None = None
-    task_spec: dict[str, Any] | None = None
+    task_spec: TaskSpec | None = None
 
     @model_validator(mode="after")
     def exactly_one_input(self) -> "RunCreate":
