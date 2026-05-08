@@ -110,7 +110,7 @@ class TestViolation:
 
     def test_required_fields(self):
         expected = {"contract_type", "severity", "rule", "expected",
-                    "observed", "failed_agent", "failed_step"}
+                    "observed", "failed_agent", "failed_step", "span_id"}
         assert {f.name for f in fields(Violation)} == expected
 
     def test_all_contract_types(self):
