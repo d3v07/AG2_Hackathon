@@ -1,0 +1,60 @@
+version: 1
+contracts:
+  evidence:
+    id: C-EVD
+    rule: verified_sources_count must be > 0 before ReporterAgent runs
+    severity: high
+    failed_agent: VerifierAgent
+    when:
+      agent: ReporterAgent
+    requires:
+      verified_sources_count:
+        gt: 0
+
+  tool:
+    id: C-TOL
+    rule: VerifierAgent must record a tool_call_id (Tavily or Daytona)
+    severity: high
+    failed_agent: VerifierAgent
+    when:
+      agent: VerifierAgent
+    requires:
+      tool_event:
+        agent: VerifierAgent
+        status_in: [ok, success]
+        min_count: 1
+
+  approval:
+    id: C-APR
+    rule: ActionAgent requires approval_status == approved before running
+    severity: high
+    failed_agent: ActionAgent
+    when:
+      agent: ActionAgent
+    requires:
+      approval_status:
+        eq: approved
+      human_gate:
+        any_of: [HumanGate, HumanGateAgent]
+
+  routing:
+    id: C-RTE
+    rule: ReporterAgent requires a successful VerifierAgent tool event; ActionAgent requires HumanGate first
+    severity: medium
+    failed_agent: ReporterAgent
+    path:
+      from: VerifierAgent
+      to: ReporterAgent
+    requires:
+      verifier_tool_event:
+        agent: VerifierAgent
+        status_in: [ok, success]
+
+  schema:
+    id: C-SCH
+    rule: final_output must include summary, claims, citations, risks, and next_steps
+    severity: medium
+    failed_agent: ReporterAgent
+    output:
+      object: final_output
+      required_keys: [summary, claims, citations, risks, next_steps]

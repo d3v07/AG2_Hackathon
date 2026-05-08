@@ -33,6 +33,17 @@ def _workflow_payload() -> dict:
     }
 
 
+def _contracts_yaml() -> str:
+    return """
+contracts:
+  - id: C-EVD
+    type: evidence
+    severity: high
+    rule: verified_sources_count must be > 0 before ReporterAgent runs
+    failed_agent: VerifierAgent
+"""
+
+
 def _tenant(name: str, key: str) -> dict[str, str]:
     return {"X-Tenant-ID": name, "X-Concord-API-Key": key}
 
@@ -102,6 +113,114 @@ def test_invalid_contract_schema_returns_400(tmp_path):
     assert response.status_code == 400
     assert "contracts[0]" in response.json()["detail"]
     assert "rule" in response.json()["detail"]
+
+
+def test_create_workflow_accepts_contracts_yaml_and_persists_normalized_contracts(tmp_path):
+    client = _client(tmp_path)
+    payload = _workflow_payload()
+    payload["contracts"] = []
+    payload["contracts_yaml"] = _contracts_yaml()
+
+    created = client.post("/api/workflows", json=payload)
+
+    assert created.status_code == 200
+    contract = created.json()["contracts"][0]
+    assert contract == {
+        "id": "C-EVD",
+        "type": "evidence",
+        "severity": "high",
+        "rule": "verified_sources_count must be > 0 before ReporterAgent runs",
+        "failed_agent": "VerifierAgent",
+    }
+
+
+def test_create_workflow_persists_contracts_yaml_machine_fields(tmp_path):
+    client = _client(tmp_path)
+    payload = _workflow_payload()
+    payload["contracts"] = []
+    payload["contracts_yaml"] = """
+contracts:
+  schema:
+    id: C-SCH
+    rule: final_output must include summary, claims, citations, risks, and next_steps
+    output:
+      object: final_output
+      required_keys: [summary, claims, citations, risks, next_steps]
+"""
+
+    created = client.post("/api/workflows", json=payload)
+
+    assert created.status_code == 200
+    assert created.json()["contracts"][0]["type"] == "schema"
+    assert created.json()["contracts"][0]["output"] == {
+        "object": "final_output",
+        "required_keys": ["summary", "claims", "citations", "risks", "next_steps"],
+    }
+
+
+def test_create_workflow_rejects_mixed_contract_sources(tmp_path):
+    client = _client(tmp_path)
+    payload = _workflow_payload()
+    payload["contracts_yaml"] = _contracts_yaml()
+
+    response = client.post("/api/workflows", json=payload)
+
+    assert response.status_code == 400
+    assert "provide either contracts or contracts_yaml" in response.json()["detail"]
+
+
+def test_create_workflow_reports_contracts_yaml_line_errors(tmp_path):
+    client = _client(tmp_path)
+    payload = _workflow_payload()
+    payload["contracts"] = []
+    payload["contracts_yaml"] = """
+contracts:
+  - id: C-BAD
+    type: evidence
+"""
+
+    response = client.post("/api/workflows", json=payload)
+
+    assert response.status_code == 400
+    assert "line 3" in response.json()["detail"]
+    assert "contracts[0]" in response.json()["detail"]
+
+
+def test_create_workflow_rejects_contracts_yaml_non_string_mapping_key(tmp_path):
+    client = _client(tmp_path)
+    payload = _workflow_payload()
+    payload["contracts"] = []
+    payload["contracts_yaml"] = """
+contracts:
+  1:
+    id: C-EVD
+    rule: verified_sources_count must be > 0 before ReporterAgent runs
+"""
+
+    response = client.post("/api/workflows", json=payload)
+
+    assert response.status_code == 400
+    assert "line 3" in response.json()["detail"]
+    assert "contract type key must be a string" in response.json()["detail"]
+
+
+def test_create_workflow_rejects_contracts_yaml_invalid_machine_field_shape(tmp_path):
+    client = _client(tmp_path)
+    payload = _workflow_payload()
+    payload["contracts"] = []
+    payload["contracts_yaml"] = """
+contracts:
+  schema:
+    id: C-SCH
+    rule: final_output must include summary, claims, citations, risks, and next_steps
+    output: nope
+"""
+
+    response = client.post("/api/workflows", json=payload)
+
+    assert response.status_code == 400
+    assert "line 6" in response.json()["detail"]
+    assert "schema.output must be a mapping" in response.json()["detail"]
 
 
 def test_workflow_persists_across_database_reinitialization(tmp_path):

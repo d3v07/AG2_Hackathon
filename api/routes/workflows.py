@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.schemas import WorkflowCreate
 from api.routes.deps import get_tenant_id
 from api.store import create_workflow, get_workflow, list_workflow_recurrences, list_workflows
+from zone_b.contracts.parser import ContractDslError, parse_contracts_yaml
 
 router = APIRouter(prefix="/api/workflows", tags=["workflows"])
 
@@ -23,12 +24,28 @@ def _validate_contracts(contracts: list[dict]) -> None:
             )
 
 
+def _normalize_contracts(payload: dict) -> None:
+    contracts_yaml = payload.pop("contracts_yaml", None)
+    contracts = payload.get("contracts") or []
+    if contracts_yaml is not None:
+        if contracts:
+            raise HTTPException(
+                status_code=400,
+                detail="provide either contracts or contracts_yaml, not both",
+            )
+        try:
+            payload["contracts"] = [contract.to_dict() for contract in parse_contracts_yaml(contracts_yaml)]
+        except ContractDslError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("")
 def create_workflow_endpoint(
     body: WorkflowCreate,
     tenant_id: str = Depends(get_tenant_id),
 ) -> dict:
     payload = body.model_dump()
+    _normalize_contracts(payload)
     _validate_contracts(payload["contracts"])
     workflow = create_workflow(payload, tenant_id=tenant_id)
     return {"workflow_id": workflow["workflow_id"], **workflow}

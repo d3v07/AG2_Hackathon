@@ -12,6 +12,7 @@ class WorkflowCreate(BaseModel):
     agents: list[dict[str, Any]] = Field(default_factory=list)
     tools: list[dict[str, Any]] = Field(default_factory=list)
     contracts: list[dict[str, Any]] = Field(default_factory=list)
+    contracts_yaml: str | None = None
     owner: str = ""
 
 

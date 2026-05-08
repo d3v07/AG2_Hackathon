@@ -389,9 +389,10 @@ The LLM is called *after* a check fails — only to produce `expected` / `observ
 │   ├── sandbox_run.py              Daytona demo runner with mock trace
 │   ├── fixtures/
 │   │   └── sample_trace.json       pre-baked run_041 trace (4 violations)
+│   ├── contracts/                  dataclass registry + YAML contract DSL
 │   └── agents/
 │       ├── trace_collector.py      JSON → RunTrace + ContextSnapshot (no LLM)
-│       ├── contract_checker.py     5 rules, deterministic + LLM text
+│       ├── contract_checker.py     registry-backed deterministic checks + LLM text
 │       ├── attribution.py          LLM → failed_agent + root cause
 │       ├── repair.py               primitive map + LLM patch code
 │       ├── regression_test.py      LLM test gen + Daytona execution
