@@ -53,7 +53,7 @@ def submit_run_endpoint(
     run = create_run(
         workflow_id=body.workflow_id,
         raw_trace=body.raw_trace,
-        task_spec=body.task_spec,
+        task_spec=body.task_spec.model_dump() if body.task_spec is not None else None,
         tenant_id=tenant_id,
     )
     from api.background import process_run
