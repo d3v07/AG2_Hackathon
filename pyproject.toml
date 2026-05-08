@@ -7,7 +7,9 @@ name = "concord-lite"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-    "ag2>=0.12",
+    "ag2[openai]>=0.12",
+    "opentelemetry-sdk>=1.41,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.41,<2",
     "python-dotenv",
     "tavily-python",
     "daytona-sdk",

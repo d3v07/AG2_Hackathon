@@ -3,11 +3,11 @@
 ## Overview
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
-- Phase: Sprint 5 landing
-- Branch: feat/sprint-5-api-persistence
-- Current Sprint: Sprint 5
-- Current Task: #18-#20 API persistence, workflow registration, and run submission
-- Last Checkpoint: Sprint 5 full verification gate passed locally.
+- Phase: Sprint 6 landing
+- Branch: feat/sprint-6-ag2-sdk
+- Current Sprint: Sprint 6
+- Current Task: #21-#23 AG2 OTel verification, trace exporter, and SDK package
+- Last Checkpoint: Sprint 6 local commit `b281e94` created after full verification and reviewer fix loops.
 
 ## Sprint Board
 Sprint 3: Foundation
@@ -21,9 +21,14 @@ Sprint 4: Repair and downstream report compatibility
 - #17 P0 API: Pass backend report patches through to dashboard data — closed on `main`
 
 Sprint 5: API persistence and run APIs
-- #18 P0 API: Add SQLite + SQLModel persistence layer — full gate passed locally
-- #19 P0 API: Implement POST /api/workflows + listing endpoints — full gate passed locally
-- #20 P0 API: Implement POST /api/runs with status state machine — full gate passed locally
+- #18 P0 API: Add SQLite + SQLModel persistence layer — closed on `main`
+- #19 P0 API: Implement POST /api/workflows + listing endpoints — closed on `main`
+- #20 P0 API: Implement POST /api/runs with status state machine — closed on `main`
+
+Sprint 6: AG2 tracing and SDK
+- #21 P0 Zone A: Verify AG2 OpenTelemetry import paths and document them — full gate passed locally
+- #22 P0 Zone A: Add OTel span-to-RunTrace exporter — full gate passed locally
+- #23 P0 SDK: Add one-line instrumentation and API client package — full gate passed locally
 
 ## What Worked
 - GitHub issues #12-#15 are closed on `main`.
@@ -109,12 +114,33 @@ Sprint 5: API persistence and run APIs
 - Sprint 5 AG2 import smoke passed.
 - Sprint 5 local API probe passed: `GET /api/health` returned 200, `GET /api/runs/RUN-041` returned 4 patches with `completed`, and unauthenticated `X-Tenant-ID: tenant-a` was rejected with 401.
 - PR #46 inline comments were addressed locally with tests: local regression runner errors report `error`, JSONP escapes JS-sensitive output, API startup uses explicit store initialization, and reporter summary naming now matches per-violation status semantics.
+- PR #46 merged Sprint 5 into `production`; PR #47 merged `production` into `main`.
+- GitHub issues #18, #19, and #20 are closed on `main`.
+- Sprint 6 branch `feat/sprint-6-ag2-sdk` was created from updated `production`.
+- #21 verified `autogen.opentelemetry` imports for `instrument_agent`, `instrument_llm_wrapper`, and `instrument_pattern`; HTTP OTLP and in-memory exporter paths were documented in `docs/AG2_VERSIONING.md`.
+- #21 spike `python3 scripts/otel_spike.py` passed and printed a native AG2 tool span plus its normalized Concord event.
+- #22 added `zone_a.trace_adapter.ConcordSpanExporter` and tests for raw-trace round trip, native AG2 agent/tool spans, handoff derivation, malformed spans, malformed context JSON, and ordering.
+- #23 added standalone `sdk/` package with `ConcordClient`, one-line `instrument()`, server-side tenant headers, editable install smoke, and SDK submission tests.
+- Sprint 6 first reviewer found two blocking issues: SDK imported `zone_a` and exporter dropped native AG2 spans without Concord attributes. Both were fixed with package-local adapter and native `ag2.span.type`/`gen_ai.*` mapping.
+- Sprint 6 second reviewer found two follow-up blockers: `complete()` discarded captured native spans and repo-local context JSON parsing could drop malformed spans. Both were fixed; `complete()` now prefers captured spans and raw-trace replay is fallback only.
+- Sprint 6 final reviewer found two more blockers: clean SDK install lacked the AG2 provider extra needed by the Zone A spike, and repeated `complete()` calls could resubmit prior spans. Both were fixed with `ag2[openai]` dependencies and a regression test that proves submitted spans are cleared per run.
+- Sprint 6 focused gate passed: `pytest -q tests/test_otel_exporter.py tests/test_sdk_instrumentation.py tests/test_swarm.py tests/test_api_runs.py tests/test_integration.py` passed 73 tests.
+- Sprint 6 full gate passed: `pytest -x --tb=short` passed 343 tests.
+- Sprint 6 fixture gate passed: `python3 run_all.py --fixture` reported `Regression status : pass` and `Regression tests   : 4 pass / 0 fail / 0 error`.
+- Sprint 6 SDK install/spike smoke passed in a fresh temporary venv with `python3 -m pip install -e ./sdk`, `import concord_sdk`, and `python3 scripts/otel_spike.py`.
+- Sprint 6 `git diff --check` passed.
+- Sprint 6 AG2/OTel import smoke passed.
+- Sprint 6 local API probe passed: `GET /api/health` returned 200, `GET /api/runs/RUN-041` returned 4 patches with `completed`, and unauthenticated `X-Tenant-ID: tenant-a` was rejected with 401.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
 - `python3 -m ruff check .` failed because `ruff` is not installed.
 - Older FastAPI/Pydantic pins failed to install on Python 3.14 because `pydantic-core==2.23.4` only supports through Python 3.13.
 - Sprint 5 focused gate initially exposed a flaky pytest fixture path that depended on live sandbox execution; fixed by adding an explicit local regression runner for subprocess tests while preserving the live direct fixture gate.
+- Sprint 6 initial SDK packaging did not work outside the monorepo because `concord_sdk` imported `zone_a`; fixed with a packaged SDK trace adapter and installed-package smoke test.
+- Sprint 6 initial native span support still required Concord attributes; fixed with native AG2 `gen_ai.*` mapping and tests.
+- Sprint 6 clean SDK install initially missed the provider extra required by the Zone A spike; fixed by declaring `ag2[openai]>=0.12`.
+- Sprint 6 reusable SDK sessions initially leaked prior spans into later submissions; fixed by resetting submitted span buffers after each `complete()`.
 - `docs/PLAN_VS_REALITY.md` is referenced by the handoff but missing locally.
 
 ## Blockers
@@ -122,7 +148,8 @@ Sprint 5: API persistence and run APIs
 - No #15 blocker remains.
 - No #16/#17 blocker remains.
 - No Sprint 5 blocker remains.
+- No Sprint 6 blocker remains.
 - Remaining toolchain gaps: `ruff` unavailable in the current Python environment; `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Review the Sprint 5 diff, commit locally with `Closes #18`, `Closes #19`, and `Closes #20`, then land through `production` and `main` before starting Sprint 6. Use child agents for parallel review/research on later sprints after Sprint 5 lands.
+Push `feat/sprint-6-ag2-sdk`, open the PR to `production`, check review comments and required gates, then merge through `production` and `main` before starting Sprint 7.
