@@ -4,7 +4,7 @@
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
 - Phase: Complete
-- Branch: main
+- Branch: main steady state; short-lived cleanup branches may exist only while landing this state file
 - Current Sprint: Sprint 12
 - Current Task: #39-#41 complete and closed
 - Last Checkpoint: Sprint 12 landed on `production` through PR #60 and `main` through PR #61. Issues #39, #40, and #41 are closed. PR checks passed on both merge paths, local `production` verification passed, and stale merged branches were deleted locally and remotely.
@@ -309,4 +309,4 @@ Sprint 12: Release operations and onboarding
 - Remaining baseline doc gap: `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-No open GitHub issues remain for #12-#41. Keep `main` and `production` in sync; next work should start from a fresh issue and branch.
+No open GitHub issues remain for #12-#41. Finish any active state-only cleanup PR, keep `main` and `production` in sync, and start next work from a fresh issue and branch.
