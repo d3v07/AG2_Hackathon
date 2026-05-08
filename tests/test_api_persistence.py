@@ -20,6 +20,7 @@ def test_seeded_run_persists_across_store_reinitialization(tmp_path):
     first = get_run("RUN-041")
     assert first is not None
     assert first["run"]["id"] == "RUN-041"
+    assert first["cost"]["daytona_seconds"] > 0
     assert "RUN-041" in list_runs()
 
     configure_database(db_url)
@@ -29,6 +30,7 @@ def test_seeded_run_persists_across_store_reinitialization(tmp_path):
     assert restarted is not None
     assert restarted["run"]["id"] == "RUN-041"
     assert len(restarted["patches"]) == 4
+    assert restarted["cost"]["daytona_cost_usd"] > 0
 
 
 def test_put_run_survives_new_engine_for_same_database(tmp_path):

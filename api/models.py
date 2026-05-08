@@ -34,6 +34,10 @@ class RunRecord(SQLModel, table=True):
     raw_trace_json: str = ""
     task_spec_json: str = ""
     report_json: str = ""
+    daytona_seconds: float = 0.0
+    llm_tokens: int = 0
+    llm_cost_usd: float = 0.0
+    daytona_cost_usd: float = 0.0
     error: str = ""
     status_history_json: str = "[]"
     created_at: str = Field(default_factory=_utc_now)

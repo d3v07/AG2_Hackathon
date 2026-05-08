@@ -2,7 +2,14 @@
 import asyncio
 import pytest
 from shared.models import Violation, RunTrace
-from zone_b.agents.regression_test import _parse_status, _fallback_test, run_regression_test
+from zone_b.agents.regression_test import (
+    RegressionTestGenerationError,
+    _ask_llm_for_test,
+    _extract_llm_usage,
+    _fallback_test,
+    _parse_status,
+    run_regression_test,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -15,6 +22,15 @@ def _v(contract_type: str = "evidence") -> Violation:
         rule="test rule", expected="EXPECTED: x", observed="OBSERVED: y",
         failed_agent="VerifierAgent", failed_step=3,
     )
+
+
+class _ChatResult:
+    def __init__(self, content="", cost=None):
+        self.chat_history = [{"content": content}]
+        self.cost = cost or {
+            "usage_including_cached_inference": {},
+            "usage_excluding_cached_inference": {},
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +121,62 @@ class TestFallbackTest:
 
 
 class TestRunRegressionTest:
+    def test_ag2_cost_payload_does_not_double_count_total_cost(self):
+        result = _ChatResult(
+            cost={
+                "usage_including_cached_inference": {
+                    "total_cost": 0.00042,
+                    "model-a": {
+                        "prompt_tokens": 11,
+                        "completion_tokens": 7,
+                        "total_tokens": 18,
+                        "cost": 0.00042,
+                    },
+                }
+            }
+        )
+
+        usage, cost = _extract_llm_usage(result)
+
+        assert usage == {
+            "prompt_tokens": 11,
+            "completion_tokens": 7,
+            "total_tokens": 18,
+        }
+        assert cost == 0.00042
+
+    def test_non_object_generated_json_preserves_billed_usage(self, monkeypatch):
+        cost_payload = {
+            "usage_including_cached_inference": {
+                "total_cost": 0.00021,
+                "model-a": {
+                    "prompt_tokens": 5,
+                    "completion_tokens": 3,
+                    "total_tokens": 8,
+                    "cost": 0.00021,
+                },
+            }
+        }
+
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._make_proxy",
+            lambda *_: type(
+                "Proxy",
+                (),
+                {"initiate_chat": lambda *_args, **_kwargs: _ChatResult("[]", cost_payload)},
+            )(),
+        )
+
+        with pytest.raises(RegressionTestGenerationError) as exc:
+            _ask_llm_for_test("patch", [_v("evidence")], RunTrace("r", "w", [], None))
+
+        assert exc.value.usage == {
+            "prompt_tokens": 5,
+            "completion_tokens": 3,
+            "total_tokens": 8,
+        }
+        assert exc.value.llm_cost_usd == 0.00021
+
     def test_bad_generated_test_uses_deterministic_fallback(self, monkeypatch):
         monkeypatch.setattr(
             "zone_b.agents.regression_test._ask_llm_for_test",
@@ -188,6 +260,41 @@ class TestRunRegressionTest:
         assert result["per_violation_results"][0]["assertion"] == (
             "evidence contract is satisfied post-repair"
         )
+
+    def test_generation_parse_error_preserves_billed_usage(self, monkeypatch):
+        def raise_parse_error(*_args):
+            raise RegressionTestGenerationError(
+                "bad json",
+                usage={
+                    "prompt_tokens": 11,
+                    "completion_tokens": 7,
+                    "total_tokens": 18,
+                },
+                llm_cost_usd=0.00042,
+            )
+
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._ask_llm_for_test",
+            raise_parse_error,
+        )
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._run_in_daytona",
+            lambda _: ("PASS", "sb-fallback", "pass"),
+        )
+
+        result = asyncio.run(
+            run_regression_test("patch", [_v("evidence")], RunTrace("r", "w", [], None))
+        )
+
+        assert result["fallback_used"] is True
+        assert result["fallback_reason"] == "generation_error"
+        assert result["usage"] == {
+            "prompt_tokens": 11,
+            "completion_tokens": 7,
+            "total_tokens": 18,
+        }
+        assert result["cost"]["llm_tokens"] == 18
+        assert result["cost"]["llm_cost_usd"] == 0.00042
 
     def test_local_runner_uses_deterministic_test_without_daytona(self, monkeypatch):
         monkeypatch.setenv("CONCORD_REGRESSION_RUNNER", "local")
