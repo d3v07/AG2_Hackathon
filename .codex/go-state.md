@@ -3,11 +3,11 @@
 ## Overview
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
-- Phase: Sprint 12 implementation and verification
-- Branch: feat/sprint-12-release-ops
+- Phase: Complete
+- Branch: main
 - Current Sprint: Sprint 12
-- Current Task: #39-#41 Docker stack, CI, deployment docs, and onboarding
-- Last Checkpoint: Sprint 11 landed on `production` through PR #58 and `main` through PR #59. Issues #36, #37, and #38 are closed. Sprint 12 branch was created from updated `production`; RED release-ops tests failed for the expected missing-artifact reasons, then passed after adding Docker, CI, smoke, deployment, and onboarding artifacts. Dev requirements were installed into `.venv`, and `ruff` is now passing through `.venv/bin/python -m ruff check .`.
+- Current Task: #39-#41 complete and closed
+- Last Checkpoint: Sprint 12 landed on `production` through PR #60 and `main` through PR #61. Issues #39, #40, and #41 are closed. PR checks passed on both merge paths, local `production` verification passed, and stale merged branches were deleted locally and remotely.
 
 ## Sprint Board
 Sprint 3: Foundation
@@ -56,9 +56,9 @@ Sprint 11: Auth, tenant isolation, and usage
 - #38 P2 API/Dashboard: Cost dashboard endpoint and UI panel — closed on `main`
 
 Sprint 12: Release operations and onboarding
-- #39 P1 Infra: Dockerfile and docker-compose local stack — implementation in progress
-- #40 P1 Infra: GitHub Actions CI for tests and lint — implementation in progress
-- #41 P1 Docs: Hosted deploy docs and onboarding — implementation in progress
+- #39 P1 Infra: Dockerfile and docker-compose local stack — closed on `main`
+- #40 P1 Infra: GitHub Actions CI for tests and lint — closed on `main`
+- #41 P1 Docs: Hosted deploy docs and onboarding — closed on `main`
 
 ## What Worked
 - GitHub issues #12-#15 are closed on `main`.
@@ -272,6 +272,10 @@ Sprint 12: Release operations and onboarding
 - Sprint 12 deployed demo probe returned HTTP 200.
 - Sprint 12 reviewer found three high release blockers: browser docs exposed tenant API keys, compose forced `CONCORD_ALLOW_DEV_AUTH`, and Dockerfile ignored provider `PORT`. All three were fixed and the reviewer re-check reported no blockers.
 - PR #60 first CI run failed because one regression-test unit required an ambient provider key before its monkeypatch path ran. Fixed by monkeypatching the regression-test config in that unit; targeted regression tests, lint, and full pytest passed locally afterward.
+- PR #60 merged Sprint 12 into `production`; PR #61 merged `production` into `main`; GitHub issues #39, #40, and #41 are closed.
+- Local `production` verification after PR #60 passed: release-ops/regression focused tests, `ruff`, `git diff --check`, local smoke, full pytest, fixture pipeline, OTel spike, and deployed demo HTTP 200.
+- PR #61 checks passed before merge to `main`.
+- Stale merged branches were deleted locally and remotely after confirming they were merged into `main`.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -305,4 +309,4 @@ Sprint 12: Release operations and onboarding
 - Remaining baseline doc gap: `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Commit Sprint 12 with `Closes #39`, `Closes #40`, and `Closes #41`, then run the branch -> `production` -> `main` landing loop and delete merged sprint branches.
+No open GitHub issues remain for #12-#41. Keep `main` and `production` in sync; next work should start from a fresh issue and branch.
