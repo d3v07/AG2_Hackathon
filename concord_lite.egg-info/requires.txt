@@ -1,11 +1,4 @@
-ag2[daytona,openai]>=0.12
-falkordb>=1.0.10
-opentelemetry-sdk<2,>=1.41
-opentelemetry-exporter-otlp-proto-http<2,>=1.41
+ag2>=0.12
 python-dotenv
-PyYAML>=6.0
 tavily-python
-fastapi==0.136.1
-pydantic==2.13.4
-sqlmodel==0.0.38
-uvicorn==0.38.0
+daytona-sdk
