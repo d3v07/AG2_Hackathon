@@ -8,3 +8,4 @@ data/
 *.db
 *.sqlite
 *.sqlite3
+concord_lite.egg-info/
