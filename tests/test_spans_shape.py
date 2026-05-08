@@ -1,15 +1,13 @@
-"""Sprint 15 #72 — span data contract tests (xfail until #74 implements spans block).
+"""Sprint 15 #72/#74 — span data contract tests.
 
-Defines the 16-field shape and 10 allowed kinds for `CONCORD_DATA.spans[]`.
-Sprint 15 #74 lands `_build_spans_block` in `api/adapter.py`; until then
-these tests xfail with a clear reason. Once #74 ships and these tests turn
-green, remove the xfail markers (or set strict=True).
+Locks the 16-field shape and 10 allowed kinds for `CONCORD_DATA.spans[]`.
+Sprint 15 #74 wires `_build_spans_block` in `api/adapter.py`, and these
+tests are now first-class green tests asserting that contract end-to-end.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -133,7 +131,6 @@ def _submit_with_synthetic_spans(
     return fetched.json()
 
 
-@pytest.mark.xfail(strict=True, reason="spans block lands in #74; remove this marker once it does")
 def test_spans_is_a_list(tmp_path, clean_trace_raw):
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)
@@ -143,7 +140,6 @@ def test_spans_is_a_list(tmp_path, clean_trace_raw):
     assert len(data["spans"]) >= 1
 
 
-@pytest.mark.xfail(strict=True, reason="spans block lands in #74; remove this marker once it does")
 def test_every_span_has_exact_16_field_shape(tmp_path, clean_trace_raw):
     """Span shape is locked: not just `must contain` but `must equal`. Extra
     keys fail the test so the contract stays a fixed 16-field shape."""
@@ -159,7 +155,6 @@ def test_every_span_has_exact_16_field_shape(tmp_path, clean_trace_raw):
         assert not extra, f"Span {span.get('span_id')!r} has unexpected fields: {extra}"
 
 
-@pytest.mark.xfail(strict=True, reason="spans block lands in #74; remove this marker once it does")
 def test_kind_is_in_allowed_set(tmp_path, clean_trace_raw):
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)
@@ -171,7 +166,6 @@ def test_kind_is_in_allowed_set(tmp_path, clean_trace_raw):
         )
 
 
-@pytest.mark.xfail(strict=True, reason="spans block lands in #74; remove this marker once it does")
 def test_parent_references_resolve(tmp_path, clean_trace_raw):
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)
@@ -186,7 +180,6 @@ def test_parent_references_resolve(tmp_path, clean_trace_raw):
             )
 
 
-@pytest.mark.xfail(strict=True, reason="spans block lands in #74; remove this marker once it does")
 def test_child_timestamps_within_parent(tmp_path, clean_trace_raw):
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)

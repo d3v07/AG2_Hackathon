@@ -314,6 +314,66 @@ def _build_trace_block(events: list[dict], base_dt: datetime, violation_steps: d
     return rows
 
 
+def _build_spans_block(
+    raw_trace: dict[str, Any],
+    violations: list[dict[str, Any]],
+    violations_block: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Pass through `raw_trace["spans"]` and stamp `contract_refs` on any span
+    that matches a violation. Returns empty list when no spans were emitted
+    (legacy `raw_trace` submissions without AG2 OTel data).
+
+    Match strategy (in order, first match wins):
+      1. Direct `span_id` link on the violation (Zone B sets this in #75)
+      2. Step-based join: span step matches violation `failed_step`
+      3. Agent-based join: span `agent` matches violation `failed_agent`
+    """
+    raw_spans = raw_trace.get("spans") or []
+    if not isinstance(raw_spans, list) or not raw_spans:
+        return []
+
+    # Index violations for the join. violations_block has the formatted V-### IDs;
+    # raw violations have the contract type and step/agent.
+    spans_by_id: dict[str, dict[str, Any]] = {}
+    out: list[dict[str, Any]] = []
+    for span in raw_spans:
+        if not isinstance(span, dict):
+            continue
+        copied = dict(span)
+        copied.setdefault("contract_refs", [])
+        # Don't trust caller-supplied contract_refs — Zone B + adapter own this field
+        copied["contract_refs"] = []
+        spans_by_id[copied.get("span_id", "")] = copied
+        out.append(copied)
+
+    for raw_v, formatted_v in zip(violations, violations_block, strict=False):
+        ref = {
+            "contract_id": formatted_v.get("contract", "C-???"),
+            "violation_id": formatted_v.get("id", ""),
+            "severity": formatted_v.get("severity", ""),
+            "rule": formatted_v.get("rule", ""),
+        }
+        target_span_id = raw_v.get("span_id")
+        target_step = raw_v.get("failed_step")
+        target_agent = raw_v.get("failed_agent")
+
+        matched = None
+        if target_span_id and target_span_id in spans_by_id:
+            matched = spans_by_id[target_span_id]
+        elif target_step is not None:
+            matched = next(
+                (s for s in out if s.get("attributes", {}).get("concord.step") == target_step),
+                None,
+            )
+        if matched is None and target_agent:
+            matched = next((s for s in out if s.get("agent") == target_agent), None)
+
+        if matched is not None:
+            matched["contract_refs"].append(ref)
+
+    return out
+
+
 def _build_violations_block(violations: list[dict]) -> list[dict]:
     out = []
     for i, v in enumerate(violations, start=1):
@@ -519,6 +579,8 @@ def report_to_concord_data(
     report_sandbox_id = report.get("sandbox_id") or sandbox_id
     duration_ms = report.get("regression_duration_ms", 4128)
 
+    spans_block = _build_spans_block(run_trace_dict, violations, violations_block)
+
     return {
         "run": _build_run_block(run_trace_dict, started_at),
         "stats": _build_stats_block(violations, events, tool_event_count, contracts_block, agents_block),
@@ -529,6 +591,7 @@ def report_to_concord_data(
         "trace": _build_trace_block(events, base_dt, violation_steps),
         "violations": violations_block,
         "patches": patches_block,
+        "spans": spans_block,
         "test": _build_test_block(
             report.get("regression_test_status", "passed"),
             report_sandbox_id,
