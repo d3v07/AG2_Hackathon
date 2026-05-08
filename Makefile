@@ -1,4 +1,4 @@
-.PHONY: dev test lint fixture smoke clean
+.PHONY: dev test test-e2e lint fixture smoke clean
 
 API_BASE_URL ?= http://localhost:8000
 
@@ -7,6 +7,9 @@ dev:
 
 test:
 	pytest -x --tb=short
+
+test-e2e:
+	npm run test:e2e
 
 lint:
 	python3 -m ruff check .
