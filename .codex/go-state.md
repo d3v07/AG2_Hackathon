@@ -271,6 +271,7 @@ Sprint 12: Release operations and onboarding
 - Sprint 12 import smoke and OTel spike passed.
 - Sprint 12 deployed demo probe returned HTTP 200.
 - Sprint 12 reviewer found three high release blockers: browser docs exposed tenant API keys, compose forced `CONCORD_ALLOW_DEV_AUTH`, and Dockerfile ignored provider `PORT`. All three were fixed and the reviewer re-check reported no blockers.
+- PR #60 first CI run failed because one regression-test unit required an ambient provider key before its monkeypatch path ran. Fixed by monkeypatching the regression-test config in that unit; targeted regression tests, lint, and full pytest passed locally afterward.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -287,6 +288,7 @@ Sprint 12: Release operations and onboarding
 - AG2 `graph-rag-falkor-db` extra could not install on Python 3.14 because `graphrag-sdk==0.8.2` has no compatible distribution here. Sprint 9 uses the real `falkordb` client when AG2's optional graph stack is unavailable, while keeping the verified AG2 wrapper import path documented.
 - Sprint 10 first reviewer lane stalled and was replaced with a narrower blocker-only reviewer. The replacement found two parser/API blockers, both fixed.
 - Sprint 12 first reviewer pass found three release blockers in docs, compose auth, and provider port binding. All were fixed with tests and a reviewer re-check.
+- PR #60 first CI run exposed a hermeticity gap in `tests/test_regression_test.py`; fixed locally and pushed as a normal follow-up commit.
 
 ## Blockers
 - No regression-gate blocker remains for Sprint 3.

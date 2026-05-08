@@ -160,6 +160,10 @@ class TestRunRegressionTest:
         }
 
         monkeypatch.setattr(
+            "zone_b.agents.regression_test.get_llm_config",
+            lambda: {"config_list": [{"model": "test", "api_key": "x"}]},
+        )
+        monkeypatch.setattr(
             "zone_b.agents.regression_test._make_proxy",
             lambda *_: type(
                 "Proxy",
