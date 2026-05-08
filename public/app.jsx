@@ -14,6 +14,33 @@ const SCREENS = [
   { id: "workflows",  num: "08", label: "Workflows" },
 ];
 
+/* Deep-link helper: find the matching forensic span for a violation /
+   patch / regression test. First tries explicit span_id (set in #75 by
+   Zone B's contract checker), then falls back to agent-name match. */
+function _findSpanForAgent(spans, agentName, explicitSpanId) {
+  if (!Array.isArray(spans) || spans.length === 0) return null;
+  if (explicitSpanId) {
+    const exact = spans.find(s => s.span_id === explicitSpanId);
+    if (exact) return exact;
+  }
+  if (!agentName) return null;
+  return spans.find(s => s.agent === agentName) || null;
+}
+
+function ViewSpanLink({ spanId, onClick, label = "View span" }) {
+  if (!spanId) return null;
+  return (
+    <button
+      type="button"
+      className="view-span-link"
+      onClick={(e) => { e.stopPropagation(); onClick(spanId); }}
+      aria-label={`${label} ${spanId} on Forensic screen`}
+    >
+      {label} →
+    </button>
+  );
+}
+
 const FORENSIC_KIND_ICONS = {
   workflow:       "▣",
   agent:          "●",
@@ -413,12 +440,13 @@ function Trace() {
 }
 
 /* ---------------- VIOLATIONS ---------------- */
-function Violations({ setScreen, setSelectedPatch }) {
+function Violations({ setScreen, setSelectedPatch, goToForensicSpan }) {
   const onClick = (v) => {
     const p = D.patches.find(p => p.violation === v.id);
     if (p) setSelectedPatch(p.id);
     setScreen("repair");
   };
+  const spans = D.spans || [];
   return (
     <>
       <div className="section-head">
@@ -459,6 +487,12 @@ function Violations({ setScreen, setSelectedPatch }) {
               <div className="where">
                 <div className="agent">{v.failed_agent}</div>
                 <div className="muted" style={{fontSize: 11, marginTop: 4}}>step <span className="step">{String(v.failed_step).padStart(2,"0")}</span></div>
+                {(() => {
+                  const span = _findSpanForAgent(spans, v.failed_agent, v.span_id);
+                  return span && goToForensicSpan ? (
+                    <ViewSpanLink spanId={span.span_id} onClick={goToForensicSpan} />
+                  ) : null;
+                })()}
               </div>
               <div>
                 <div className="text-gold" style={{letterSpacing: "0.16em", fontSize: 11}}>{patch ? patch.id : "—"}</div>
@@ -497,7 +531,8 @@ function Violations({ setScreen, setSelectedPatch }) {
 }
 
 /* ---------------- REPAIR ---------------- */
-function Repair({ selectedPatch, setSelectedPatch }) {
+function Repair({ selectedPatch, setSelectedPatch, goToForensicSpan }) {
+  const spans = D.spans || [];
   return (
     <>
       <div className="section-head">
@@ -529,6 +564,14 @@ function Repair({ selectedPatch, setSelectedPatch }) {
               <div>
                 <div className="ctitle">{p.title}</div>
                 <div className="muted" style={{fontSize: 11, marginTop: 4}}>fixes <span className="text-brick">{v.id}</span> &nbsp;&middot;&nbsp; {v.type} CONTRACT &nbsp;&middot;&nbsp; failed at step {v.failed_step}</div>
+                {(() => {
+                  const span = _findSpanForAgent(spans, v.failed_agent, v.span_id);
+                  return span && goToForensicSpan ? (
+                    <div style={{marginTop: 6}}>
+                      <ViewSpanLink spanId={span.span_id} onClick={goToForensicSpan} />
+                    </div>
+                  ) : null;
+                })()}
               </div>
               <div className="prim">{p.primitive}</div>
               <div><Pill kind="ok">READY</Pill></div>
@@ -555,13 +598,28 @@ function Repair({ selectedPatch, setSelectedPatch }) {
 }
 
 /* ---------------- REGRESSION ---------------- */
-function Regression() {
+function Regression({ goToForensicSpan }) {
   const t = D.test;
+  // The regression test corresponds to the regression span (last in the chain)
+  const spans = D.spans || [];
+  const regressionSpan = spans.find(s => s.kind === "regression") || null;
   return (
     <>
       <div className="section-head">
         <h2>Regression Test &nbsp;//&nbsp; {t.runner}</h2>
-        <div className="right">sandbox {t.sandbox_id} &nbsp;&middot;&nbsp; {t.image} &nbsp;&middot;&nbsp; {(t.duration_ms/1000).toFixed(2)}s</div>
+        <div className="right">
+          sandbox {t.sandbox_id} &nbsp;&middot;&nbsp; {t.image} &nbsp;&middot;&nbsp; {(t.duration_ms/1000).toFixed(2)}s
+          {regressionSpan && goToForensicSpan && (
+            <>
+              &nbsp;&middot;&nbsp;
+              <ViewSpanLink
+                spanId={regressionSpan.span_id}
+                onClick={goToForensicSpan}
+                label="Forensic span"
+              />
+            </>
+          )}
+        </div>
       </div>
 
       <div className="row" style={{alignItems: "stretch", marginBottom: 14}}>
@@ -1797,6 +1855,39 @@ function App() {
     setCurrentRunId(runId);
   };
 
+  const goToForensicSpan = (spanId) => {
+    setSelectedSpanId(spanId);
+    setScreen("forensic");
+  };
+
+  // Hash routing — read on mount and when hash changes; write when screen/span changes
+  useEffect(() => {
+    const applyHash = () => {
+      const hash = window.location.hash.slice(1);
+      if (!hash) return;
+      const params = new URLSearchParams(hash);
+      const s = params.get("screen");
+      const span = params.get("span");
+      if (s && SCREENS.find(x => x.id === s)) setScreen(s);
+      if (span) setSelectedSpanId(span);
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (screen) params.set("screen", screen);
+    if (selectedSpanId) params.set("span", selectedSpanId);
+    const newHash = params.toString();
+    if (window.location.hash.slice(1) !== newHash) {
+      // replaceState to avoid polluting history on every nav click
+      history.replaceState(null, "", `#${newHash}`);
+    }
+  }, [screen, selectedSpanId]);
+
   return (
     <div className="shell" data-screen-label={SCREENS.find(s=>s.id===screen).num + " " + SCREENS.find(s=>s.id===screen).label}>
       <TopBar screen={screen} setScreen={setScreen} />
@@ -1812,9 +1903,9 @@ function App() {
       <main className="main">
         {screen === "overview"   && <Overview setScreen={setScreen} />}
         {screen === "trace"      && <Trace />}
-        {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
-        {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} />}
-        {screen === "regression" && <Regression />}
+        {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} goToForensicSpan={goToForensicSpan} />}
+        {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} goToForensicSpan={goToForensicSpan} />}
+        {screen === "regression" && <Regression goToForensicSpan={goToForensicSpan} />}
         {screen === "report"     && <Report setScreen={setScreen} runId={currentRunId} />}
         {screen === "submit"     && <SubmitRun setScreen={setScreen} onRunSubmitted={handleRunSubmitted} />}
         {screen === "workflows"  && <WorkflowsScreen setScreen={setScreen} />}
@@ -1832,6 +1923,7 @@ if (_rootEl) {
 export {
   App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun,
   WorkflowsScreen, Forensic, SpanTree, TimelineWaterfall, SpanInspector,
+  ViewSpanLink,
   RunProgress, useRunEventStream, fetchStreamToken,
   ApprovalPanel,
   TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS, FORENSIC_KIND_ICONS,
