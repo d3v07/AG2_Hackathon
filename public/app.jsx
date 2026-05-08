@@ -550,4 +550,9 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+const _rootEl = typeof document !== "undefined" ? document.getElementById("root") : null;
+if (_rootEl) {
+  ReactDOM.createRoot(_rootEl).render(<App />);
+}
+
+export { App, Overview, Trace, Violations, Repair, Regression, Report, SCREENS };
