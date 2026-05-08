@@ -15,6 +15,172 @@ const SCREENS = [
 const TASK_MAX = 1000;
 const RESEARCH_QUESTION_MAX = 500;
 
+const TERMINAL_STATUSES = new Set(["completed", "failed"]);
+const STATUS_KIND = {
+  queued: "neutral",
+  analyzing: "warn",
+  repairing: "warn",
+  testing: "warn",
+  completed: "ok",
+  failed: "err",
+};
+const SSE_MAX_RECONNECTS = 5;
+const SSE_BACKOFF_BASE_MS = 500;
+
+/**
+ * Live SSE consumer for /api/runs/{id}/events.
+ *
+ * Returns { status, lastEvent, connectionState, error, lastEventId }.
+ *
+ * - Opens EventSource against the SSE endpoint with the stream_token
+ * - Tracks the current status from each event payload
+ * - Reconnects on disconnect using Last-Event-ID via the URL (browser
+ *   EventSource doesn't expose request headers, so we pass it as a query
+ *   param the server can read OR rely on its native Last-Event-ID header
+ *   on auto-reconnect — we do both)
+ * - Exponential backoff up to SSE_MAX_RECONNECTS attempts
+ * - Cleans up on unmount or terminal status
+ *
+ * `eventSourceCtor` is injectable for tests (jsdom has no native EventSource).
+ */
+function useRunEventStream(runId, streamToken, options = {}) {
+  const eventSourceCtor = options.eventSourceCtor || (typeof EventSource !== "undefined" ? EventSource : null);
+  const [status, setStatus] = useState(null);
+  const [lastEventId, setLastEventId] = useState(0);
+  const [connectionState, setConnectionState] = useState("idle"); // idle|connecting|open|reconnecting|closed|error
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!runId || !streamToken) return undefined;
+    if (!eventSourceCtor) {
+      setError(new Error("EventSource not available"));
+      setConnectionState("error");
+      return undefined;
+    }
+
+    let attempt = 0;
+    let es = null;
+    let cancelled = false;
+    let reconnectTimer = null;
+    let lastSeenId = 0;
+
+    function open() {
+      const url = `/api/runs/${runId}/events?stream_token=${encodeURIComponent(streamToken)}`
+        + (lastSeenId > 0 ? `&last_event_id=${lastSeenId}` : "");
+      setConnectionState(attempt === 0 ? "connecting" : "reconnecting");
+      es = new eventSourceCtor(url);
+
+      es.onopen = () => {
+        if (cancelled) return;
+        attempt = 0;
+        setConnectionState("open");
+      };
+
+      const handleEvent = (event) => {
+        if (cancelled) return;
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed.status) setStatus(parsed.status);
+          if (parsed.sequence) {
+            lastSeenId = Number(parsed.sequence);
+            setLastEventId(lastSeenId);
+          }
+          if (parsed.status && TERMINAL_STATUSES.has(parsed.status)) {
+            es.close();
+            setConnectionState("closed");
+          }
+        } catch (e) {
+          // Malformed event — log via setError but don't tear down
+          setError(e);
+        }
+      };
+      // Listen for both default 'message' and the named events the API emits
+      es.onmessage = handleEvent;
+      ["status", "queued", "analyzing", "repairing", "testing", "completed", "failed"].forEach(name => {
+        es.addEventListener(name, handleEvent);
+      });
+
+      es.onerror = () => {
+        if (cancelled) return;
+        es.close();
+        if (attempt >= SSE_MAX_RECONNECTS) {
+          setConnectionState("error");
+          setError(new Error(`SSE failed after ${SSE_MAX_RECONNECTS} reconnect attempts`));
+          return;
+        }
+        attempt += 1;
+        const delay = SSE_BACKOFF_BASE_MS * Math.pow(2, attempt - 1);
+        setConnectionState("reconnecting");
+        reconnectTimer = setTimeout(open, delay);
+      };
+    }
+
+    open();
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (es) es.close();
+    };
+  }, [runId, streamToken, eventSourceCtor]);
+
+  return { status, lastEventId, connectionState, error };
+}
+
+function _formatElapsed(ms) {
+  if (!ms || ms < 0) return "0:00";
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function RunProgress({ runId, streamToken, eventSourceCtor }) {
+  const { status, connectionState, error } = useRunEventStream(runId, streamToken, { eventSourceCtor });
+  const [startedAt] = useState(Date.now());
+  const [, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!status || TERMINAL_STATUSES.has(status)) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [status]);
+
+  if (!runId || !streamToken) return null;
+  if (status && TERMINAL_STATUSES.has(status)) {
+    // Auto-hide after a small delay would be nice, but for forensic UX
+    // we keep the terminal state visible so the user sees the outcome.
+    return (
+      <div className={`run-progress run-progress-${STATUS_KIND[status] || "neutral"}`} aria-live="polite">
+        <span className="run-progress-pill" data-status={status}>{status}</span>
+        <span className="run-progress-runid">{runId}</span>
+      </div>
+    );
+  }
+
+  const kind = STATUS_KIND[status || "queued"] || "neutral";
+  const label = status || "queued";
+  return (
+    <div className={`run-progress run-progress-${kind}`} role="status" aria-live="polite">
+      <span className="run-progress-pill" data-status={label}>{label}</span>
+      <span className="run-progress-runid">{runId}</span>
+      <span className="run-progress-elapsed">{_formatElapsed(Date.now() - startedAt)}</span>
+      {connectionState === "reconnecting" && (
+        <span className="run-progress-reconnect">reconnecting…</span>
+      )}
+      {error && (
+        <span className="run-progress-error" role="alert">{error.message}</span>
+      )}
+    </div>
+  );
+}
+
+async function fetchStreamToken(runId) {
+  const res = await fetch(`/api/runs/${runId}/events/token`, { method: "POST" });
+  if (!res.ok) throw new Error(`stream token fetch ${res.status}`);
+  const body = await res.json();
+  return body.stream_token;
+}
+
 function Sq({ kind }) { return <span className={`sq ${kind}`}></span>; }
 function Pill({ kind, children }) {
   return <span className={`pill ${kind}`}><Sq kind={kind} />{children}</span>;
@@ -747,14 +913,53 @@ function SubmitRun({ setScreen, onRunSubmitted }) {
 function App() {
   const [screen, setScreen] = useState("overview");
   const [selectedPatch, setSelectedPatch] = useState(null);
+  const [currentRunId, setCurrentRunId] = useState(null);
+  const [streamToken, setStreamToken] = useState(null);
+  const [streamTokenError, setStreamTokenError] = useState(null);
 
   // when leaving repair screen, clear filter
   useEffect(() => { if (screen !== "repair") setSelectedPatch(null); }, [screen]);
+
+  // Fetch a stream token whenever a fresh run is submitted so the SSE
+  // consumer can authenticate without leaking the API key into a URL.
+  useEffect(() => {
+    if (!currentRunId) {
+      setStreamToken(null);
+      return undefined;
+    }
+    let cancelled = false;
+    fetchStreamToken(currentRunId)
+      .then((token) => {
+        if (!cancelled) {
+          setStreamToken(token);
+          setStreamTokenError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setStreamTokenError(err);
+          setStreamToken(null);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [currentRunId]);
+
+  const handleRunSubmitted = (runId) => {
+    setCurrentRunId(runId);
+  };
 
   return (
     <div className="shell" data-screen-label={SCREENS.find(s=>s.id===screen).num + " " + SCREENS.find(s=>s.id===screen).label}>
       <TopBar screen={screen} setScreen={setScreen} />
       <MetaStrip />
+      {currentRunId && (
+        <RunProgress runId={currentRunId} streamToken={streamToken} />
+      )}
+      {streamTokenError && (
+        <div className="run-progress run-progress-err" role="alert">
+          stream token failed: {streamTokenError.message}
+        </div>
+      )}
       <main className="main">
         {screen === "overview"   && <Overview setScreen={setScreen} />}
         {screen === "trace"      && <Trace />}
@@ -762,7 +967,7 @@ function App() {
         {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} />}
         {screen === "regression" && <Regression />}
         {screen === "report"     && <Report setScreen={setScreen} />}
-        {screen === "submit"     && <SubmitRun setScreen={setScreen} />}
+        {screen === "submit"     && <SubmitRun setScreen={setScreen} onRunSubmitted={handleRunSubmitted} />}
       </main>
     </div>
   );
@@ -773,4 +978,9 @@ if (_rootEl) {
   ReactDOM.createRoot(_rootEl).render(<App />);
 }
 
-export { App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun, SCREENS };
+export {
+  App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun,
+  RunProgress, useRunEventStream, fetchStreamToken,
+  TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS,
+  SCREENS,
+};
