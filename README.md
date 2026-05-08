@@ -27,6 +27,23 @@ Concord Lite monitors a multi-agent workflow run, detects when agents violate th
 
 ---
 
+## Local API Auth
+
+The FastAPI layer supports a dev bootstrap path and tenant-scoped API keys:
+
+```bash
+uvicorn api.index:app --port 8765
+curl -X POST http://localhost:8765/api/api-keys \
+  -H 'Content-Type: application/json' \
+  -d '{"tenant_id":"tenant-a","name":"tenant-a primary"}'
+curl http://localhost:8765/api/tenant/usage \
+  -H "Authorization: Bearer <returned-api-key>"
+```
+
+When no API keys exist, unauthenticated requests use the `local` tenant for demo setup. After a key exists, `/api/*` routes require a bearer key except `/api/health`; browser SSE uses a short-lived stream token minted from an authenticated run.
+
+---
+
 ## The Idea
 
 Multi-agent systems fail silently. An agent claims it verified sources but sets `verified_sources_count=0`. Another runs a side-effect action without waiting for human approval. A third records no tool call despite claiming it searched. These are contract violations — the gap between what an agent *says* it did and what it *actually* produced in the trace.

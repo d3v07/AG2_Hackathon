@@ -3,11 +3,11 @@
 ## Overview
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
-- Phase: Sprint 10 landing
-- Branch: feat/sprint-10-contract-dsl
-- Current Sprint: Sprint 10
-- Current Task: #33-#35 contract registry extraction, YAML DSL parser, and workflow YAML registration
-- Last Checkpoint: Sprint 10 reviewer blockers were fixed and rechecked clean. Focused suite passed 114 tests, full pytest passed 404 tests, fixture pipeline passed, import smoke passed, local API YAML probe passed, deployed demo returned 200, and `git diff --check` passed. `ruff` remains unavailable in the current environment.
+- Phase: Sprint 11 pre-landing gate
+- Branch: feat/sprint-11-auth-usage
+- Current Sprint: Sprint 11
+- Current Task: #36-#38 API key auth, tenant isolation, and usage/cost dashboard
+- Last Checkpoint: Sprint 11 reviewer blockers were fixed and rechecked clean. Focused suite passed 65 tests, full pytest passed 420 tests, fixture pipeline passed, import smoke passed, authenticated API probe passed, browser QA passed on desktop/mobile fixture and live modes, deployed demo returned 200, and `git diff --check` passed. `ruff` remains unavailable in the current environment.
 
 ## Sprint Board
 Sprint 3: Foundation
@@ -46,9 +46,14 @@ Sprint 9: Graph recurrence and dashboard annotations
 - #32 P1 Dashboard: Add recurrence badges on DAG nodes/edges — closed on `main`
 
 Sprint 10: Contract registry and YAML DSL
-- #33 P1 Zone B: Extract contracts to `zone_b/contracts/` package — in progress
-- #34 P1 Zone B: YAML contract DSL parser — in progress
-- #35 P1 API: `POST /api/workflows` accepts contracts in YAML — in progress
+- #33 P1 Zone B: Extract contracts to `zone_b/contracts/` package — closed on `main`
+- #34 P1 Zone B: YAML contract DSL parser — closed on `main`
+- #35 P1 API: `POST /api/workflows` accepts contracts in YAML — closed on `main`
+
+Sprint 11: Auth, tenant isolation, and usage
+- #36 P1 API: API key auth middleware — implementation complete locally
+- #37 P1 API: Tenant isolation in storage queries — implementation complete locally
+- #38 P2 API/Dashboard: Cost dashboard endpoint and UI panel — implementation complete locally
 
 ## What Worked
 - GitHub issues #12-#15 are closed on `main`.
@@ -227,6 +232,21 @@ Sprint 10: Contract registry and YAML DSL
 - Sprint 10 local API probe passed: YAML workflow creation returned 200 with normalized persisted machine fields, fetch returned the same fields, and malformed YAML returned 400 with a line-numbered parser error.
 - Sprint 10 reviewer found parser/API blockers for non-string mapping keys and malformed machine-field containers; both were fixed with tests and the reviewer re-check returned no blockers.
 - Sprint 10 `python3 -m compileall -q api zone_b`, `git diff --check`, and deployed demo HTTP 200 checks passed.
+- PR #56 merged Sprint 10 into `production`; PR #57 merged `production` into `main`; GitHub issues #33, #34, and #35 are closed.
+- Merged Sprint 10 branch `feat/sprint-10-contract-dsl` was deleted locally and remotely after landing on `main`.
+- Sprint 11 branch `feat/sprint-11-auth-usage` was created from updated `production`.
+- #36 now has `api/auth.py`, auth middleware for protected `/api/*` routes, bearer API key validation, local-dev-only first-key bootstrap, authenticated key rotation, and SDK bearer header support.
+- #37 now keeps storage tenant isolation covered at API and child-row boundaries, supports stream-token JSONP loading, and restores default interrupted-run recovery across all tenants while retaining optional per-tenant recovery.
+- #38 now exposes `GET /api/tenant/usage`, aggregates persisted run cost fields per tenant, and renders a dashboard Run Cost panel in fixture and live modes.
+- Sprint 11 RED tests failed for the expected reason before implementation: missing `api.auth`, missing API key route, missing tenant usage route, public local bypass, tenant-biased recovery signature gap, and missing dashboard cost panel.
+- Sprint 11 focused gate passed after blocker fixes: `pytest -q tests/test_auth.py tests/test_tenancy.py tests/test_usage.py tests/test_api_workflows.py tests/test_api_runs.py tests/test_api_run_events.py tests/test_cost_tracking.py tests/test_dashboard_live_mode.py tests/test_sdk_instrumentation.py` passed 65 tests.
+- Sprint 11 full gate passed after blocker fixes: `pytest -x --tb=short` passed 420 tests.
+- Sprint 11 fixture gate passed: `python3 run_all.py --fixture` reported `Regression status : pass` and `Regression tests   : 4 pass / 0 fail / 0 error`.
+- Sprint 11 import smoke passed for auth, middleware, API key and usage routers, usage store helper, recovery helper, API key model, and SDK client.
+- Sprint 11 authenticated API probe passed: health 200, API key create 201, missing auth 401, workflow create 200 under `tenant-probe`, run submit 202, usage 200 for `tenant-probe`, event token 200, and JSONP script payload 200 with stream token.
+- Sprint 11 browser QA passed on desktop and mobile in fixture and live modes: Run Cost rendered, LIVE reached `LIVE COMPLETED`, no severe console errors, and no horizontal document overflow.
+- Sprint 11 reviewer found three blockers in the first pass: remote first-key bootstrap, tenant-biased startup recovery, and JSONP auth regression. All were fixed with tests; reviewer re-check found no blockers.
+- Sprint 11 deployed demo probe returned HTTP 200.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -253,7 +273,8 @@ Sprint 10: Contract registry and YAML DSL
 - No Sprint 8 blocker remains after final reviewer fixes, full gate, and merge to `main`.
 - No Sprint 9 blocker remains after reviewer re-check.
 - No Sprint 10 blocker remains after reviewer re-check.
+- No Sprint 11 blocker remains after reviewer re-check.
 - Remaining toolchain gaps: `ruff` unavailable in the current Python environment; `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Commit Sprint 10 with `Closes #33`, `Closes #34`, and `Closes #35`, then run the branch -> `production` -> `main` landing loop and delete the merged sprint branch.
+Commit Sprint 11 with `Closes #36`, `Closes #37`, and `Closes #38`, then run the branch -> `production` -> `main` landing loop and delete the merged sprint branch.

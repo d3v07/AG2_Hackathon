@@ -37,6 +37,7 @@ class ConcordClient:
         if self.tenant_id:
             headers["X-Tenant-ID"] = self.tenant_id
         if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
             headers["X-Concord-API-Key"] = self.api_key
         return headers
 
