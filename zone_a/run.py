@@ -90,7 +90,7 @@ def run() -> None:
     )
 
     emit_trace(context, events, run_id=run_id)
-    print(f"\n  Trace written → zone_b/fixtures/sample_trace.json")
+    print("\n  Trace written → zone_b/fixtures/sample_trace.json")
     print("=" * 55)
 
 

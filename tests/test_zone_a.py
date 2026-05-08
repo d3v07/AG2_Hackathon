@@ -1,6 +1,5 @@
 """Unit tests for Zone A — no LLM calls, covers utils and return shape contracts."""
 
-import pytest
 import time
 from zone_a.agents._utils import strip_json_fences
 from zone_a.run import _to_trace_event

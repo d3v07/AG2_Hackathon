@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from shared.models import ContextSnapshot, RunTrace, TraceEvent, ToolEvent
-from zone_b.agents.contract_checker import CONTRACTS, run_contract_checker
+from zone_b.agents.contract_checker import run_contract_checker
 from zone_b.agents.trace_collector import (
     _build_context_snapshot,
     _parse_trace_events,

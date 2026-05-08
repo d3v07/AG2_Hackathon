@@ -148,13 +148,13 @@ async def run_diagnostic_pipeline(trace_path: str) -> dict:
     collected = await run_trace_collector(raw)
     print(f"      {collected['summary']}")
 
-    print(f"\n[2/7] ContractChecker — applying contracts")
+    print("\n[2/7] ContractChecker — applying contracts")
     checked = run_contract_checker(
         collected["run_trace"], collected["context_snapshot"]
     )
     print(f"      {checked['violation_count']} violation(s) found")
 
-    print(f"\n[3/7] Attribution — identifying failed agent")
+    print("\n[3/7] Attribution — identifying failed agent")
     attributed = await run_attribution(
         checked["violations"], collected["run_trace"], collected["context_snapshot"]
     )
@@ -163,7 +163,7 @@ async def run_diagnostic_pipeline(trace_path: str) -> dict:
         f"step={attributed['failed_step']}"
     )
 
-    print(f"\n[4/7] Repair/Test — iterating patch through regression")
+    print("\n[4/7] Repair/Test — iterating patch through regression")
     iteration = await run_repair_test_iterations(
         checked["violations"],
         collected["run_trace"],
@@ -179,7 +179,7 @@ async def run_diagnostic_pipeline(trace_path: str) -> dict:
         f"iterations={iteration_count}"
     )
 
-    print(f"\n[5/7] RegressionTest — completed in Daytona")
+    print("\n[5/7] RegressionTest — completed in Daytona")
     print(
         f"      test_status={tested['test_status']} "
         f"sandbox={tested['sandbox_id']}"
@@ -193,7 +193,7 @@ async def run_diagnostic_pipeline(trace_path: str) -> dict:
             f"{summary.get('error', 0)} error"
         )
 
-    print(f"\n[6/7] Reporter — assembling Contract Violation Report")
+    print("\n[6/7] Reporter — assembling Contract Violation Report")
     reported = await run_reporter(
         collected["run_trace"],
         checked["violations"],
@@ -205,7 +205,7 @@ async def run_diagnostic_pipeline(trace_path: str) -> dict:
     )
     report = reported["report"]
 
-    print(f"\n[7/7] HumanGate — approval check")
+    print("\n[7/7] HumanGate — approval check")
     gate = await run_human_gate(report)
     report["approval_status"] = gate["approval_status"]
     report["approval_comments"] = gate["comments"]

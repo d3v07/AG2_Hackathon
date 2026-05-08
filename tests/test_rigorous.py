@@ -15,8 +15,6 @@ import asyncio
 import json
 import subprocess
 import sys
-import tempfile
-import time
 from pathlib import Path
 
 import pytest
@@ -28,7 +26,7 @@ from zone_a.agents._utils import make_proxy as za_make_proxy, strip_json_fences
 from zone_a.run import _to_trace_event
 from zone_a.trace_emitter import emit_trace
 from zone_b.agents.attribution import _deterministic_failed_step, run_attribution
-from zone_b.agents.contract_checker import CONTRACTS, _find_failed_step, run_contract_checker
+from zone_b.agents.contract_checker import run_contract_checker
 from zone_b.agents.regression_test import _fallback_test, _parse_status
 from zone_b.agents.repair import PRIMITIVE_MAP, _pick_primary
 from zone_b.agents.trace_collector import _build_context_snapshot, _parse_trace_events

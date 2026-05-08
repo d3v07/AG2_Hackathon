@@ -1,8 +1,7 @@
 """Tests for zone_b/agents/repair.py — deterministic parts only."""
 import asyncio
-import pytest
 from shared.models import Violation
-from zone_b.agents.repair import PRIMITIVE_MAP, SEVERITY_RANK, _pick_primary, run_repair
+from zone_b.agents.repair import PRIMITIVE_MAP, _pick_primary, run_repair
 
 
 # ---------------------------------------------------------------------------

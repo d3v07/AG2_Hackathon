@@ -8,13 +8,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from autogen.opentelemetry import instrument_agent, instrument_llm_wrapper  # noqa: E402
+from opentelemetry.sdk.trace import TracerProvider  # noqa: E402
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # noqa: E402
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import (  # noqa: E402
+    InMemorySpanExporter,
+)
 
-from zone_a.swarm import build_swarm
-from zone_a.trace_adapter import ConcordSpanExporter
+from zone_a.swarm import build_swarm  # noqa: E402
+from zone_a.trace_adapter import ConcordSpanExporter  # noqa: E402
 
 
 def main() -> int:

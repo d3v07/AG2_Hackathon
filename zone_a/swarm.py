@@ -277,15 +277,6 @@ def _chat_history_to_trace_events(
         "HumanGateAgent": 5,
         "ActionAgent": 6,
     }
-    sequence = [
-        "ResearcherAgent",
-        "CriticAgent",
-        "VerifierAgent",
-        "ReporterAgent",
-        "HumanGateAgent",
-        "ActionAgent",
-    ]
-
     seen: set[str] = set()
     events: list[TraceEvent] = []
     now = time.time()
