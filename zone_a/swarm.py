@@ -21,7 +21,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import time
 from pathlib import Path
 from typing import Any, Literal
 
@@ -279,7 +278,7 @@ def _chat_history_to_trace_events(
     }
     seen: set[str] = set()
     events: list[TraceEvent] = []
-    now = time.time()
+    now = 0.0  # fixed timestamp keeps stub mode fully deterministic across runs
 
     for msg in chat_history:
         name = msg.get("name") or ""
@@ -355,7 +354,7 @@ def _synthesize_stub_run(
     - C-RTE: VerifierAgent event carries tool_events with status="success"
     - C-SCH: final_output has all 5 required keys
     """
-    now = time.time()
+    now = 0.0  # fixed timestamp keeps stub mode fully deterministic across runs
     stub_tool_call_id = "tc_v01"
     stub_final_output = {
         "summary": f"Stub summary for: {task}",
@@ -508,7 +507,7 @@ async def run_swarm(
     if mode == "stub":
         events, final_ctx = _synthesize_stub_run(task, research_question)
         last_agent_name: str | None = "ActionAgent"
-    else:
+    elif mode == "live":
         agents, ctx = build_swarm(interactive=interactive)
         initial_message = _build_initial_message(task, research_question)
 
@@ -527,6 +526,8 @@ async def run_swarm(
 
         events = _chat_history_to_trace_events(chat_result.chat_history, final_ctx)
         last_agent_name = last_agent.name if last_agent else None
+    else:
+        raise ValueError(f"unknown mode: {mode!r} (expected 'live' or 'stub')")
 
     snapshot = ContextSnapshot(
         retrieved_sources=final_ctx.get("retrieved_sources") or [],

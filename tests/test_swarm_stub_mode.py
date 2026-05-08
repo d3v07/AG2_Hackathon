@@ -10,7 +10,9 @@ import inspect
 import json
 import re
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+
+import pytest
 
 from zone_a.swarm import run_swarm
 from zone_b.agents.contract_checker import run_contract_checker
@@ -166,13 +168,33 @@ class TestLiveModeDefault:
         assert mode_param.default == "live"
 
 
+# ─── unknown mode raises ValueError ───────────────────────────────────────────
+
+class TestUnknownMode:
+    def test_unknown_mode_raises_valueerror(self, tmp_path):
+        with pytest.raises(ValueError, match="unknown mode"):
+            _run(
+                run_swarm(
+                    task="t",
+                    research_question="rq",
+                    run_id="test_bad_mode",
+                    output_path=tmp_path / "trace.json",
+                    mode="bogus",  # type: ignore[arg-type]
+                )
+            )
+
+
 # ─── Tavily not called in stub ────────────────────────────────────────────────
 
 class TestStubNoTavily:
     def test_stub_does_not_call_tavily(self, tmp_path):
-        with patch("zone_a.swarm.TavilyClient", create=True) as mock_tavily_cls:
-            mock_client = MagicMock()
-            mock_tavily_cls.return_value = mock_client
+        # TavilyClient is imported inside _build_initial_message — patch the
+        # actual import target plus the build helper so a regression that
+        # routes stub mode through live's initial-message path is caught.
+        with (
+            patch("tavily.TavilyClient") as mock_tavily_cls,
+            patch("zone_a.swarm._build_initial_message") as mock_build_initial,
+        ):
             with patch.dict("os.environ", {"TAVILY_API_KEY": "fake-key-for-test"}):
                 _run(
                     run_swarm(
@@ -183,4 +205,5 @@ class TestStubNoTavily:
                         mode="stub",
                     )
                 )
-            mock_client.search.assert_not_called()
+            mock_tavily_cls.assert_not_called()
+            mock_build_initial.assert_not_called()
