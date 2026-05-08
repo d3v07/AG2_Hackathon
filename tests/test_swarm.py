@@ -12,11 +12,9 @@ No LLM is invoked — tests use a fake llm_config.
 """
 import re
 
-import pytest
 
 from autogen.agentchat.group import (
     ContextVariables,
-    OnContextCondition,
     StringContextCondition,
     AgentTarget,
     TerminateTarget,

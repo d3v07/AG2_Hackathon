@@ -31,7 +31,6 @@ def emit_trace(
 
 if __name__ == "__main__":
     import time
-    from shared.models import ToolEvent
 
     sample_events = [
         TraceEvent(

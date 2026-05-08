@@ -1,6 +1,5 @@
 """Tests for zone_b/agents/human_gate.py."""
 import asyncio
-import pytest
 from zone_b.agents.human_gate import run_human_gate
 
 

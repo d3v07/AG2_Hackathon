@@ -1,6 +1,5 @@
 """Tests for shared/models.py — dataclass field integrity."""
-import pytest
-from dataclasses import fields, asdict
+from dataclasses import fields
 from shared.models import (
     ToolEvent, TraceEvent, RunTrace, ContextSnapshot,
     Violation, RoleContract, EvidenceContract, RouteContract, ApprovalContract

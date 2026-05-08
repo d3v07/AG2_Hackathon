@@ -100,7 +100,7 @@ class TestStageFunctions:
         ctx = ContextVariables(data={"raw_trace": fixture_raw})
         asyncio.run(_trace_collector_stage(ctx))
         ctx.set("violations", [])
-        msg = asyncio.run(_attribution_stage(ctx))
+        asyncio.run(_attribution_stage(ctx))
         attribution = ctx.get("attribution")
         assert attribution["failed_agent"] == ""
         assert attribution["failed_step"] == -1

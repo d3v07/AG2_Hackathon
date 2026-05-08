@@ -1,6 +1,5 @@
 """Tests for zone_b/agents/trace_collector.py"""
 import asyncio
-import pytest
 from shared.models import RunTrace, TraceEvent, ToolEvent, ContextSnapshot
 from zone_b.agents.trace_collector import (
     run_trace_collector, _parse_tool_events,

@@ -10,6 +10,8 @@ import json
 from autogen import ConversableAgent
 from shared.models import Violation
 from zone_b.config import get_llm_config
+from zone_b.utils import make_proxy as _make_proxy
+from zone_b.utils import parse_json_body as _parse_json_body
 
 
 PRIMITIVE_MAP: dict[str, str] = {
@@ -21,10 +23,6 @@ PRIMITIVE_MAP: dict[str, str] = {
 }
 
 SEVERITY_RANK = {"high": 3, "medium": 2, "low": 1}
-
-
-from zone_b.utils import parse_json_body as _parse_json_body, make_proxy as _make_proxy
-
 
 def _pick_primary(violations: list[Violation]) -> Violation:
     """Highest severity, ties broken by first occurrence in list."""
