@@ -135,11 +135,14 @@ def _submit_failing_run_with_spans(
         "/api/runs",
         json={"workflow_id": workflow_id, "raw_trace": raw_trace},
     )
+    assert submitted.status_code == 202, submitted.text
     run_id = submitted.json()["run_id"]
-    return client.get(f"/api/runs/{run_id}").json()
+    fetched = client.get(f"/api/runs/{run_id}")
+    assert fetched.status_code == 200, fetched.text
+    return fetched.json()
 
 
-@pytest.mark.xfail(strict=False, reason="violation.span_id stamped in #75; spans block lands in #74")
+@pytest.mark.xfail(strict=True, reason="violation.span_id stamped in #75; remove this marker once it does")
 def test_each_violation_has_span_id_field(tmp_path, sample_trace_raw):
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)
@@ -152,7 +155,7 @@ def test_each_violation_has_span_id_field(tmp_path, sample_trace_raw):
         assert "span_id" in v, f"Violation {v.get('id')!r} missing span_id field"
 
 
-@pytest.mark.xfail(strict=False, reason="violation.span_id stamped in #75; spans block lands in #74")
+@pytest.mark.xfail(strict=True, reason="violation.span_id stamped in #75; remove this marker once it does")
 def test_violation_span_id_references_existing_span(tmp_path, sample_trace_raw):
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)
@@ -167,7 +170,7 @@ def test_violation_span_id_references_existing_span(tmp_path, sample_trace_raw):
             )
 
 
-@pytest.mark.xfail(strict=False, reason="violation.span_id stamped in #75; spans block lands in #74")
+@pytest.mark.xfail(strict=True, reason="violation.span_id stamped in #75; remove this marker once it does")
 def test_violation_span_agent_matches_failed_agent(tmp_path, sample_trace_raw):
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)

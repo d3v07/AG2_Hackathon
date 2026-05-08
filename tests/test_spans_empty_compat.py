@@ -92,8 +92,11 @@ def test_legacy_concord_data_shape_intact(tmp_path, clean_trace_raw):
         "/api/runs",
         json={"workflow_id": workflow_id, "raw_trace": clean_trace_raw},
     )
+    assert submitted.status_code == 202, submitted.text
     run_id = submitted.json()["run_id"]
-    data = client.get(f"/api/runs/{run_id}").json()
+    fetched = client.get(f"/api/runs/{run_id}")
+    assert fetched.status_code == 200, fetched.text
+    data = fetched.json()
 
     missing = REQUIRED_TOP_LEVEL_KEYS - set(data.keys())
     assert not missing, f"Missing required top-level keys: {missing}"
