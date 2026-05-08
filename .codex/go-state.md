@@ -3,11 +3,11 @@
 ## Overview
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
-- Phase: Sprint 9 landing
-- Branch: feat/sprint-9-graph-recurrence
-- Current Sprint: Sprint 9
-- Current Task: #30-#32 FalkorDB graph connection, topology persistence, and recurrence dashboard badges
-- Last Checkpoint: Sprint 9 final gates passed after reviewer blocker fix: focused suite 54 tests, full pytest 386 tests, fixture pipeline, OTel spike, import smoke, local API probe, browser QA, deployed demo probe, and `git diff --check`. `ruff` remains unavailable in the current environment.
+- Phase: Sprint 10 landing
+- Branch: feat/sprint-10-contract-dsl
+- Current Sprint: Sprint 10
+- Current Task: #33-#35 contract registry extraction, YAML DSL parser, and workflow YAML registration
+- Last Checkpoint: Sprint 10 reviewer blockers were fixed and rechecked clean. Focused suite passed 114 tests, full pytest passed 404 tests, fixture pipeline passed, import smoke passed, local API YAML probe passed, deployed demo returned 200, and `git diff --check` passed. `ruff` remains unavailable in the current environment.
 
 ## Sprint Board
 Sprint 3: Foundation
@@ -41,9 +41,14 @@ Sprint 8: Real Daytona repair-test-iterate loop
 - #29 P1 Zone B/API: Track Daytona duration and cost fields on persisted runs — closed on `main`
 
 Sprint 9: Graph recurrence and dashboard annotations
-- #30 P0 Graph: Add FalkorDB graph connection/schema and docker service — in progress
-- #31 P0 API/Graph: Persist workflow topology and violation recurrence data — in progress
-- #32 P1 Dashboard: Add recurrence badges on DAG nodes/edges — in progress
+- #30 P0 Graph: Add FalkorDB graph connection/schema and docker service — closed on `main`
+- #31 P0 API/Graph: Persist workflow topology and violation recurrence data — closed on `main`
+- #32 P1 Dashboard: Add recurrence badges on DAG nodes/edges — closed on `main`
+
+Sprint 10: Contract registry and YAML DSL
+- #33 P1 Zone B: Extract contracts to `zone_b/contracts/` package — in progress
+- #34 P1 Zone B: YAML contract DSL parser — in progress
+- #35 P1 API: `POST /api/workflows` accepts contracts in YAML — in progress
 
 ## What Worked
 - GitHub issues #12-#15 are closed on `main`.
@@ -208,6 +213,20 @@ Sprint 9: Graph recurrence and dashboard annotations
 - Sprint 9 local API probe passed: health 200, `GET /api/runs/RUN-041` returned completed with 4 patches and 4 recurrences, and `GET /api/workflows/WF-RUN-041/recurrences` returned routing count 3 on edge `VRF -> RPT`.
 - Sprint 9 browser QA passed on desktop and mobile in fixture and live modes: recurrence badges and route notes rendered, no severe console errors, no document overflow, and mobile DAG used internal horizontal scroll.
 - Sprint 9 deployed demo probe returned HTTP 200.
+- PR #54 merged Sprint 9 into `production`; PR #55 merged `production` into `main`; GitHub issues #30, #31, and #32 are closed.
+- Merged Sprint 9 branch `feat/sprint-9-graph-recurrence` was deleted locally and remotely after landing on `main`.
+- Sprint 10 branch `feat/sprint-10-contract-dsl` was created from updated `production`.
+- #33 RED tests failed for the expected reason before implementation: `zone_b.contracts` did not exist.
+- #33 now uses `zone_b/contracts/{types,checks,registry}.py` with a frozen `Contract` dataclass, deterministic check functions, and a registry-backed `CONTRACTS` compatibility facade in `zone_b/agents/contract_checker.py`.
+- #34 now has a PyYAML `SafeLoader` parser under `zone_b/contracts/parser.py`, a literature review YAML example, line-numbered `ContractDslError` messages, duplicate/unknown type rejection, non-string mapping-key rejection, and machine-field shape validation.
+- #35 now accepts `contracts_yaml` on `POST /api/workflows`, rejects mixed `contracts` plus `contracts_yaml`, normalizes YAML to persisted contract dicts, and preserves machine-readable YAML fields like `output` and `requires`.
+- Sprint 10 focused gate passed: `pytest -q tests/test_contract_registry.py tests/test_contract_dsl.py tests/test_contract_checker.py tests/test_routing_contract.py tests/test_schema_contract.py tests/test_rigorous.py::TestPartialContractFailures tests/test_integration.py::TestContractViolationDetection tests/test_integration.py::TestRunAllFixtureMode tests/test_group_chat.py tests/test_api_workflows.py tests/test_graph_schema.py tests/test_api_adapter_multi_patch.py tests/test_sdk_instrumentation.py` passed 114 tests.
+- Sprint 10 full gate passed: `pytest -x --tb=short` passed 404 tests.
+- Sprint 10 fixture gate passed: `python3 run_all.py --fixture` reported `Regression status : pass` and `Regression tests   : 4 pass / 0 fail / 0 error`.
+- Sprint 10 import smoke passed for the registry, parser, checker facade, and PyYAML `SafeLoader`.
+- Sprint 10 local API probe passed: YAML workflow creation returned 200 with normalized persisted machine fields, fetch returned the same fields, and malformed YAML returned 400 with a line-numbered parser error.
+- Sprint 10 reviewer found parser/API blockers for non-string mapping keys and malformed machine-field containers; both were fixed with tests and the reviewer re-check returned no blockers.
+- Sprint 10 `python3 -m compileall -q api zone_b`, `git diff --check`, and deployed demo HTTP 200 checks passed.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -222,6 +241,7 @@ Sprint 9: Graph recurrence and dashboard annotations
 - Sprint 8 second reviewer found LLM cost double-counting and non-object generated JSON usage loss; fixed with AG2-shaped cost parsing tests.
 - `docs/PLAN_VS_REALITY.md` is referenced by the handoff but missing locally.
 - AG2 `graph-rag-falkor-db` extra could not install on Python 3.14 because `graphrag-sdk==0.8.2` has no compatible distribution here. Sprint 9 uses the real `falkordb` client when AG2's optional graph stack is unavailable, while keeping the verified AG2 wrapper import path documented.
+- Sprint 10 first reviewer lane stalled and was replaced with a narrower blocker-only reviewer. The replacement found two parser/API blockers, both fixed.
 
 ## Blockers
 - No regression-gate blocker remains for Sprint 3.
@@ -232,7 +252,8 @@ Sprint 9: Graph recurrence and dashboard annotations
 - No Sprint 7 blocker remains; final reviewer medium findings were fixed locally.
 - No Sprint 8 blocker remains after final reviewer fixes, full gate, and merge to `main`.
 - No Sprint 9 blocker remains after reviewer re-check.
+- No Sprint 10 blocker remains after reviewer re-check.
 - Remaining toolchain gaps: `ruff` unavailable in the current Python environment; `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Commit Sprint 9 with `Closes #30`, `Closes #31`, and `Closes #32`, then run the branch -> `production` -> `main` landing loop and delete the merged sprint branch.
+Commit Sprint 10 with `Closes #33`, `Closes #34`, and `Closes #35`, then run the branch -> `production` -> `main` landing loop and delete the merged sprint branch.

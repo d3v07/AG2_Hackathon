@@ -12,6 +12,7 @@ dependencies = [
     "opentelemetry-sdk>=1.41,<2",
     "opentelemetry-exporter-otlp-proto-http>=1.41,<2",
     "python-dotenv",
+    "PyYAML>=6.0",
     "tavily-python",
     "fastapi==0.136.1",
     "pydantic==2.13.4",
