@@ -144,6 +144,22 @@ def test_backend_report_patches_passthrough_one_per_violation():
     assert data["report"]["cost_summary"] == data["cost"]
 
 
+def test_adapter_preserves_stable_violation_recurrence_aliases():
+    report = {
+        "narrative": "repair plan",
+        "patches": [],
+        "regression_test_status": "passed",
+        "approval_status": "approved",
+    }
+
+    data = report_to_concord_data(report, _run_trace(), _violations(), sandbox_id="dt-test")
+
+    assert data["violations"][0]["contract_type"] == "tool"
+    assert data["violations"][0]["rule"] == "Claims of verification require tool evidence"
+    assert data["violations"][1]["contract_type"] == "routing"
+    assert data["violations"][1]["rule"] == "Reporter handoff must be gated"
+
+
 def test_adapter_keeps_scalar_patch_fallback_when_native_patches_absent():
     report = {
         "narrative": "legacy repair",

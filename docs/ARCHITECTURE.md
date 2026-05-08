@@ -181,6 +181,13 @@ We use AG2 deliberately, not as a library skin over LLM calls. Specific primitiv
 - Why: we generate code with an LLM and execute it. Doing that on the operator's machine is unsafe. Daytona gives us per-run isolation, no install drift, no cleanup burden, and fast cold starts.
 - Demo-friendly: `python zone_b/sandbox_run.py` runs the full Zone B pipeline against a mock Tavily-enriched trace inside Daytona — the sandbox script itself is what gets exec'd.
 
+### FalkorDB — workflow topology and violation recurrence graph
+- Where: `graph/schema.py`, `graph/falkor.py`, `zone_b/memory/violation_memory.py`
+- How: workflow registration projects tenants, workflows, agents, tools, contracts, and declared handoff/tool-call edges into FalkorDB. Completed runs persist stable violation recurrence keys back into SQLite and, when `CONCORD_GRAPH_ENABLED=1` or `FALKORDB_HOST` is set, upsert `Run` and `Violation` nodes connected to the workflow graph.
+- Query shape: `MATCH (a:Agent)-[r:Handoff]->(b:Agent) WHERE r.workflow_id = $workflow_id RETURN a.name, b.name` returns declared handoff paths.
+- Local service: `docker compose up -d falkordb` exposes FalkorDB on port 6379 with a persistent volume.
+- Runtime behavior: graph persistence is disabled by default so local API/tests do not require a running FalkorDB service. When graph persistence is enabled, graph writes are best-effort after the durable SQL write; API writes stay available if FalkorDB is temporarily unavailable.
+
 ### OpenRouter / Gemini 2.5 Flash — LLM backbone
 - Where: `zone_a/config.py` and `zone_b/config.py`
 - Why Gemini Flash: cheap, fast, good enough for structured-JSON tasks. We're parsing every response, not generating prose.
@@ -201,9 +208,9 @@ The frontend is a self-contained React app served as static assets from Vercel (
 - **Interactivity:** clicking any pipeline node navigates to **Agent Trace**. Replay button steps through 12 events at ~520ms/step.
 
 ### Screen 2 — **Workflow DAG** (`screen === "topology"`)
-- **Renders:** declared-vs-observed graph. Fixture mode shows the full demo topology; live mode renders the observed agents, tools, handoffs, and route status derived from the run trace. Edges are colored by status: OK (sage), SKIPPED GUARD (orange), MISSING APPROVAL (brick), PROPOSED (gold dashed). Below the graph: routes table showing every observed edge and its status.
-- **Data sources:** `D.topology.{nodes, edges}`, `D.routes`.
-- **Backend equivalent:** `api/adapter.py` derives live `topology` and `routes` from `RunTrace.events`, then annotates observed nodes/routes with violation contract IDs. It does not synthesize fixture nodes for arbitrary live runs.
+- **Renders:** declared-vs-observed graph. Fixture mode shows the full demo topology; live mode renders the observed agents, tools, handoffs, and route status derived from the run trace. Edges are colored by status: OK (sage), SKIPPED GUARD (orange), MISSING APPROVAL (brick), PROPOSED (gold dashed). Recurring violations with count >= 2 get neutral `RECURRING xN` badges on matching DAG nodes/edges and route-table rows.
+- **Data sources:** `D.topology.{nodes, edges}`, `D.routes`, `D.recurrences`.
+- **Backend equivalent:** `api/adapter.py` derives live `topology` and `routes` from `RunTrace.events`, then annotates observed nodes/routes with violation contract IDs. `api/store.py` adds workflow recurrence rows from persisted `ViolationRecord` data when serving `GET /api/runs/{id}`.
 - **Why this screen matters:** routing violations are *structural* (handoff fired without satisfying a condition). Showing the topology with the broken edge highlighted makes the violation legible at a glance.
 
 ### Screen 3 — **Agent Trace** (`screen === "trace"`)
@@ -344,7 +351,7 @@ This is a multi-agent observability + repair system. Both tracks fit. Concord is
 ## 11. What's Honest to Concede
 
 - **The dashboard's per-violation patch diffs are still template-driven** in the fixture. The backend now emits one repair entry per violation in `report.patches[]`, but the public dashboard adapter still synthesizes its visual diff rows until the API passthrough work lands.
-- **The topology/routes block on the Workflow DAG screen is not yet derived from a real workflow declaration.** It's a fixture today. Real implementation would parse the operator's AG2 program (or a YAML manifest) to get the declared topology.
+- **Workflow topology persistence is live for registered workflow payloads**, and run traces still derive observed topology/routes when a workflow declaration is not available in the request path. Later contract-DSL work will make declaration authoring richer.
 - **We use Daytona as a real, live integration**, not a stub. `_run_in_daytona` calls the AG2 `DaytonaCodeExecutor` runner. Without `DAYTONA_API_KEY`/`DAYTONA_API_URL` it returns `("Daytona credentials missing", "no-sandbox", "error")` — not a fake `pass`.
 - **Tavily is also live.** `zone_a/agents/researcher.py` actually hits `client.search(...)` for every Zone A run.
 - **Live LLM is Gemini 2.5 Flash.** Not local, not stubbed.

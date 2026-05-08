@@ -18,6 +18,7 @@ from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import FalkorGraphQueryEngine
 ```
 
 ## Verified Signatures
@@ -31,6 +32,22 @@ instrument_pattern(pattern, *, tracer_provider: TracerProvider) -> Pattern
 The gRPC OTLP exporter path shown in some installed AG2 examples is not
 available in this environment. Use the HTTP OTLP exporter or local exporters
 above.
+
+## FalkorDB Graph Notes
+
+The AG2 Falkor GraphRAG wrapper imports at:
+
+```python
+from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import FalkorGraphQueryEngine
+```
+
+Constructor shape verified locally:
+
+```text
+FalkorGraphQueryEngine(name, host='127.0.0.1', port=6379, username=None, password=None, model=None, ontology=None)
+```
+
+On Python 3.14, the AG2 `graph-rag-falkor-db` extra cannot be installed here because its pinned `graphrag-sdk==0.8.2` has no compatible distribution. Concord therefore persists topology through the real `falkordb` Python client when that optional AG2 stack is unavailable, while still preferring the AG2 wrapper whenever its dependencies are installed.
 
 ## Concord Mapping
 

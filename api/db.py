@@ -50,6 +50,7 @@ def init_db() -> None:
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
     _ensure_run_cost_columns(engine)
+    _ensure_violation_recurrence_columns(engine)
 
 
 def _ensure_run_cost_columns(engine: Engine) -> None:
@@ -69,6 +70,24 @@ def _ensure_run_cost_columns(engine: Engine) -> None:
         for name, definition in columns.items():
             if name not in existing:
                 connection.execute(text(f"ALTER TABLE runs ADD COLUMN {name} {definition}"))
+
+
+def _ensure_violation_recurrence_columns(engine: Engine) -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    inspector = inspect(engine)
+    if not inspector.has_table("violations"):
+        return
+    existing = {column["name"] for column in inspector.get_columns("violations")}
+    columns = {
+        "workflow_id": "VARCHAR DEFAULT ''",
+        "recurrence_key": "VARCHAR DEFAULT ''",
+        "rule": "VARCHAR DEFAULT ''",
+    }
+    with engine.begin() as connection:
+        for name, definition in columns.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE violations ADD COLUMN {name} {definition}"))
 
 
 def get_session() -> Iterator[Session]:

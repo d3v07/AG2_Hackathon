@@ -50,8 +50,11 @@ class ViolationRecord(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     tenant_id: str = Field(default="local", index=True)
     run_id: str = Field(index=True)
+    workflow_id: str = Field(default="", index=True)
+    recurrence_key: str = Field(default="", index=True)
     contract_type: str = Field(default="", index=True)
     severity: str = ""
+    rule: str = ""
     failed_agent: str = ""
     failed_step: int = -1
     payload_json: str = "{}"

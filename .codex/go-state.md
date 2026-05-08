@@ -3,11 +3,11 @@
 ## Overview
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
-- Phase: Sprint 8 implementation
-- Branch: feat/sprint-8-daytona-costs
-- Current Sprint: Sprint 8
-- Current Task: #27-#29 DaytonaCodeExecutor pool, repair-test-iterate loop, and run cost tracking
-- Last Checkpoint: Sprint 8 RED tests were added and then passed after implementation; the focused compatibility gate passed `pytest -q tests/test_daytona_runner.py tests/test_repair_iterate.py tests/test_cost_tracking.py tests/test_regression_test.py tests/test_per_violation_repairs.py tests/test_reporter.py tests/test_api_adapter_multi_patch.py tests/test_api_runs.py tests/test_api_persistence.py tests/test_group_chat.py tests/test_integration.py` with 107 tests.
+- Phase: Sprint 9 landing
+- Branch: feat/sprint-9-graph-recurrence
+- Current Sprint: Sprint 9
+- Current Task: #30-#32 FalkorDB graph connection, topology persistence, and recurrence dashboard badges
+- Last Checkpoint: Sprint 9 final gates passed after reviewer blocker fix: focused suite 54 tests, full pytest 386 tests, fixture pipeline, OTel spike, import smoke, local API probe, browser QA, deployed demo probe, and `git diff --check`. `ruff` remains unavailable in the current environment.
 
 ## Sprint Board
 Sprint 3: Foundation
@@ -36,9 +36,14 @@ Sprint 7: Live run events and dashboard mode controls
 - #26 P0 Dashboard: Add LIVE/FIXTURE toggle and badge — closed on `main`
 
 Sprint 8: Real Daytona repair-test-iterate loop
-- #27 P0 Zone B: Replace raw Daytona SDK execution with AG2 `DaytonaCodeExecutor` pool — in progress
-- #28 P0 Zone B: Add repair-test-iterate loop capped at 3 iterations — in progress
-- #29 P1 Zone B/API: Track Daytona duration and cost fields on persisted runs — in progress
+- #27 P0 Zone B: Replace raw Daytona SDK execution with AG2 `DaytonaCodeExecutor` pool — closed on `main`
+- #28 P0 Zone B: Add repair-test-iterate loop capped at 3 iterations — closed on `main`
+- #29 P1 Zone B/API: Track Daytona duration and cost fields on persisted runs — closed on `main`
+
+Sprint 9: Graph recurrence and dashboard annotations
+- #30 P0 Graph: Add FalkorDB graph connection/schema and docker service — in progress
+- #31 P0 API/Graph: Persist workflow topology and violation recurrence data — in progress
+- #32 P1 Dashboard: Add recurrence badges on DAG nodes/edges — in progress
 
 ## What Worked
 - GitHub issues #12-#15 are closed on `main`.
@@ -187,6 +192,22 @@ Sprint 8: Real Daytona repair-test-iterate loop
 - Sprint 8 final local API probe passed: health 200, `GET /api/runs/RUN-041` returned completed with 4 patches and non-zero Daytona cost, and `/events/token` issued a token.
 - Sprint 8 final deployed demo probe returned HTTP 200.
 - Sprint 8 `git diff --check` and `python3 -m compileall -q api zone_b` passed.
+- PR #52 merged Sprint 8 into `production`; PR #53 merged `production` into `main`; GitHub issues #27, #28, and #29 are closed.
+- Merged Sprint 8 branch `feat/sprint-8-daytona-costs` was deleted locally and remotely after landing on `main`.
+- Operator steering: use multiple child agents during Sprint 9 where they reduce risk, while the main lane owns TDD, integration, verification, and merge decisions.
+- #30 workflow registration now projects tenant/workflow/agent/tool/contract topology to FalkorDB when graph persistence is enabled; local live smoke wrote handoffs and queried `MATCH (a:Agent)-[r:Handoff]->(b:Agent)`.
+- #31 completed runs now persist stable recurrence keys on violation rows and expose `GET /api/workflows/{workflow_id}/recurrences`.
+- #32 dashboard Workflow DAG now renders neutral `RECURRING xN` badges on matching nodes, edges, and route rows from `D.recurrences`.
+- Sprint 9 focused gate passed: `pytest -q tests/test_graph_schema.py tests/test_violation_memory.py tests/test_api_workflows.py tests/test_api_persistence.py tests/test_api_adapter_multi_patch.py tests/test_dashboard_live_mode.py tests/test_api_runs.py tests/test_api_run_events.py` passed 54 tests.
+- Sprint 9 Falkor live smoke passed using `docker compose up -d falkordb`, graph persistence enabled on localhost:6379, and a Cypher handoff query returned `ResearcherAgent -> VerifierAgent` and `VerifierAgent -> ReporterAgent`.
+- Sprint 9 reviewer blocker was fixed: ambiguous backend recurrences no longer render as frontend edge/route badges unless explicit `edge.from`/`edge.to` metadata is present.
+- Sprint 9 full gate passed: `pytest -x --tb=short` passed 386 tests.
+- Sprint 9 fixture gate passed: `python3 run_all.py --fixture` reported `Regression status : pass` and `Regression tests   : 4 pass / 0 fail / 0 error`.
+- Sprint 9 OTel spike passed: `python3 scripts/otel_spike.py`.
+- Sprint 9 repo-valid import smoke passed for Daytona executor, Falkor GraphRAG wrapper, direct FalkorDB client, run event classes, graph projection, and violation recurrence memory.
+- Sprint 9 local API probe passed: health 200, `GET /api/runs/RUN-041` returned completed with 4 patches and 4 recurrences, and `GET /api/workflows/WF-RUN-041/recurrences` returned routing count 3 on edge `VRF -> RPT`.
+- Sprint 9 browser QA passed on desktop and mobile in fixture and live modes: recurrence badges and route notes rendered, no severe console errors, no document overflow, and mobile DAG used internal horizontal scroll.
+- Sprint 9 deployed demo probe returned HTTP 200.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -200,6 +221,7 @@ Sprint 8: Real Daytona repair-test-iterate loop
 - Sprint 8 first reviewer found sandbox-state leakage and per-iteration cost undercounting; fixed with pool reset and cost aggregation tests.
 - Sprint 8 second reviewer found LLM cost double-counting and non-object generated JSON usage loss; fixed with AG2-shaped cost parsing tests.
 - `docs/PLAN_VS_REALITY.md` is referenced by the handoff but missing locally.
+- AG2 `graph-rag-falkor-db` extra could not install on Python 3.14 because `graphrag-sdk==0.8.2` has no compatible distribution here. Sprint 9 uses the real `falkordb` client when AG2's optional graph stack is unavailable, while keeping the verified AG2 wrapper import path documented.
 
 ## Blockers
 - No regression-gate blocker remains for Sprint 3.
@@ -208,8 +230,9 @@ Sprint 8: Real Daytona repair-test-iterate loop
 - No Sprint 5 blocker remains.
 - No Sprint 6 blocker remains.
 - No Sprint 7 blocker remains; final reviewer medium findings were fixed locally.
-- No Sprint 8 blocker remains after final reviewer fixes and full gate.
+- No Sprint 8 blocker remains after final reviewer fixes, full gate, and merge to `main`.
+- No Sprint 9 blocker remains after reviewer re-check.
 - Remaining toolchain gaps: `ruff` unavailable in the current Python environment; `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Commit Sprint 8 with `Closes #27`, `Closes #28`, and `Closes #29`, then push PR to `production`, inspect comments/checks, merge through `production` and `main`, verify `main`, delete the merged sprint branch, and continue to Sprint 9 (#30-#32).
+Commit Sprint 9 with `Closes #30`, `Closes #31`, and `Closes #32`, then run the branch -> `production` -> `main` landing loop and delete the merged sprint branch.
