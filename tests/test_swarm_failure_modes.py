@@ -165,12 +165,25 @@ _FAILURE_MODE_CASES: list[tuple[str, str]] = [
 ]
 
 
+def test_failure_mode_rejected_in_live_mode(tmp_path) -> None:
+    """failure_mode is a stub-only knob; live mode must raise ValueError so
+    a misconfigured production call cannot accidentally inject violations."""
+    from zone_a.swarm import run_swarm
+
+    with pytest.raises(ValueError, match="failure_mode is only supported in stub mode"):
+        asyncio.run(
+            run_swarm(
+                mode="live",
+                failure_mode="force_no_evidence",
+                task="t",
+                research_question="rq",
+                run_id="test_live_rejects_failure_mode",
+                output_path=tmp_path / "trace.json",
+            )
+        )
+
+
 @pytest.mark.parametrize("failure_mode,expected_contract_type", _FAILURE_MODE_CASES)
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason="run_swarm rejects unknown failure_mode kwarg with TypeError until #70",
-)
 def test_failure_mode_produces_expected_violation(
     failure_mode: str,
     expected_contract_type: str,
@@ -178,10 +191,6 @@ def test_failure_mode_produces_expected_violation(
 ) -> None:
     """run_swarm(mode='stub', failure_mode=X) must produce exactly the
     contract violation type for that mode after Zone B contract checking.
-
-    Blocked on #70: run_swarm does not accept failure_mode yet — call raises
-    TypeError. Once #70 lands, the xfail strict=True will force XPASS, which
-    fails the suite and prompts removing the marker.
     """
     from zone_a.swarm import run_swarm  # local import — module may not be on path in all envs
 
