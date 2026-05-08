@@ -25,7 +25,10 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from api.middleware import ApiAuthMiddleware  # noqa: E402
+from api.routes.api_keys import router as api_keys_router  # noqa: E402
 from api.routes.runs import router as runs_router  # noqa: E402
+from api.routes.usage import router as usage_router  # noqa: E402
 from api.routes.workflows import router as workflows_router  # noqa: E402
 from api.store import ensure_store, recover_interrupted_runs  # noqa: E402
 
@@ -45,6 +48,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+app.add_middleware(ApiAuthMiddleware)
 
 
 @app.get("/api/health")
@@ -54,6 +58,8 @@ def health() -> dict[str, str]:
 
 app.include_router(workflows_router)
 app.include_router(runs_router)
+app.include_router(api_keys_router)
+app.include_router(usage_router)
 
 
 _PUBLIC_DIR = _ROOT / "public"

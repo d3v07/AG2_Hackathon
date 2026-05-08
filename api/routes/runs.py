@@ -4,13 +4,12 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
-from typing import Annotated, Any
+from typing import Any
 
 from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
-    Header,
     HTTPException,
     Query,
     Request,
@@ -63,8 +62,31 @@ def submit_run_endpoint(
     return run
 
 
+def _tenant_from_stream_token_or_request(
+    *,
+    run_id: str,
+    request: Request,
+    stream_token: str | None,
+) -> str:
+    if stream_token:
+        tenant_id = run_event_tokens.validate(stream_token, run_id)
+        if tenant_id is None:
+            raise HTTPException(status_code=401, detail="invalid or expired stream token")
+        return tenant_id
+    return get_tenant_id(request)
+
+
 @router.get("/{run_id}.js", response_class=Response)
-def get_run_jsonp(run_id: str, tenant_id: str = Depends(get_tenant_id)) -> Response:
+def get_run_jsonp(
+    run_id: str,
+    request: Request,
+    stream_token: str | None = Query(default=None),
+) -> Response:
+    tenant_id = _tenant_from_stream_token_or_request(
+        run_id=run_id,
+        request=request,
+        stream_token=stream_token,
+    )
     data = get_run(run_id, tenant_id=tenant_id)
     if data is None:
         raise HTTPException(status_code=404, detail=f"run {run_id} not found")
@@ -132,15 +154,12 @@ async def get_run_events_endpoint(
     run_id: str,
     request: Request,
     stream_token: str | None = Query(default=None),
-    x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    x_concord_api_key: Annotated[str | None, Header(alias="X-Concord-API-Key")] = None,
 ) -> EventSourceResponse:
-    if stream_token:
-        tenant_id = run_event_tokens.validate(stream_token, run_id)
-        if tenant_id is None:
-            raise HTTPException(status_code=401, detail="invalid or expired stream token")
-    else:
-        tenant_id = get_tenant_id(x_tenant_id, x_concord_api_key)
+    tenant_id = _tenant_from_stream_token_or_request(
+        run_id=run_id,
+        request=request,
+        stream_token=stream_token,
+    )
 
     status = get_run_status(run_id, tenant_id=tenant_id)
     if status is None:
