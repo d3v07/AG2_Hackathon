@@ -21,6 +21,7 @@ def _violations_to_dicts(violations: list[Violation]) -> list[dict]:
             "observed": v.observed,
             "failed_agent": v.failed_agent,
             "failed_step": v.failed_step,
+            "span_id": getattr(v, "span_id", None),
         }
         for v in violations
     ]

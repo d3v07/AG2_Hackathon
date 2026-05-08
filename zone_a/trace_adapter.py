@@ -19,6 +19,49 @@ _AG2_TYPE_MAP = {
     "code_execution": "tool_call",
 }
 
+# Concord span kinds. Sprint 15 #72 locked the 10-kind contract; the AG2
+# OTel namespace maps onto a subset of these. Other kinds (contract_check,
+# repair, regression) are stamped by Zone B in #74/#75, not here.
+_AG2_KIND_MAP = {
+    "agent": "agent",
+    "conversation": "agent",
+    "tool": "tool",
+    "handoff": "handoff",
+    "human_input": "human_gate",
+    "code_execution": "tool",
+    "guardrail": "guardrail",
+}
+_ALLOWED_SPAN_KINDS = {
+    "workflow",
+    "agent",
+    "tool",
+    "handoff",
+    "guardrail",
+    "human_gate",
+    "action",
+    "contract_check",
+    "repair",
+    "regression",
+}
+_CONCORD_SPAN_FIELDS = (
+    "trace_id",
+    "span_id",
+    "parent_span_id",
+    "name",
+    "kind",
+    "agent",
+    "tool",
+    "status",
+    "start_time",
+    "end_time",
+    "duration_ms",
+    "attributes",
+    "input",
+    "output",
+    "error",
+    "contract_refs",
+)
+
 
 def _json_default(value: Any) -> Any:
     if dataclasses.is_dataclass(value):
@@ -159,6 +202,105 @@ def _span_to_event(span: Any) -> dict[str, Any] | None:
     }
 
 
+def _hex_span_id(value: Any) -> str | None:
+    """Render an OTel span/trace id as a hex string, or None when missing."""
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return format(value, "x")
+    return str(value)
+
+
+def _span_kind(attrs: dict[str, Any]) -> str:
+    """Concord-native kind for a span. Defaults to 'agent' so unknown spans
+    surface in the forensic UI rather than being silently dropped."""
+    raw = attrs.get("concord.kind")
+    if isinstance(raw, str) and raw in _ALLOWED_SPAN_KINDS:
+        return raw
+    ag2_type = attrs.get("ag2.span.type")
+    if isinstance(ag2_type, str) and ag2_type in _AG2_KIND_MAP:
+        return _AG2_KIND_MAP[ag2_type]
+    return "agent"
+
+
+def _span_status(span: Any, attrs: dict[str, Any]) -> str:
+    if attrs.get("error.type"):
+        return "error"
+    status_obj = getattr(span, "status", None)
+    if status_obj is None:
+        return "ok"
+    description = getattr(status_obj, "status_code", None)
+    if description is not None and "ERROR" in str(description).upper():
+        return "error"
+    return "ok"
+
+
+def _span_error(attrs: dict[str, Any]) -> dict[str, Any] | None:
+    error_type = attrs.get("error.type")
+    if not error_type:
+        return None
+    error: dict[str, Any] = {"type": str(error_type)}
+    if attrs.get("error.message"):
+        error["message"] = str(attrs["error.message"])
+    return error
+
+
+def _span_to_concord_span(span: Any) -> dict[str, Any] | None:
+    """Convert one OTel span into Concord's 16-field shape. Returns None for
+    spans that don't carry Concord/AG2 attributes (e.g. spans from unrelated
+    instrumentation that share the tracer)."""
+    attrs = _span_attributes(span)
+    if not (
+        attrs.get("concord.kind")
+        or attrs.get("ag2.span.type")
+        or attrs.get("concord.type")
+    ):
+        return None
+
+    span_context = getattr(span, "context", None)
+    trace_id_raw = getattr(span_context, "trace_id", None) if span_context else None
+    span_id_raw = getattr(span_context, "span_id", None) if span_context else None
+    parent_obj = getattr(span, "parent", None)
+    parent_span_id_raw = getattr(parent_obj, "span_id", None) if parent_obj else None
+
+    start_time_ns = getattr(span, "start_time", None)
+    end_time_ns = getattr(span, "end_time", None)
+    start_time = (start_time_ns / 1_000_000_000) if isinstance(start_time_ns, int) else 0.0
+    end_time = (end_time_ns / 1_000_000_000) if isinstance(end_time_ns, int) else start_time
+    duration_ms = (
+        int((end_time_ns - start_time_ns) / 1_000_000)
+        if isinstance(end_time_ns, int) and isinstance(start_time_ns, int)
+        else 0
+    )
+
+    kind = _span_kind(attrs)
+    agent = (
+        attrs.get("concord.agent")
+        or attrs.get("gen_ai.agent.name")
+        or attrs.get("ag2.agent.name")
+    )
+    tool = attrs.get("gen_ai.tool.name") or attrs.get("concord.tool")
+
+    return {
+        "trace_id": _hex_span_id(trace_id_raw) or "",
+        "span_id": _hex_span_id(span_id_raw) or "",
+        "parent_span_id": _hex_span_id(parent_span_id_raw),
+        "name": str(getattr(span, "name", "") or ""),
+        "kind": kind,
+        "agent": str(agent) if agent else None,
+        "tool": str(tool) if tool else None,
+        "status": _span_status(span, attrs),
+        "start_time": start_time,
+        "end_time": end_time,
+        "duration_ms": duration_ms,
+        "attributes": dict(attrs),
+        "input": _safe_json_loads(attrs.get("gen_ai.input.messages")) or {},
+        "output": _safe_json_loads(attrs.get("gen_ai.output.messages")) or {},
+        "error": _span_error(attrs),
+        "contract_refs": [],
+    }
+
+
 class ConcordSpanExporter(SpanExporter):
     def __init__(
         self,
@@ -171,6 +313,7 @@ class ConcordSpanExporter(SpanExporter):
         self.workflow_name = workflow_name
         self.final_output = final_output
         self._events: list[dict[str, Any]] = []
+        self._spans: list[dict[str, Any]] = []
         self._stopped = False
 
     def export(self, spans: Iterable[Any]) -> SpanExportResult:
@@ -180,6 +323,9 @@ class ConcordSpanExporter(SpanExporter):
             event = _span_to_event(span)
             if event is not None:
                 self._events.append(event)
+            concord_span = _span_to_concord_span(span)
+            if concord_span is not None:
+                self._spans.append(concord_span)
         return SpanExportResult.SUCCESS
 
     def shutdown(self) -> None:
@@ -199,6 +345,7 @@ class ConcordSpanExporter(SpanExporter):
         self.workflow_name = workflow_name
         self.final_output = final_output
         self._events = []
+        self._spans = []
         self._stopped = False
 
     def configure(
@@ -214,6 +361,53 @@ class ConcordSpanExporter(SpanExporter):
             self.workflow_name = workflow_name
         if final_output is not _UNSET:
             self.final_output = final_output
+
+    def to_spans_payload(self) -> list[dict[str, Any]]:
+        """Concord 16-field spans payload, with a synthesized ``workflow``
+        root span wrapping all captured spans. Matches the contract locked
+        by Sprint 15 #72 tests (`tests/test_spans_shape.py`).
+        """
+        if not self._spans:
+            return []
+
+        trace_id = self._spans[0]["trace_id"] or ""
+        start_time = min(s["start_time"] for s in self._spans)
+        end_time = max(s["end_time"] for s in self._spans)
+        duration_ms = max(int((end_time - start_time) * 1000), 0)
+        root_span_id = f"sp_workflow_{self.run_id}" if self.run_id else "sp_workflow_root"
+
+        root: dict[str, Any] = {
+            "trace_id": trace_id,
+            "span_id": root_span_id,
+            "parent_span_id": None,
+            "name": f"concord.workflow.{self.workflow_name}" if self.workflow_name else "concord.workflow",
+            "kind": "workflow",
+            "agent": None,
+            "tool": None,
+            "status": "ok",
+            "start_time": start_time,
+            "end_time": end_time,
+            "duration_ms": duration_ms,
+            "attributes": {
+                "workflow.name": self.workflow_name,
+                "run.id": self.run_id,
+            },
+            "input": {},
+            "output": self.final_output if isinstance(self.final_output, dict) else {},
+            "error": None,
+            "contract_refs": [],
+        }
+
+        # Re-parent any span without a parent to the synthesized root so the
+        # forensic UI tree always has a single root.
+        existing_span_ids = {s["span_id"] for s in self._spans}
+        out: list[dict[str, Any]] = [root]
+        for span in self._spans:
+            copy = dict(span)
+            if copy["parent_span_id"] is None or copy["parent_span_id"] not in existing_span_ids:
+                copy["parent_span_id"] = root_span_id
+            out.append(copy)
+        return out
 
     def to_run_trace_dict(self) -> dict[str, Any]:
         events = sorted(
