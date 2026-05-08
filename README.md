@@ -1,5 +1,7 @@
 # Concord Lite
 
+[![CI](https://github.com/d3v07/AG2_Hackathon/actions/workflows/ci.yml/badge.svg)](https://github.com/d3v07/AG2_Hackathon/actions/workflows/ci.yml)
+
 **A contract-to-repair diagnostic layer for AG2 multi-agent workflows.**
 
 Concord Lite monitors a multi-agent workflow run, detects when agents violate their behavioural contracts, attributes the root cause to the responsible agent, proposes a repair targeting the correct AG2 primitive, and validates the fix with a sandboxed regression test — all automatically, end-to-end.

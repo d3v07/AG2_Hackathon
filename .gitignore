@@ -8,8 +8,6 @@ data/
 *.db
 *.sqlite
 *.sqlite3
-playwright-report/
-test-results/
-/blob-report/
-.playwright/
 node_modules/
+.vitest/
+concord_lite.egg-info/
