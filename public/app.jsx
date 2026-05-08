@@ -5,11 +5,290 @@ const D = window.CONCORD_DATA;
 const SCREENS = [
   { id: "overview",   num: "01", label: "Overview" },
   { id: "trace",      num: "02", label: "Agent Trace" },
+  { id: "forensic",   num: "03", label: "Forensic" },
   { id: "violations", num: "04", label: "Violations" },
   { id: "repair",     num: "04", label: "Repair Patch" },
   { id: "regression", num: "05", label: "Regression" },
   { id: "report",     num: "06", label: "Final Report" },
+  { id: "submit",     num: "07", label: "Submit Run" },
+  { id: "workflows",  num: "08", label: "Workflows" },
 ];
+
+/* ---------- Sprint 18 #88 — reusable state components ---------- */
+function LoadingState({ message = "Loading…", inline = false }) {
+  return (
+    <div
+      className={`state-loading ${inline ? "inline" : ""}`}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <span className="state-spinner" aria-hidden="true">◐</span>
+      <span>{message}</span>
+    </div>
+  );
+}
+
+function EmptyState({ title, body, action }) {
+  return (
+    <div className="state-empty" role="status">
+      <h3>{title}</h3>
+      {body && <p>{body}</p>}
+      {action && <div className="state-action">{action}</div>}
+    </div>
+  );
+}
+
+/**
+ * Specific error copy per HTTP status (per global taste rules — never
+ * "Something went wrong"). The status code informs whether retry is
+ * useful: 4xx user-error usually requires intervention, 5xx is retryable.
+ */
+function _errorCopy(error) {
+  if (!error) return null;
+  const status = error.status || error.statusCode || 0;
+  if (status === 401 || status === 403) {
+    return { title: "Session expired", body: "Please re-authenticate to continue.", retryable: false };
+  }
+  if (status === 404) {
+    return { title: "Not found", body: error.message || "This resource doesn't exist or was deleted.", retryable: false };
+  }
+  if (status === 409) {
+    return { title: "Conflict", body: error.message || "The current state doesn't allow this operation.", retryable: false };
+  }
+  if (status >= 500 && status < 600) {
+    return { title: `Server error ${status}`, body: "Click retry. If it persists, check the API status.", retryable: true };
+  }
+  if (error.name === "TypeError" || /network|fetch|offline/i.test(error.message || "")) {
+    return { title: "Network error", body: error.message || "Could not reach the API.", retryable: true };
+  }
+  return { title: "Error", body: error.message || String(error), retryable: true };
+}
+
+function ErrorState({ error, onRetry }) {
+  const copy = _errorCopy(error);
+  if (!copy) return null;
+  return (
+    <div className="state-error" role="alert" aria-live="polite">
+      <h3>{copy.title}</h3>
+      {copy.body && <p>{copy.body}</p>}
+      {copy.retryable && onRetry && (
+        <button type="button" className="btn-retry" onClick={onRetry}>
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* Deep-link helper: find the matching forensic span for a violation /
+   patch / regression test. First tries explicit span_id (set in #75 by
+   Zone B's contract checker), then falls back to agent-name match. */
+function _findSpanForAgent(spans, agentName, explicitSpanId) {
+  if (!Array.isArray(spans) || spans.length === 0) return null;
+  if (explicitSpanId) {
+    const exact = spans.find(s => s.span_id === explicitSpanId);
+    if (exact) return exact;
+  }
+  if (!agentName) return null;
+  return spans.find(s => s.agent === agentName) || null;
+}
+
+function ViewSpanLink({ spanId, onClick, label = "View span" }) {
+  if (!spanId) return null;
+  return (
+    <button
+      type="button"
+      className="view-span-link"
+      onClick={(e) => { e.stopPropagation(); onClick(spanId); }}
+      aria-label={`${label} ${spanId} on Forensic screen`}
+    >
+      {label} →
+    </button>
+  );
+}
+
+const FORENSIC_KIND_ICONS = {
+  workflow:       "▣",
+  agent:          "●",
+  tool:           "◆",
+  handoff:        "→",
+  guardrail:      "▲",
+  human_gate:     "◉",
+  action:         "★",
+  contract_check: "✕",
+  repair:         "✚",
+  regression:     "✓",
+};
+
+const TASK_MAX = 1000;
+const RESEARCH_QUESTION_MAX = 500;
+
+const TERMINAL_STATUSES = new Set(["completed", "failed"]);
+const STATUS_KIND = {
+  queued: "neutral",
+  analyzing: "warn",
+  repairing: "warn",
+  testing: "warn",
+  completed: "ok",
+  failed: "err",
+};
+const SSE_MAX_RECONNECTS = 5;
+const SSE_BACKOFF_BASE_MS = 500;
+
+/**
+ * Live SSE consumer for /api/runs/{id}/events.
+ *
+ * Returns { status, lastEvent, connectionState, error, lastEventId }.
+ *
+ * - Opens EventSource against the SSE endpoint with the stream_token
+ * - Tracks the current status from each event payload
+ * - Reconnects on disconnect using Last-Event-ID via the URL (browser
+ *   EventSource doesn't expose request headers, so we pass it as a query
+ *   param the server can read OR rely on its native Last-Event-ID header
+ *   on auto-reconnect — we do both)
+ * - Exponential backoff up to SSE_MAX_RECONNECTS attempts
+ * - Cleans up on unmount or terminal status
+ *
+ * `eventSourceCtor` is injectable for tests (jsdom has no native EventSource).
+ */
+function useRunEventStream(runId, streamToken, options = {}) {
+  const eventSourceCtor = options.eventSourceCtor || (typeof EventSource !== "undefined" ? EventSource : null);
+  const [status, setStatus] = useState(null);
+  const [lastEventId, setLastEventId] = useState(0);
+  const [connectionState, setConnectionState] = useState("idle"); // idle|connecting|open|reconnecting|closed|error
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!runId || !streamToken) return undefined;
+    if (!eventSourceCtor) {
+      setError(new Error("EventSource not available"));
+      setConnectionState("error");
+      return undefined;
+    }
+
+    let attempt = 0;
+    let es = null;
+    let cancelled = false;
+    let reconnectTimer = null;
+    let lastSeenId = 0;
+
+    function open() {
+      const url = `/api/runs/${runId}/events?stream_token=${encodeURIComponent(streamToken)}`
+        + (lastSeenId > 0 ? `&last_event_id=${lastSeenId}` : "");
+      setConnectionState(attempt === 0 ? "connecting" : "reconnecting");
+      es = new eventSourceCtor(url);
+
+      es.onopen = () => {
+        if (cancelled) return;
+        attempt = 0;
+        setConnectionState("open");
+      };
+
+      const handleEvent = (event) => {
+        if (cancelled) return;
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed.status) setStatus(parsed.status);
+          if (parsed.sequence) {
+            lastSeenId = Number(parsed.sequence);
+            setLastEventId(lastSeenId);
+          }
+          if (parsed.status && TERMINAL_STATUSES.has(parsed.status)) {
+            es.close();
+            setConnectionState("closed");
+          }
+        } catch (e) {
+          // Malformed event — log via setError but don't tear down
+          setError(e);
+        }
+      };
+      // Listen for both default 'message' and the named events the API emits
+      es.onmessage = handleEvent;
+      ["status", "queued", "analyzing", "repairing", "testing", "completed", "failed"].forEach(name => {
+        es.addEventListener(name, handleEvent);
+      });
+
+      es.onerror = () => {
+        if (cancelled) return;
+        es.close();
+        if (attempt >= SSE_MAX_RECONNECTS) {
+          setConnectionState("error");
+          setError(new Error(`SSE failed after ${SSE_MAX_RECONNECTS} reconnect attempts`));
+          return;
+        }
+        attempt += 1;
+        const delay = SSE_BACKOFF_BASE_MS * Math.pow(2, attempt - 1);
+        setConnectionState("reconnecting");
+        reconnectTimer = setTimeout(open, delay);
+      };
+    }
+
+    open();
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (es) es.close();
+    };
+  }, [runId, streamToken, eventSourceCtor]);
+
+  return { status, lastEventId, connectionState, error };
+}
+
+function _formatElapsed(ms) {
+  if (!ms || ms < 0) return "0:00";
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function RunProgress({ runId, streamToken, eventSourceCtor }) {
+  const { status, connectionState, error } = useRunEventStream(runId, streamToken, { eventSourceCtor });
+  const [startedAt] = useState(Date.now());
+  const [, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!status || TERMINAL_STATUSES.has(status)) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [status]);
+
+  if (!runId || !streamToken) return null;
+  if (status && TERMINAL_STATUSES.has(status)) {
+    // Auto-hide after a small delay would be nice, but for forensic UX
+    // we keep the terminal state visible so the user sees the outcome.
+    return (
+      <div className={`run-progress run-progress-${STATUS_KIND[status] || "neutral"}`} aria-live="polite">
+        <span className="run-progress-pill" data-status={status}>{status}</span>
+        <span className="run-progress-runid">{runId}</span>
+      </div>
+    );
+  }
+
+  const kind = STATUS_KIND[status || "queued"] || "neutral";
+  const label = status || "queued";
+  return (
+    <div className={`run-progress run-progress-${kind}`} role="status" aria-live="polite">
+      <span className="run-progress-pill" data-status={label}>{label}</span>
+      <span className="run-progress-runid">{runId}</span>
+      <span className="run-progress-elapsed">{_formatElapsed(Date.now() - startedAt)}</span>
+      {connectionState === "reconnecting" && (
+        <span className="run-progress-reconnect">reconnecting…</span>
+      )}
+      {error && (
+        <span className="run-progress-error" role="alert">{error.message}</span>
+      )}
+    </div>
+  );
+}
+
+async function fetchStreamToken(runId) {
+  const res = await fetch(`/api/runs/${runId}/events/token`, { method: "POST" });
+  if (!res.ok) throw new Error(`stream token fetch ${res.status}`);
+  const body = await res.json();
+  return body.stream_token;
+}
 
 function Sq({ kind }) { return <span className={`sq ${kind}`}></span>; }
 function Pill({ kind, children }) {
@@ -41,14 +320,16 @@ function TopBar({ screen, setScreen }) {
         <div className="mark">CONCORD · LITE</div>
         <div className="sub">CONTRACT &nbsp;&middot;&nbsp; REPAIR &nbsp;&middot;&nbsp; REGRESSION</div>
       </div>
-      <nav className="tabs">
+      <nav className="tabs" aria-label="Primary screens">
         {SCREENS.map(s => (
           <button
             key={s.id}
             className={`tab ${screen === s.id ? "active" : ""}`}
             onClick={() => setScreen(s.id)}
+            aria-current={screen === s.id ? "page" : undefined}
+            aria-label={`${s.label} (screen ${s.num})`}
           >
-            <span className="num">{s.num}</span>
+            <span className="num" aria-hidden="true">{s.num}</span>
             <span>{s.label}</span>
           </button>
         ))}
@@ -228,12 +509,13 @@ function Trace() {
 }
 
 /* ---------------- VIOLATIONS ---------------- */
-function Violations({ setScreen, setSelectedPatch }) {
+function Violations({ setScreen, setSelectedPatch, goToForensicSpan }) {
   const onClick = (v) => {
     const p = D.patches.find(p => p.violation === v.id);
     if (p) setSelectedPatch(p.id);
     setScreen("repair");
   };
+  const spans = D.spans || [];
   return (
     <>
       <div className="section-head">
@@ -274,6 +556,12 @@ function Violations({ setScreen, setSelectedPatch }) {
               <div className="where">
                 <div className="agent">{v.failed_agent}</div>
                 <div className="muted" style={{fontSize: 11, marginTop: 4}}>step <span className="step">{String(v.failed_step).padStart(2,"0")}</span></div>
+                {(() => {
+                  const span = _findSpanForAgent(spans, v.failed_agent, v.span_id);
+                  return span && goToForensicSpan ? (
+                    <ViewSpanLink spanId={span.span_id} onClick={goToForensicSpan} />
+                  ) : null;
+                })()}
               </div>
               <div>
                 <div className="text-gold" style={{letterSpacing: "0.16em", fontSize: 11}}>{patch ? patch.id : "—"}</div>
@@ -312,7 +600,8 @@ function Violations({ setScreen, setSelectedPatch }) {
 }
 
 /* ---------------- REPAIR ---------------- */
-function Repair({ selectedPatch, setSelectedPatch }) {
+function Repair({ selectedPatch, setSelectedPatch, goToForensicSpan }) {
+  const spans = D.spans || [];
   return (
     <>
       <div className="section-head">
@@ -344,6 +633,14 @@ function Repair({ selectedPatch, setSelectedPatch }) {
               <div>
                 <div className="ctitle">{p.title}</div>
                 <div className="muted" style={{fontSize: 11, marginTop: 4}}>fixes <span className="text-brick">{v.id}</span> &nbsp;&middot;&nbsp; {v.type} CONTRACT &nbsp;&middot;&nbsp; failed at step {v.failed_step}</div>
+                {(() => {
+                  const span = _findSpanForAgent(spans, v.failed_agent, v.span_id);
+                  return span && goToForensicSpan ? (
+                    <div style={{marginTop: 6}}>
+                      <ViewSpanLink spanId={span.span_id} onClick={goToForensicSpan} />
+                    </div>
+                  ) : null;
+                })()}
               </div>
               <div className="prim">{p.primitive}</div>
               <div><Pill kind="ok">READY</Pill></div>
@@ -370,13 +667,28 @@ function Repair({ selectedPatch, setSelectedPatch }) {
 }
 
 /* ---------------- REGRESSION ---------------- */
-function Regression() {
+function Regression({ goToForensicSpan }) {
   const t = D.test;
+  // The regression test corresponds to the regression span (last in the chain)
+  const spans = D.spans || [];
+  const regressionSpan = spans.find(s => s.kind === "regression") || null;
   return (
     <>
       <div className="section-head">
         <h2>Regression Test &nbsp;//&nbsp; {t.runner}</h2>
-        <div className="right">sandbox {t.sandbox_id} &nbsp;&middot;&nbsp; {t.image} &nbsp;&middot;&nbsp; {(t.duration_ms/1000).toFixed(2)}s</div>
+        <div className="right">
+          sandbox {t.sandbox_id} &nbsp;&middot;&nbsp; {t.image} &nbsp;&middot;&nbsp; {(t.duration_ms/1000).toFixed(2)}s
+          {regressionSpan && goToForensicSpan && (
+            <>
+              &nbsp;&middot;&nbsp;
+              <ViewSpanLink
+                spanId={regressionSpan.span_id}
+                onClick={goToForensicSpan}
+                label="Forensic span"
+              />
+            </>
+          )}
+        </div>
       </div>
 
       <div className="row" style={{alignItems: "stretch", marginBottom: 14}}>
@@ -440,8 +752,167 @@ function Regression() {
 }
 
 /* ---------------- REPORT ---------------- */
-function Report({ setScreen }) {
-  const r = D.report;
+function _approvalKind(status) {
+  const norm = (status || "").toUpperCase();
+  if (norm.startsWith("APPROVED")) return "ok";
+  if (norm.startsWith("REJECTED")) return "err";
+  return "warn"; // PENDING* / unknown
+}
+
+function _isPendingApproval(status) {
+  const norm = (status || "").toUpperCase();
+  return norm.startsWith("PENDING") || norm === "" || norm === "UNKNOWN";
+}
+
+function ApprovalPanel({ runId, approval, onUpdated }) {
+  const [operator, setOperator] = useState(approval?.operator || "j.kowalski");
+  const [comments, setComments] = useState(approval?.comments || "");
+  const [submitState, setSubmitState] = useState("idle"); // idle|submitting|error
+  const [submitError, setSubmitError] = useState("");
+
+  const status = approval?.status || "UNKNOWN";
+  const pending = _isPendingApproval(status);
+  const kind = _approvalKind(status);
+
+  async function decide(decision) {
+    if (!runId) {
+      setSubmitError("No run_id available — submit a run first.");
+      setSubmitState("error");
+      return;
+    }
+    setSubmitState("submitting");
+    setSubmitError("");
+    try {
+      const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/approval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, operator, comments }),
+      });
+      if (res.status === 404) {
+        setSubmitError(`Run ${runId} not found. It may have been deleted.`);
+        setSubmitState("error");
+        return;
+      }
+      if (res.status === 409) {
+        const body = await res.json().catch(() => ({}));
+        setSubmitError(`Run is not approval-ready: ${body.detail || res.statusText}`);
+        setSubmitState("error");
+        return;
+      }
+      if (!res.ok) {
+        setSubmitError(`Server error ${res.status}. Try again.`);
+        setSubmitState("error");
+        return;
+      }
+      const body = await res.json();
+      setSubmitState("idle");
+      if (onUpdated) onUpdated(body.approval);
+    } catch (err) {
+      setSubmitError(`Network error: ${err.message || err}`);
+      setSubmitState("error");
+    }
+  }
+
+  return (
+    <div className={`approval approval-${kind}`}>
+      <div className="big">
+        <span className="sq"></span>
+        <span className="label" data-status={status}>{status.replace(/_/g, " ")}</span>
+      </div>
+      <div className="kv-list">
+        <div className="lbl">Operator</div>
+        <div className="val">{approval?.operator || "—"}</div>
+        <div className="lbl">Requested</div>
+        <div className="val">{approval?.requested_at || "—"}</div>
+        <div className="lbl">SLA</div>
+        <div className="val">{approval?.sla || "—"}</div>
+        <div className="lbl">Channel</div>
+        <div className="val">UserProxyAgent / HumanGate</div>
+      </div>
+
+      {approval?.comments && (
+        <>
+          <hr />
+          <div className="approval-comments-display">
+            <div className="lbl">Comments</div>
+            <div className="val">{approval.comments}</div>
+          </div>
+        </>
+      )}
+
+      <hr />
+
+      {pending && (
+        <form className="approval-form" onSubmit={(e) => e.preventDefault()} aria-label="Approval form">
+          <label className="form-row">
+            <span className="form-label">Operator</span>
+            <input
+              className="form-input"
+              type="text"
+              value={operator}
+              onChange={(e) => setOperator(e.target.value)}
+              aria-required="true"
+            />
+          </label>
+          <label className="form-row">
+            <span className="form-label">Comments (optional)</span>
+            <textarea
+              className="form-textarea"
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              rows={2}
+              maxLength={500}
+              placeholder="Optional context for the audit trail"
+            />
+          </label>
+
+          {submitError && (
+            <div className="form-error" role="alert" aria-live="polite">
+              {submitError}
+              <button
+                type="button"
+                className="btn-retry"
+                onClick={() => { setSubmitState("idle"); setSubmitError(""); }}
+              >
+                dismiss
+              </button>
+            </div>
+          )}
+
+          <div className="btn-row">
+            <button
+              type="button"
+              className="btn"
+              disabled={!operator.trim() || submitState === "submitting"}
+              onClick={() => decide("approved")}
+              aria-busy={submitState === "submitting"}
+            >
+              {submitState === "submitting" ? "SUBMITTING…" : "APPROVE & RERUN"}
+            </button>
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={!operator.trim() || submitState === "submitting"}
+              onClick={() => decide("rejected")}
+              aria-busy={submitState === "submitting"}
+            >
+              REJECT
+            </button>
+          </div>
+        </form>
+      )}
+
+      {!pending && submitError && (
+        <div className="form-error" role="alert" aria-live="polite">{submitError}</div>
+      )}
+    </div>
+  );
+}
+
+function Report({ setScreen, runId }) {
+  const [reportData, setReportData] = useState(D.report);
+  const r = reportData;
+
   return (
     <>
       <div className="section-head">
@@ -456,23 +927,11 @@ function Report({ setScreen }) {
             <p>{r.summary}</p>
           </div>
         </div>
-        <div className="approval">
-          <div className="big">
-            <span className="sq"></span>
-            <span className="label">{r.approval.status.replace("_", " ")}</span>
-          </div>
-          <div className="kv-list">
-            <div className="lbl">Operator</div><div className="val">{r.approval.operator}</div>
-            <div className="lbl">Requested</div><div className="val">{r.approval.requested_at}</div>
-            <div className="lbl">SLA</div><div className="val">{r.approval.sla}</div>
-            <div className="lbl">Channel</div><div className="val">UserProxyAgent / HumanGate</div>
-          </div>
-          <hr />
-          <div className="btn-row">
-            <button className="btn">APPROVE &amp; RERUN</button>
-            <button className="btn ghost">REJECT</button>
-          </div>
-        </div>
+        <ApprovalPanel
+          runId={runId || D.run?.id}
+          approval={r.approval}
+          onUpdated={(updated) => setReportData({ ...reportData, approval: { ...r.approval, ...updated } })}
+        />
       </div>
 
       <div className="row" style={{alignItems: "stretch"}}>
@@ -526,28 +985,1021 @@ function Report({ setScreen }) {
   );
 }
 
+/* ---------------- FORENSIC: span tree ---------------- */
+function _buildSpanTree(spans) {
+  const byId = Object.fromEntries(spans.map(s => [s.span_id, { ...s, children: [] }]));
+  const roots = [];
+  for (const span of spans) {
+    const node = byId[span.span_id];
+    if (span.parent_span_id == null) {
+      roots.push(node);
+    } else {
+      const parent = byId[span.parent_span_id];
+      if (parent) parent.children.push(node);
+      else roots.push(node);
+    }
+  }
+  return { roots, byId };
+}
+
+function _flattenVisible(roots, expandedSet) {
+  const out = [];
+  function walk(node, depth, path) {
+    out.push({ ...node, depth, path });
+    if (expandedSet.has(node.span_id)) {
+      for (const child of node.children) {
+        walk(child, depth + 1, [...path, node.span_id]);
+      }
+    }
+  }
+  for (const root of roots) walk(root, 0, []);
+  return out;
+}
+
+function SpanTreeRow({ node, isExpanded, isSelected, onSelect, onToggle }) {
+  const icon = FORENSIC_KIND_ICONS[node.kind] || "·";
+  const violationCount = (node.contract_refs || []).length;
+  const hasChildren = node.children && node.children.length > 0;
+  const isError = node.status === "error";
+
+  return (
+    <div
+      role="treeitem"
+      aria-expanded={hasChildren ? isExpanded : undefined}
+      aria-selected={isSelected}
+      aria-level={node.depth + 1}
+      tabIndex={isSelected ? 0 : -1}
+      data-span-id={node.span_id}
+      className={`span-tree-row ${isSelected ? "selected" : ""} ${isError ? "err" : ""}`}
+      style={{ paddingLeft: 8 + node.depth * 14 }}
+      onClick={(e) => { e.stopPropagation(); onSelect(node.span_id); }}
+    >
+      {hasChildren ? (
+        <button
+          type="button"
+          className="span-tree-chevron"
+          onClick={(e) => { e.stopPropagation(); onToggle(node.span_id); }}
+          aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
+        >
+          {isExpanded ? "▾" : "▸"}
+        </button>
+      ) : (
+        <span className="span-tree-chevron-spacer" aria-hidden="true">·</span>
+      )}
+      <span className={`span-tree-icon kind-${node.kind}`} aria-hidden="true">{icon}</span>
+      <span className="span-tree-label">
+        <span className="span-tree-name">{node.name.replace(/^concord\./, "")}</span>
+        {node.agent && <span className="span-tree-agent">{node.agent}</span>}
+        {node.tool && <span className="span-tree-tool">{node.tool}</span>}
+      </span>
+      <span className="span-tree-duration">{(node.duration_ms / 1000).toFixed(2)}s</span>
+      {violationCount > 0 && (
+        <span
+          className="span-tree-badge"
+          aria-label={`${violationCount} violation${violationCount === 1 ? "" : "s"}`}
+        >
+          {violationCount}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function SpanTree({ spans, selectedSpanId, setSelectedSpanId }) {
+  const { roots, byId } = useMemo(() => _buildSpanTree(spans), [spans]);
+  const [expanded, setExpanded] = useState(() => new Set(spans.map(s => s.span_id)));
+
+  const toggle = (id) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const visible = useMemo(() => _flattenVisible(roots, expanded), [roots, expanded]);
+
+  const handleKeyDown = (e) => {
+    const idx = visible.findIndex(n => n.span_id === selectedSpanId);
+    const current = idx >= 0 ? visible[idx] : null;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const next = visible[Math.min(idx + 1, visible.length - 1)] || visible[0];
+      if (next) setSelectedSpanId(next.span_id);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const prev = visible[Math.max(idx - 1, 0)] || visible[0];
+      if (prev) setSelectedSpanId(prev.span_id);
+    } else if (e.key === "ArrowRight" && current && current.children.length > 0) {
+      e.preventDefault();
+      if (!expanded.has(current.span_id)) toggle(current.span_id);
+    } else if (e.key === "ArrowLeft" && current && expanded.has(current.span_id) && current.children.length > 0) {
+      e.preventDefault();
+      toggle(current.span_id);
+    } else if (e.key === "Enter" && current && current.children.length > 0) {
+      e.preventDefault();
+      toggle(current.span_id);
+    } else if (e.key === " " && current) {
+      e.preventDefault();
+      setSelectedSpanId(current.span_id);
+    }
+  };
+
+  if (visible.length === 0) {
+    return <div className="forensic-pane-placeholder">No spans to render</div>;
+  }
+
+  return (
+    <div
+      role="tree"
+      aria-label="Span hierarchy"
+      className="span-tree"
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+    >
+      {visible.map(node => (
+        <SpanTreeRow
+          key={node.span_id}
+          node={node}
+          isExpanded={expanded.has(node.span_id)}
+          isSelected={node.span_id === selectedSpanId}
+          onSelect={setSelectedSpanId}
+          onToggle={toggle}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ---------------- FORENSIC: span inspector ---------------- */
+function _patchesForSpan(span, allPatches) {
+  if (!span || !Array.isArray(allPatches)) return [];
+  const violationIds = new Set((span.contract_refs || []).map(r => r.violation_id));
+  if (violationIds.size === 0) return [];
+  return allPatches.filter(p => p.violation && violationIds.has(p.violation));
+}
+
+function _regressionForSpan(span, regressionRoot) {
+  // Two link strategies:
+  //   1. span.kind === "regression" → it IS the regression
+  //   2. span.kind === "repair" → its child regression carries the result
+  // Otherwise fall back to the workflow-level regression summary.
+  if (!span) return null;
+  if (span.kind === "regression") {
+    return {
+      name: span.attributes?.test_name || span.name,
+      status: span.attributes?.test_status || (span.status === "ok" ? "passed" : "failed"),
+      sandbox_id: span.attributes?.sandbox_id,
+      duration_ms: span.duration_ms,
+    };
+  }
+  if (regressionRoot) {
+    return {
+      name: regressionRoot.name,
+      status: regressionRoot.duration_ms ? (regressionRoot.test_status || "passed") : "unknown",
+      sandbox_id: regressionRoot.sandbox_id,
+      duration_ms: regressionRoot.duration_ms,
+    };
+  }
+  return null;
+}
+
+function _prettyJson(value) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function CollapsibleBlock({ title, children, initialOpen = false }) {
+  const [open, setOpen] = useState(initialOpen);
+  return (
+    <div className={`inspector-block ${open ? "open" : "closed"}`}>
+      <button
+        type="button"
+        className="inspector-block-toggle"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        <span className="inspector-block-arrow" aria-hidden="true">{open ? "▾" : "▸"}</span>
+        <span>{title}</span>
+      </button>
+      {open && <div className="inspector-block-body">{children}</div>}
+    </div>
+  );
+}
+
+function SpanInspector({ span, allPatches, regressionRoot, onJumpToScreen }) {
+  if (!span) {
+    return (
+      <div className="forensic-pane-placeholder">
+        Select a span from the tree or waterfall to inspect
+      </div>
+    );
+  }
+
+  const patches = _patchesForSpan(span, allPatches);
+  const regression = _regressionForSpan(span, regressionRoot);
+  const violations = span.contract_refs || [];
+  const hasError = span.error && (span.error.type || span.error.message);
+
+  return (
+    <div className="span-inspector" aria-label={`Inspector for ${span.span_id}`}>
+      <header className="inspector-head">
+        <div className="inspector-kind-row">
+          <span className={`inspector-kind kind-${span.kind}`} aria-hidden="true">
+            {FORENSIC_KIND_ICONS[span.kind] || "·"}
+          </span>
+          <span className="inspector-kind-label">{span.kind}</span>
+          <span className={`inspector-status status-${span.status}`}>{span.status}</span>
+        </div>
+        <h3 className="inspector-name">{span.name.replace(/^concord\./, "")}</h3>
+      </header>
+
+      <section className="inspector-section">
+        <h4>Identity</h4>
+        <dl className="inspector-kv">
+          <dt>span_id</dt><dd className="mono">{span.span_id}</dd>
+          <dt>parent_span_id</dt><dd className="mono">{span.parent_span_id || "(root)"}</dd>
+          <dt>trace_id</dt><dd className="mono">{span.trace_id}</dd>
+          {span.agent && (<><dt>agent</dt><dd>{span.agent}</dd></>)}
+          {span.tool && (<><dt>tool</dt><dd>{span.tool}</dd></>)}
+        </dl>
+      </section>
+
+      <section className="inspector-section">
+        <h4>Timing</h4>
+        <dl className="inspector-kv">
+          <dt>start_time</dt><dd className="mono">{span.start_time.toFixed(3)}s</dd>
+          <dt>end_time</dt><dd className="mono">{span.end_time.toFixed(3)}s</dd>
+          <dt>duration</dt><dd className="mono">{span.duration_ms}ms</dd>
+        </dl>
+      </section>
+
+      {hasError && (
+        <section className="inspector-section inspector-error">
+          <h4>Error</h4>
+          <dl className="inspector-kv">
+            {span.error.type && (<><dt>type</dt><dd className="mono">{span.error.type}</dd></>)}
+            {span.error.message && (<><dt>message</dt><dd>{span.error.message}</dd></>)}
+          </dl>
+        </section>
+      )}
+
+      <CollapsibleBlock title={`Input ${typeof span.input === "object" && Object.keys(span.input).length === 0 ? "(empty)" : ""}`}>
+        <pre className="inspector-json">{_prettyJson(span.input)}</pre>
+      </CollapsibleBlock>
+
+      <CollapsibleBlock title={`Output ${typeof span.output === "object" && Object.keys(span.output).length === 0 ? "(empty)" : ""}`}>
+        <pre className="inspector-json">{_prettyJson(span.output)}</pre>
+      </CollapsibleBlock>
+
+      <CollapsibleBlock title={`Attributes (${Object.keys(span.attributes || {}).length})`}>
+        <dl className="inspector-kv">
+          {Object.keys(span.attributes || {}).sort().map(k => (
+            <React.Fragment key={k}>
+              <dt className="mono">{k}</dt>
+              <dd className="mono">{typeof span.attributes[k] === "object" ? _prettyJson(span.attributes[k]) : String(span.attributes[k])}</dd>
+            </React.Fragment>
+          ))}
+        </dl>
+      </CollapsibleBlock>
+
+      {violations.length > 0 && (
+        <section className="inspector-section inspector-violations">
+          <h4>Contract violations ({violations.length})</h4>
+          <ul className="inspector-violation-list">
+            {violations.map((v, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  className="inspector-violation-link"
+                  onClick={() => onJumpToScreen && onJumpToScreen("violations")}
+                  aria-label={`View violation ${v.violation_id} on Violations screen`}
+                >
+                  <span className="violation-contract">{v.contract_id}</span>
+                  <span className="violation-severity">{v.severity}</span>
+                  <span className="violation-rule">{v.rule}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {patches.length > 0 && (
+        <section className="inspector-section inspector-repair">
+          <h4>Repair ({patches.length})</h4>
+          <ul className="inspector-repair-list">
+            {patches.map(p => (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className="inspector-repair-link"
+                  onClick={() => onJumpToScreen && onJumpToScreen("repair")}
+                  aria-label={`Open patch ${p.id} on Repair screen`}
+                >
+                  <span className="patch-id">{p.id}</span>
+                  <span className="patch-primitive">{p.primitive}</span>
+                  <span className="patch-title">{p.title}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {regression && (
+        <section className="inspector-section inspector-regression">
+          <h4>Regression</h4>
+          <dl className="inspector-kv">
+            <dt>name</dt><dd>{regression.name}</dd>
+            <dt>status</dt>
+            <dd>
+              <span className={`pill ${regression.status === "passed" ? "ok" : "fail"}`}>{regression.status}</span>
+            </dd>
+            {regression.sandbox_id && (<><dt>sandbox</dt><dd className="mono">{regression.sandbox_id}</dd></>)}
+            {regression.duration_ms && (<><dt>duration</dt><dd className="mono">{regression.duration_ms}ms</dd></>)}
+          </dl>
+          {onJumpToScreen && (
+            <button
+              type="button"
+              className="btn-link"
+              onClick={() => onJumpToScreen("regression")}
+            >
+              Open on Regression screen →
+            </button>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- FORENSIC: timeline waterfall ---------------- */
+function _formatTimeAxis(seconds) {
+  const total = Math.max(0, Math.floor(seconds * 1000));
+  const m = Math.floor(total / 60000);
+  const s = Math.floor((total % 60000) / 1000);
+  const ms = total % 1000;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}.${ms.toString().padStart(3, "0")}`;
+}
+
+function _waterfallBounds(spans) {
+  if (!spans || spans.length === 0) return { t0: 0, total: 1 };
+  const t0 = Math.min(...spans.map(s => s.start_time));
+  const tEnd = Math.max(...spans.map(s => s.end_time));
+  const total = Math.max(tEnd - t0, 0.001); // avoid /0
+  return { t0, total };
+}
+
+function TimelineWaterfall({ spans, selectedSpanId, setSelectedSpanId }) {
+  const ordered = useMemo(
+    () => [...(spans || [])].sort((a, b) => a.start_time - b.start_time),
+    [spans],
+  );
+  const { t0, total } = useMemo(() => _waterfallBounds(ordered), [ordered]);
+
+  const tickCount = 5;
+  const ticks = Array.from({ length: tickCount + 1 }, (_, i) => {
+    const fraction = i / tickCount;
+    return { fraction, label: _formatTimeAxis(t0 + fraction * total) };
+  });
+
+  if (ordered.length === 0) {
+    return <div className="forensic-pane-placeholder">No spans to plot</div>;
+  }
+
+  return (
+    <div className="waterfall" role="figure" aria-label="Span timing plot">
+      <div className="waterfall-axis" aria-hidden="true">
+        {ticks.map((t, i) => (
+          <span key={i} className="waterfall-tick" style={{ left: `${t.fraction * 100}%` }}>
+            {t.label}
+          </span>
+        ))}
+      </div>
+      <div className="waterfall-rows" role="list">
+        {ordered.map((span) => {
+          const offset = ((span.start_time - t0) / total) * 100;
+          const width = Math.max(((span.end_time - span.start_time) / total) * 100, 0.3);
+          const isSelected = span.span_id === selectedSpanId;
+          const isError = span.status === "error";
+          const violations = (span.contract_refs || []).length;
+          return (
+            <button
+              type="button"
+              key={span.span_id}
+              role="listitem"
+              data-span-id={span.span_id}
+              className={`waterfall-row ${isSelected ? "selected" : ""} ${isError ? "err" : ""}`}
+              onClick={() => setSelectedSpanId(span.span_id)}
+              aria-label={
+                `${span.name} ${span.agent || ""} ${(span.duration_ms / 1000).toFixed(2)}s `
+                + `${isError ? "(error)" : ""} ${violations > 0 ? `${violations} violations` : ""}`
+              }
+              aria-pressed={isSelected}
+              title={`${span.name}\n${(span.duration_ms / 1000).toFixed(2)}s · ${span.status}`}
+            >
+              <span className="waterfall-row-label">
+                <span className={`waterfall-row-icon kind-${span.kind}`} aria-hidden="true">
+                  {FORENSIC_KIND_ICONS[span.kind] || "·"}
+                </span>
+                <span className="waterfall-row-name">{span.name.replace(/^concord\./, "")}</span>
+              </span>
+              <span className="waterfall-bar-track" aria-hidden="true">
+                <span
+                  className={`waterfall-bar kind-${span.kind} ${isError ? "err" : ""}`}
+                  style={{ left: `${offset}%`, width: `${width}%` }}
+                />
+              </span>
+              <span className="waterfall-row-duration">{(span.duration_ms / 1000).toFixed(2)}s</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- FORENSIC ---------------- */
+function Forensic({ selectedSpanId, setSelectedSpanId, onJumpToScreen }) {
+  const spans = D.spans || [];
+  const hasSpans = spans.length > 0;
+
+  return (
+    <>
+      <div className="section-head">
+        <h2>Forensic Trace &nbsp;//&nbsp; span tree · timeline · inspector</h2>
+        <div className="right">
+          {hasSpans
+            ? `${spans.length} span${spans.length === 1 ? "" : "s"}`
+            : "no span data"}
+        </div>
+      </div>
+
+      {!hasSpans && (
+        <div className="forensic-empty" role="status">
+          <h3>No span data yet</h3>
+          <p>
+            Spans appear when a run is executed via the Submit Run screen against an
+            AG2 swarm. Submit a <code>task_spec</code> in stub or live mode to populate
+            this view.
+          </p>
+        </div>
+      )}
+
+      {hasSpans && (
+        <div className="forensic-grid" role="region" aria-label="Forensic span explorer">
+          <aside className="forensic-pane forensic-tree" aria-label="Span tree">
+            <div className="forensic-pane-head">Span tree</div>
+            <div className="forensic-pane-body forensic-pane-body-tree">
+              <SpanTree
+                spans={spans}
+                selectedSpanId={selectedSpanId}
+                setSelectedSpanId={setSelectedSpanId}
+              />
+            </div>
+          </aside>
+
+          <section className="forensic-pane forensic-waterfall" aria-label="Timeline waterfall pane">
+            <div className="forensic-pane-head">Timeline waterfall</div>
+            <div className="forensic-pane-body forensic-pane-body-waterfall">
+              <TimelineWaterfall
+                spans={spans}
+                selectedSpanId={selectedSpanId}
+                setSelectedSpanId={setSelectedSpanId}
+              />
+            </div>
+          </section>
+
+          <aside className="forensic-pane forensic-inspector" aria-label="Span inspector pane">
+            <div className="forensic-pane-head">Span inspector</div>
+            <div className="forensic-pane-body forensic-pane-body-inspector">
+              <SpanInspector
+                span={selectedSpanId ? spans.find(s => s.span_id === selectedSpanId) : null}
+                allPatches={D.patches || []}
+                regressionRoot={D.test || null}
+                onJumpToScreen={onJumpToScreen}
+              />
+            </div>
+          </aside>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ---------------- WORKFLOWS ---------------- */
+function WorkflowsScreen({ setScreen, onPickWorkflow }) {
+  const [workflows, setWorkflows] = useState([]);
+  const [state, setState] = useState("loading"); // loading|loaded|error
+  const [error, setError] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [detailState, setDetailState] = useState("idle");
+  const [detailError, setDetailError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/workflows");
+        if (!res.ok) throw new Error(`workflows fetch ${res.status}`);
+        const body = await res.json();
+        const list = Array.isArray(body) ? body : (body.workflows || []);
+        if (!cancelled) {
+          setWorkflows(list);
+          setState("loaded");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(String(err.message || err));
+          setState("error");
+        }
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function loadDetail(workflowId) {
+    setSelectedId(workflowId);
+    setDetail(null);
+    setDetailState("loading");
+    setDetailError("");
+    try {
+      const res = await fetch(`/api/workflows/${encodeURIComponent(workflowId)}`);
+      if (res.status === 404) {
+        setDetailError(`Workflow ${workflowId} doesn't exist or was deleted.`);
+        setDetailState("error");
+        return;
+      }
+      if (!res.ok) {
+        setDetailError(`Server error ${res.status} loading workflow detail.`);
+        setDetailState("error");
+        return;
+      }
+      const body = await res.json();
+      setDetail(body);
+      setDetailState("loaded");
+    } catch (err) {
+      setDetailError(`Network error: ${err.message || err}`);
+      setDetailState("error");
+    }
+  }
+
+  function _id(wf) { return wf.workflow_id || wf.id; }
+  function _name(wf) { return wf.name || _id(wf); }
+  function _agentCount(wf) { return (wf.agents || []).length; }
+  function _contractCount(wf) { return (wf.contracts || []).length; }
+
+  return (
+    <>
+      <div className="section-head">
+        <h2>Workflows &nbsp;//&nbsp; registered topology</h2>
+        <div className="right">
+          {state === "loaded" ? `${workflows.length} workflow${workflows.length === 1 ? "" : "s"}` : ""}
+        </div>
+      </div>
+
+      {state === "loading" && (
+        <div className="workflows-loading" role="status" aria-live="polite">Loading workflows…</div>
+      )}
+
+      {state === "error" && (
+        <div className="workflows-error" role="alert">
+          Could not load workflows: {error}
+        </div>
+      )}
+
+      {state === "loaded" && workflows.length === 0 && (
+        <div className="workflows-empty">
+          <h3>No workflows registered yet</h3>
+          <p>
+            Register a workflow via <code>POST /api/workflows</code> first, then submit a
+            run against it from the <button className="btn-link" onClick={() => setScreen("submit")}>Submit Run</button> screen.
+          </p>
+        </div>
+      )}
+
+      {state === "loaded" && workflows.length > 0 && (
+        <div className="workflows-grid">
+          <div className="workflows-list" role="list" aria-label="Registered workflows">
+            {workflows.map(wf => (
+              <button
+                key={_id(wf)}
+                role="listitem"
+                className={`workflow-row ${selectedId === _id(wf) ? "selected" : ""}`}
+                onClick={() => loadDetail(_id(wf))}
+              >
+                <div className="workflow-row-name">{_name(wf)}</div>
+                <div className="workflow-row-id">{_id(wf)}</div>
+                <div className="workflow-row-meta">
+                  {_agentCount(wf)} agent{_agentCount(wf) === 1 ? "" : "s"}
+                  &nbsp;·&nbsp; {_contractCount(wf)} contract{_contractCount(wf) === 1 ? "" : "s"}
+                </div>
+                {wf.owner && <div className="workflow-row-owner">{wf.owner}</div>}
+              </button>
+            ))}
+          </div>
+
+          <div className="workflow-detail" aria-live="polite">
+            {!selectedId && (
+              <div className="workflow-detail-empty">Pick a workflow on the left.</div>
+            )}
+            {selectedId && detailState === "loading" && (
+              <div role="status">Loading workflow detail…</div>
+            )}
+            {selectedId && detailState === "error" && (
+              <div role="alert" className="workflows-error">{detailError}</div>
+            )}
+            {selectedId && detailState === "loaded" && detail && (
+              <>
+                <div className="workflow-detail-head">
+                  <h3>{detail.name || detail.workflow_id}</h3>
+                  <span className="muted">{detail.workflow_id}</span>
+                </div>
+
+                <section className="workflow-section">
+                  <h4>Topology</h4>
+                  <pre className="topology-preview">{JSON.stringify(detail.declared_topology || {}, null, 2)}</pre>
+                </section>
+
+                <section className="workflow-section">
+                  <h4>Agents ({(detail.agents || []).length})</h4>
+                  <ul className="workflow-agent-list">
+                    {(detail.agents || []).map((a, i) => (
+                      <li key={a.name || i}>{a.name || JSON.stringify(a)}</li>
+                    ))}
+                  </ul>
+                </section>
+
+                <section className="workflow-section">
+                  <h4>Contracts ({(detail.contracts || []).length})</h4>
+                  <ul className="workflow-contract-list">
+                    {(detail.contracts || []).map((c, i) => (
+                      <li key={c.id || i}>
+                        <span className="contract-id">{c.id || `C-${i + 1}`}</span>
+                        <span className="contract-type">{c.type || "—"}</span>
+                        <span className="contract-rule">{c.rule || ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+
+                <div className="btn-row">
+                  <button
+                    className="btn"
+                    onClick={() => {
+                      if (onPickWorkflow) onPickWorkflow(detail);
+                      setScreen("submit");
+                    }}
+                  >
+                    SUBMIT RUN AGAINST THIS WORKFLOW
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ---------------- SUBMIT RUN ---------------- */
+function SubmitRun({ setScreen, onRunSubmitted }) {
+  const [workflows, setWorkflows] = useState([]);
+  const [workflowsState, setWorkflowsState] = useState("loading"); // loading|loaded|error
+  const [workflowsError, setWorkflowsError] = useState("");
+  const [workflowId, setWorkflowId] = useState("");
+  const [task, setTask] = useState("");
+  const [researchQuestion, setResearchQuestion] = useState("");
+  const [mode, setMode] = useState("stub");
+  const [submitState, setSubmitState] = useState("idle"); // idle|submitting|error
+  const [submitError, setSubmitError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/workflows");
+        if (!res.ok) throw new Error(`workflows fetch ${res.status}`);
+        const body = await res.json();
+        const list = Array.isArray(body) ? body : (body.workflows || []);
+        if (!cancelled) {
+          setWorkflows(list);
+          setWorkflowId(list[0]?.workflow_id || list[0]?.id || "");
+          setWorkflowsState("loaded");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setWorkflowsError(String(err.message || err));
+          setWorkflowsState("error");
+        }
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const validate = () => {
+    const errs = {};
+    if (!workflowId) errs.workflow = "Pick a workflow";
+    if (!task.trim()) errs.task = "Task is required";
+    else if (task.length > TASK_MAX) errs.task = `Task must be ≤ ${TASK_MAX} chars`;
+    if (!researchQuestion.trim()) errs.research_question = "Research question is required";
+    else if (researchQuestion.length > RESEARCH_QUESTION_MAX) errs.research_question = `Question must be ≤ ${RESEARCH_QUESTION_MAX} chars`;
+    return errs;
+  };
+
+  const errors = validate();
+  const canSubmit = Object.keys(errors).length === 0 && submitState !== "submitting";
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const errs = validate();
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    setSubmitState("submitting");
+    setSubmitError("");
+    try {
+      const res = await fetch("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workflow_id: workflowId,
+          task_spec: { task: task.trim(), research_question: researchQuestion.trim(), mode },
+        }),
+      });
+      if (res.status === 422 || res.status === 400) {
+        const body = await res.json().catch(() => ({}));
+        setSubmitError(`Validation error: ${body.detail || res.statusText}`);
+        setSubmitState("error");
+        return;
+      }
+      if (res.status === 404) {
+        setSubmitError(`Workflow ${workflowId} not found. Refresh the workflow list.`);
+        setSubmitState("error");
+        return;
+      }
+      if (!res.ok) {
+        setSubmitError(`Server error ${res.status}. Try again or check the API.`);
+        setSubmitState("error");
+        return;
+      }
+      const body = await res.json();
+      const runId = body.run_id;
+      setSubmitState("idle");
+      if (onRunSubmitted) onRunSubmitted(runId);
+      if (setScreen) setScreen("trace");
+    } catch (err) {
+      setSubmitError(`Network error: ${err.message || err}`);
+      setSubmitState("error");
+    }
+  }
+
+  return (
+    <>
+      <div className="section-head">
+        <h2>Submit Run &nbsp;//&nbsp; new task_spec</h2>
+        <div className="right">stub mode runs locally · live mode hits the AG2 swarm</div>
+      </div>
+
+      <form className="submit-run-form" onSubmit={handleSubmit} aria-label="Submit run form">
+        <div className="form-row">
+          <label htmlFor="workflow-picker" className="form-label">Workflow</label>
+          {workflowsState === "loading" && <div className="form-loading" role="status">Loading workflows…</div>}
+          {workflowsState === "error" && (
+            <div className="form-error" role="alert">
+              Could not load workflows: {workflowsError}
+            </div>
+          )}
+          {workflowsState === "loaded" && workflows.length === 0 && (
+            <div className="form-empty">No workflows registered yet. Register one first.</div>
+          )}
+          {workflowsState === "loaded" && workflows.length > 0 && (
+            <select
+              id="workflow-picker"
+              className="form-select"
+              value={workflowId}
+              onChange={(e) => setWorkflowId(e.target.value)}
+              aria-required="true"
+              aria-invalid={Boolean(fieldErrors.workflow)}
+            >
+              {workflows.map(wf => (
+                <option key={wf.workflow_id || wf.id} value={wf.workflow_id || wf.id}>
+                  {wf.name || wf.workflow_id || wf.id}
+                </option>
+              ))}
+            </select>
+          )}
+          {fieldErrors.workflow && <div className="form-field-error">{fieldErrors.workflow}</div>}
+        </div>
+
+        <div className="form-row">
+          <label htmlFor="task-input" className="form-label">Task</label>
+          <textarea
+            id="task-input"
+            className="form-textarea"
+            value={task}
+            onChange={(e) => setTask(e.target.value)}
+            maxLength={TASK_MAX}
+            rows={3}
+            aria-required="true"
+            aria-invalid={Boolean(fieldErrors.task)}
+            aria-describedby="task-counter task-error"
+            placeholder="What is the agent supposed to do?"
+          />
+          <div id="task-counter" className="form-counter">{task.length} / {TASK_MAX}</div>
+          {fieldErrors.task && <div id="task-error" className="form-field-error">{fieldErrors.task}</div>}
+        </div>
+
+        <div className="form-row">
+          <label htmlFor="research-question-input" className="form-label">Research Question</label>
+          <textarea
+            id="research-question-input"
+            className="form-textarea"
+            value={researchQuestion}
+            onChange={(e) => setResearchQuestion(e.target.value)}
+            maxLength={RESEARCH_QUESTION_MAX}
+            rows={2}
+            aria-required="true"
+            aria-invalid={Boolean(fieldErrors.research_question)}
+            aria-describedby="rq-counter rq-error"
+            placeholder="What concrete question should the swarm answer?"
+          />
+          <div id="rq-counter" className="form-counter">{researchQuestion.length} / {RESEARCH_QUESTION_MAX}</div>
+          {fieldErrors.research_question && <div id="rq-error" className="form-field-error">{fieldErrors.research_question}</div>}
+        </div>
+
+        <fieldset className="form-row form-mode" aria-required="true">
+          <legend className="form-label">Mode</legend>
+          <label className="form-radio">
+            <input
+              type="radio"
+              name="mode"
+              value="stub"
+              checked={mode === "stub"}
+              onChange={(e) => setMode(e.target.value)}
+            />
+            <span><strong>stub</strong> — deterministic, no LLM</span>
+          </label>
+          <label className="form-radio">
+            <input
+              type="radio"
+              name="mode"
+              value="live"
+              checked={mode === "live"}
+              onChange={(e) => setMode(e.target.value)}
+            />
+            <span><strong>live</strong> — real AG2 swarm + Tavily + LLM</span>
+          </label>
+        </fieldset>
+
+        {submitError && (
+          <div className="form-error" role="alert" aria-live="polite">
+            {submitError}
+          </div>
+        )}
+
+        <div className="form-actions">
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={!canSubmit}
+            aria-busy={submitState === "submitting"}
+          >
+            {submitState === "submitting" ? "Submitting…" : "Submit run"}
+          </button>
+        </div>
+      </form>
+    </>
+  );
+}
+
 /* ---------------- APP ---------------- */
 function App() {
   const [screen, setScreen] = useState("overview");
   const [selectedPatch, setSelectedPatch] = useState(null);
+  const [currentRunId, setCurrentRunId] = useState(null);
+  const [streamToken, setStreamToken] = useState(null);
+  const [streamTokenError, setStreamTokenError] = useState(null);
+  const [selectedSpanId, setSelectedSpanId] = useState(null);
 
   // when leaving repair screen, clear filter
   useEffect(() => { if (screen !== "repair") setSelectedPatch(null); }, [screen]);
 
+  // Fetch a stream token whenever a fresh run is submitted so the SSE
+  // consumer can authenticate without leaking the API key into a URL.
+  useEffect(() => {
+    if (!currentRunId) {
+      setStreamToken(null);
+      return undefined;
+    }
+    let cancelled = false;
+    fetchStreamToken(currentRunId)
+      .then((token) => {
+        if (!cancelled) {
+          setStreamToken(token);
+          setStreamTokenError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setStreamTokenError(err);
+          setStreamToken(null);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [currentRunId]);
+
+  const handleRunSubmitted = (runId) => {
+    setCurrentRunId(runId);
+  };
+
+  const goToForensicSpan = (spanId) => {
+    setSelectedSpanId(spanId);
+    setScreen("forensic");
+  };
+
+  // Hash routing — read on mount and when hash changes; write when screen/span changes
+  useEffect(() => {
+    const applyHash = () => {
+      const hash = window.location.hash.slice(1);
+      if (!hash) return;
+      const params = new URLSearchParams(hash);
+      const s = params.get("screen");
+      const span = params.get("span");
+      if (s && SCREENS.find(x => x.id === s)) setScreen(s);
+      if (span) setSelectedSpanId(span);
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (screen) params.set("screen", screen);
+    if (selectedSpanId) params.set("span", selectedSpanId);
+    const newHash = params.toString();
+    if (window.location.hash.slice(1) !== newHash) {
+      // replaceState to avoid polluting history on every nav click
+      history.replaceState(null, "", `#${newHash}`);
+    }
+  }, [screen, selectedSpanId]);
+
   return (
     <div className="shell" data-screen-label={SCREENS.find(s=>s.id===screen).num + " " + SCREENS.find(s=>s.id===screen).label}>
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <TopBar screen={screen} setScreen={setScreen} />
       <MetaStrip />
-      <main className="main">
+      {currentRunId && (
+        <RunProgress runId={currentRunId} streamToken={streamToken} />
+      )}
+      {streamTokenError && (
+        <div className="run-progress run-progress-err" role="alert">
+          stream token failed: {streamTokenError.message}
+        </div>
+      )}
+      <main className="main" id="main-content" tabIndex={-1} aria-label={`${SCREENS.find(s=>s.id===screen).label} screen`}>
+        <h1 className="visually-hidden">
+          {SCREENS.find(s=>s.id===screen).label} — Concord Lite
+        </h1>
         {screen === "overview"   && <Overview setScreen={setScreen} />}
         {screen === "trace"      && <Trace />}
-        {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
-        {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} />}
-        {screen === "regression" && <Regression />}
-        {screen === "report"     && <Report setScreen={setScreen} />}
+        {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} goToForensicSpan={goToForensicSpan} />}
+        {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} goToForensicSpan={goToForensicSpan} />}
+        {screen === "regression" && <Regression goToForensicSpan={goToForensicSpan} />}
+        {screen === "report"     && <Report setScreen={setScreen} runId={currentRunId} />}
+        {screen === "submit"     && <SubmitRun setScreen={setScreen} onRunSubmitted={handleRunSubmitted} />}
+        {screen === "workflows"  && <WorkflowsScreen setScreen={setScreen} />}
+        {screen === "forensic"   && <Forensic selectedSpanId={selectedSpanId} setSelectedSpanId={setSelectedSpanId} onJumpToScreen={setScreen} />}
       </main>
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+const _rootEl = typeof document !== "undefined" ? document.getElementById("root") : null;
+if (_rootEl) {
+  ReactDOM.createRoot(_rootEl).render(<App />);
+}
+
+export {
+  App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun,
+  WorkflowsScreen, Forensic, SpanTree, TimelineWaterfall, SpanInspector,
+  ViewSpanLink,
+  LoadingState, EmptyState, ErrorState,
+  RunProgress, useRunEventStream, fetchStreamToken,
+  ApprovalPanel,
+  TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS, FORENSIC_KIND_ICONS,
+  SCREENS,
+};

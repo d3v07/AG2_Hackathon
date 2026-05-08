@@ -1,0 +1,39 @@
+name: Live E2E Smoke
+on:
+  workflow_dispatch:
+    inputs:
+      concord_api_base:
+        description: "Backend URL"
+        required: true
+        default: "http://localhost:8000"
+
+concurrency:
+  group: live-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CONCORD_API_BASE: ${{ github.event.inputs.concord_api_base }}
+      CONCORD_API_KEY: ${{ secrets.CONCORD_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e .
+      - run: pip install pytest httpx
+      - run: pytest tests/e2e/live_smoke.py -m live_smoke -v --tb=short
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-smoke-output
+          path: |
+            .pytest_cache/
+            *.log
