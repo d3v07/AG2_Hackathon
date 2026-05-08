@@ -288,3 +288,88 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border-2); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+/* ---------- Submit Run form (Sprint 16 #77) ---------- */
+.submit-run-form {
+  max-width: 720px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  padding: 22px;
+  display: grid;
+  gap: 18px;
+}
+.submit-run-form .form-row { display: grid; gap: 6px; }
+.submit-run-form .form-label {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  font-weight: 600;
+}
+.submit-run-form .form-select,
+.submit-run-form .form-textarea {
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  padding: 10px 12px;
+  border-radius: 0;
+}
+.submit-run-form .form-select:focus,
+.submit-run-form .form-textarea:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+  border-color: var(--gold);
+}
+.submit-run-form .form-textarea { resize: vertical; min-height: 60px; font-family: var(--mono); }
+.submit-run-form .form-counter {
+  font-size: 10.5px;
+  color: var(--text-3);
+  letter-spacing: 0.1em;
+  text-align: right;
+}
+.submit-run-form .form-field-error,
+.submit-run-form .form-error {
+  color: var(--brick);
+  font-size: 12px;
+  border-left: 3px solid var(--brick);
+  padding: 6px 10px;
+  background: #fbe9e6;
+}
+.submit-run-form .form-loading,
+.submit-run-form .form-empty {
+  color: var(--text-3);
+  font-size: 12px;
+  padding: 6px 0;
+}
+.submit-run-form .form-mode {
+  border: 1px dashed var(--border);
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+.submit-run-form .form-mode legend { padding: 0 6px; }
+.submit-run-form .form-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.submit-run-form .form-actions { display: flex; justify-content: flex-end; }
+.submit-run-form .btn-primary {
+  background: var(--gold);
+  border: 1.5px solid var(--gold);
+  color: #1F1F33;
+  padding: 10px 22px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+.submit-run-form .btn-primary:disabled {
+  background: var(--border);
+  border-color: var(--border-2);
+  color: var(--text-3);
+  cursor: not-allowed;
+}
+.submit-run-form .btn-primary:hover:not(:disabled) { filter: brightness(1.05); }
