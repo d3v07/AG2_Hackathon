@@ -23,7 +23,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from autogen import ConversableAgent
 from autogen.agentchat.group import (
@@ -342,6 +342,137 @@ def _chat_history_to_trace_events(
 SWARM_TRACE_PATH = "zone_b/fixtures/swarm_trace.json"
 
 
+def _synthesize_stub_run(
+    task: str,
+    research_question: str,
+) -> tuple[list[TraceEvent], ContextVariables]:
+    """Build a deterministic 6-event trace without any LLM or Tavily call.
+
+    Produces a clean trace that passes all Zone B contract checks:
+    - C-EVD: verified_sources_count >= 1
+    - C-TOL: VerifierAgent has tool_call_id
+    - C-APR: approval_status == "approved"
+    - C-RTE: VerifierAgent event carries tool_events with status="success"
+    - C-SCH: final_output has all 5 required keys
+    """
+    now = time.time()
+    stub_tool_call_id = "tc_v01"
+    stub_final_output = {
+        "summary": f"Stub summary for: {task}",
+        "claims": ["Stub claim from verified sources."],
+        "citations": ["https://stub.example.com/source-1"],
+        "risks": ["No real risks — this is a stub trace."],
+        "next_steps": ["Replace stub with a live swarm run for production results."],
+    }
+
+    verifier_tool_event = ToolEvent(
+        tool_name="tavily_search",
+        input=research_question,
+        output="stub verified result",
+        status="success",
+        evidence_id="ev_stub_01",
+        timestamp=now,
+    )
+
+    events: list[TraceEvent] = [
+        TraceEvent(
+            step=1,
+            agent="ResearcherAgent",
+            type="agent_turn",
+            content=f"[stub] Retrieved 1 source for: {research_question}",
+            tool_call_id="tc_r01",
+            context_delta={
+                "retrieved_sources": [{"title": "Stub Source", "url": "https://stub.example.com/source-1", "snippet": "Stub snippet."}],
+                "tool_events": [
+                    ToolEvent(
+                        tool_name="tavily_search",
+                        input=research_question,
+                        output="stub search result",
+                        status="success",
+                        evidence_id="ev_stub_00",
+                        timestamp=now,
+                    )
+                ],
+            },
+            handoff_to="CriticAgent",
+            timestamp=now,
+        ),
+        TraceEvent(
+            step=2,
+            agent="CriticAgent",
+            type="agent_turn",
+            content="[stub] Sources look credible — no major risks identified.",
+            tool_call_id=None,
+            context_delta={},
+            handoff_to="VerifierAgent",
+            timestamp=now,
+        ),
+        TraceEvent(
+            step=3,
+            agent="VerifierAgent",
+            type="agent_turn",
+            content=f"[stub] Verified 1 source. tool_call_id: {stub_tool_call_id}",
+            tool_call_id=stub_tool_call_id,
+            context_delta={
+                "verified_sources_count": 1,
+                "tool_events": [verifier_tool_event],
+            },
+            handoff_to="ReporterAgent",
+            timestamp=now,
+        ),
+        TraceEvent(
+            step=4,
+            agent="ReporterAgent",
+            type="agent_turn",
+            content="[stub] Final memo produced.",
+            tool_call_id=None,
+            context_delta={"final_output": stub_final_output},
+            handoff_to="HumanGateAgent",
+            timestamp=now,
+        ),
+        TraceEvent(
+            step=5,
+            agent="HumanGateAgent",
+            type="agent_turn",
+            content="[stub] Report approved.",
+            tool_call_id=None,
+            context_delta={"approval_status": "approved"},
+            handoff_to="ActionAgent",
+            timestamp=now,
+        ),
+        TraceEvent(
+            step=6,
+            agent="ActionAgent",
+            type="agent_turn",
+            content="[stub] Action recorded — report saved.",
+            tool_call_id=None,
+            context_delta={},
+            handoff_to=None,
+            timestamp=now,
+        ),
+    ]
+
+    ctx = ContextVariables(
+        data={
+            "retrieved_sources": [{"title": "Stub Source", "url": "https://stub.example.com/source-1", "snippet": "Stub snippet."}],
+            "researcher_tool_call_id": "tc_r01",
+            "researcher_summary": f"Stub summary for: {task}",
+            "critique_notes": ["Stub critique note."],
+            "risk_flags": [],
+            "verified_sources_count": 1,
+            "verifier_tool_call_id": stub_tool_call_id,
+            "verifier_narrative": "Stub verification passed.",
+            "sources_verified": True,
+            "final_output": stub_final_output,
+            "approval_granted": True,
+            "approval_status": "approved",
+            "approval_comments": "Stub approval granted.",
+            "action_taken": "Report saved to disk (stub).",
+        }
+    )
+    return events, ctx
+
+
 async def run_swarm(
     task: str | None = None,
     research_question: str | None = None,
@@ -349,8 +480,13 @@ async def run_swarm(
     interactive: bool = False,
     fixture_path: str | Path | None = "zone_a/fixtures/task.json",
     output_path: str | Path = SWARM_TRACE_PATH,
+    mode: Literal["live", "stub"] = "live",
 ) -> dict[str, Any]:
     """Run the Zone A swarm and emit a trace JSON for Zone B to consume.
+
+    ``mode="stub"`` skips ``a_initiate_group_chat`` and Tavily entirely,
+    synthesising a deterministic 6-event clean trace for offline testing.
+    ``mode="live"`` (default) preserves all existing behaviour.
 
     The swarm produces a *partial* trace when it terminates early on a
     contract violation. Output defaults to ``zone_b/fixtures/swarm_trace.json``
@@ -369,23 +505,28 @@ async def run_swarm(
         research_question = research_question or fixture["research_question"]
         run_id = fixture.get("run_id", run_id)
 
-    agents, ctx = build_swarm(interactive=interactive)
-    initial_message = _build_initial_message(task, research_question)
+    if mode == "stub":
+        events, final_ctx = _synthesize_stub_run(task, research_question)
+        last_agent_name: str | None = "ActionAgent"
+    else:
+        agents, ctx = build_swarm(interactive=interactive)
+        initial_message = _build_initial_message(task, research_question)
 
-    pattern = RoundRobinPattern(
-        initial_agent=agents[0],
-        agents=agents,
-        context_variables=ctx,
-        group_after_work=TerminateTarget(),
-    )
+        pattern = RoundRobinPattern(
+            initial_agent=agents[0],
+            agents=agents,
+            context_variables=ctx,
+            group_after_work=TerminateTarget(),
+        )
 
-    chat_result, final_ctx, last_agent = await a_initiate_group_chat(
-        pattern=pattern,
-        messages=initial_message,
-        max_rounds=18,
-    )
+        chat_result, final_ctx, last_agent = await a_initiate_group_chat(
+            pattern=pattern,
+            messages=initial_message,
+            max_rounds=18,
+        )
 
-    events = _chat_history_to_trace_events(chat_result.chat_history, final_ctx)
+        events = _chat_history_to_trace_events(chat_result.chat_history, final_ctx)
+        last_agent_name = last_agent.name if last_agent else None
 
     snapshot = ContextSnapshot(
         retrieved_sources=final_ctx.get("retrieved_sources") or [],
@@ -397,7 +538,7 @@ async def run_swarm(
             if isinstance(te, ToolEvent)
         ],
         approval_status=final_ctx.get("approval_status") or "pending",
-        failed_agent=last_agent.name if last_agent else None,
+        failed_agent=last_agent_name,
         failed_step=len(events),
         final_output=final_ctx.get("final_output"),
     )
@@ -408,7 +549,7 @@ async def run_swarm(
     return {
         "events": events,
         "context": final_ctx,
-        "last_agent": last_agent.name if last_agent else None,
+        "last_agent": last_agent_name,
         "terminated_early": terminated_early,
         "trace_path": str(written),
     }
