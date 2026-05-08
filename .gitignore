@@ -8,4 +8,6 @@ data/
 *.db
 *.sqlite
 *.sqlite3
+node_modules/
+.vitest/
 concord_lite.egg-info/
