@@ -9,7 +9,11 @@ const SCREENS = [
   { id: "repair",     num: "04", label: "Repair Patch" },
   { id: "regression", num: "05", label: "Regression" },
   { id: "report",     num: "06", label: "Final Report" },
+  { id: "submit",     num: "07", label: "Submit Run" },
 ];
+
+const TASK_MAX = 1000;
+const RESEARCH_QUESTION_MAX = 500;
 
 function Sq({ kind }) { return <span className={`sq ${kind}`}></span>; }
 function Pill({ kind, children }) {
@@ -526,6 +530,219 @@ function Report({ setScreen }) {
   );
 }
 
+/* ---------------- SUBMIT RUN ---------------- */
+function SubmitRun({ setScreen, onRunSubmitted }) {
+  const [workflows, setWorkflows] = useState([]);
+  const [workflowsState, setWorkflowsState] = useState("loading"); // loading|loaded|error
+  const [workflowsError, setWorkflowsError] = useState("");
+  const [workflowId, setWorkflowId] = useState("");
+  const [task, setTask] = useState("");
+  const [researchQuestion, setResearchQuestion] = useState("");
+  const [mode, setMode] = useState("stub");
+  const [submitState, setSubmitState] = useState("idle"); // idle|submitting|error
+  const [submitError, setSubmitError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/workflows");
+        if (!res.ok) throw new Error(`workflows fetch ${res.status}`);
+        const body = await res.json();
+        const list = Array.isArray(body) ? body : (body.workflows || []);
+        if (!cancelled) {
+          setWorkflows(list);
+          setWorkflowId(list[0]?.workflow_id || list[0]?.id || "");
+          setWorkflowsState("loaded");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setWorkflowsError(String(err.message || err));
+          setWorkflowsState("error");
+        }
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const validate = () => {
+    const errs = {};
+    if (!workflowId) errs.workflow = "Pick a workflow";
+    if (!task.trim()) errs.task = "Task is required";
+    else if (task.length > TASK_MAX) errs.task = `Task must be ≤ ${TASK_MAX} chars`;
+    if (!researchQuestion.trim()) errs.research_question = "Research question is required";
+    else if (researchQuestion.length > RESEARCH_QUESTION_MAX) errs.research_question = `Question must be ≤ ${RESEARCH_QUESTION_MAX} chars`;
+    return errs;
+  };
+
+  const errors = validate();
+  const canSubmit = Object.keys(errors).length === 0 && submitState !== "submitting";
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const errs = validate();
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    setSubmitState("submitting");
+    setSubmitError("");
+    try {
+      const res = await fetch("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workflow_id: workflowId,
+          task_spec: { task: task.trim(), research_question: researchQuestion.trim(), mode },
+        }),
+      });
+      if (res.status === 422 || res.status === 400) {
+        const body = await res.json().catch(() => ({}));
+        setSubmitError(`Validation error: ${body.detail || res.statusText}`);
+        setSubmitState("error");
+        return;
+      }
+      if (res.status === 404) {
+        setSubmitError(`Workflow ${workflowId} not found. Refresh the workflow list.`);
+        setSubmitState("error");
+        return;
+      }
+      if (!res.ok) {
+        setSubmitError(`Server error ${res.status}. Try again or check the API.`);
+        setSubmitState("error");
+        return;
+      }
+      const body = await res.json();
+      const runId = body.run_id;
+      setSubmitState("idle");
+      if (onRunSubmitted) onRunSubmitted(runId);
+      if (setScreen) setScreen("trace");
+    } catch (err) {
+      setSubmitError(`Network error: ${err.message || err}`);
+      setSubmitState("error");
+    }
+  }
+
+  return (
+    <>
+      <div className="section-head">
+        <h2>Submit Run &nbsp;//&nbsp; new task_spec</h2>
+        <div className="right">stub mode runs locally · live mode hits the AG2 swarm</div>
+      </div>
+
+      <form className="submit-run-form" onSubmit={handleSubmit} aria-label="Submit run form">
+        <div className="form-row">
+          <label htmlFor="workflow-picker" className="form-label">Workflow</label>
+          {workflowsState === "loading" && <div className="form-loading" role="status">Loading workflows…</div>}
+          {workflowsState === "error" && (
+            <div className="form-error" role="alert">
+              Could not load workflows: {workflowsError}
+            </div>
+          )}
+          {workflowsState === "loaded" && workflows.length === 0 && (
+            <div className="form-empty">No workflows registered yet. Register one first.</div>
+          )}
+          {workflowsState === "loaded" && workflows.length > 0 && (
+            <select
+              id="workflow-picker"
+              className="form-select"
+              value={workflowId}
+              onChange={(e) => setWorkflowId(e.target.value)}
+              aria-required="true"
+              aria-invalid={Boolean(fieldErrors.workflow)}
+            >
+              {workflows.map(wf => (
+                <option key={wf.workflow_id || wf.id} value={wf.workflow_id || wf.id}>
+                  {wf.name || wf.workflow_id || wf.id}
+                </option>
+              ))}
+            </select>
+          )}
+          {fieldErrors.workflow && <div className="form-field-error">{fieldErrors.workflow}</div>}
+        </div>
+
+        <div className="form-row">
+          <label htmlFor="task-input" className="form-label">Task</label>
+          <textarea
+            id="task-input"
+            className="form-textarea"
+            value={task}
+            onChange={(e) => setTask(e.target.value)}
+            maxLength={TASK_MAX}
+            rows={3}
+            aria-required="true"
+            aria-invalid={Boolean(fieldErrors.task)}
+            aria-describedby="task-counter task-error"
+            placeholder="What is the agent supposed to do?"
+          />
+          <div id="task-counter" className="form-counter">{task.length} / {TASK_MAX}</div>
+          {fieldErrors.task && <div id="task-error" className="form-field-error">{fieldErrors.task}</div>}
+        </div>
+
+        <div className="form-row">
+          <label htmlFor="research-question-input" className="form-label">Research Question</label>
+          <textarea
+            id="research-question-input"
+            className="form-textarea"
+            value={researchQuestion}
+            onChange={(e) => setResearchQuestion(e.target.value)}
+            maxLength={RESEARCH_QUESTION_MAX}
+            rows={2}
+            aria-required="true"
+            aria-invalid={Boolean(fieldErrors.research_question)}
+            aria-describedby="rq-counter rq-error"
+            placeholder="What concrete question should the swarm answer?"
+          />
+          <div id="rq-counter" className="form-counter">{researchQuestion.length} / {RESEARCH_QUESTION_MAX}</div>
+          {fieldErrors.research_question && <div id="rq-error" className="form-field-error">{fieldErrors.research_question}</div>}
+        </div>
+
+        <fieldset className="form-row form-mode" aria-required="true">
+          <legend className="form-label">Mode</legend>
+          <label className="form-radio">
+            <input
+              type="radio"
+              name="mode"
+              value="stub"
+              checked={mode === "stub"}
+              onChange={(e) => setMode(e.target.value)}
+            />
+            <span><strong>stub</strong> — deterministic, no LLM</span>
+          </label>
+          <label className="form-radio">
+            <input
+              type="radio"
+              name="mode"
+              value="live"
+              checked={mode === "live"}
+              onChange={(e) => setMode(e.target.value)}
+            />
+            <span><strong>live</strong> — real AG2 swarm + Tavily + LLM</span>
+          </label>
+        </fieldset>
+
+        {submitError && (
+          <div className="form-error" role="alert" aria-live="polite">
+            {submitError}
+          </div>
+        )}
+
+        <div className="form-actions">
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={!canSubmit}
+            aria-busy={submitState === "submitting"}
+          >
+            {submitState === "submitting" ? "Submitting…" : "Submit run"}
+          </button>
+        </div>
+      </form>
+    </>
+  );
+}
+
 /* ---------------- APP ---------------- */
 function App() {
   const [screen, setScreen] = useState("overview");
@@ -545,9 +762,15 @@ function App() {
         {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} />}
         {screen === "regression" && <Regression />}
         {screen === "report"     && <Report setScreen={setScreen} />}
+        {screen === "submit"     && <SubmitRun setScreen={setScreen} />}
       </main>
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+const _rootEl = typeof document !== "undefined" ? document.getElementById("root") : null;
+if (_rootEl) {
+  ReactDOM.createRoot(_rootEl).render(<App />);
+}
+
+export { App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun, SCREENS };
