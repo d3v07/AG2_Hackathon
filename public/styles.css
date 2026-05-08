@@ -613,3 +613,67 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .contract-id { font-family: var(--mono); color: var(--text); font-weight: 600; }
 .contract-type { color: var(--orange); letter-spacing: 0.12em; text-transform: uppercase; font-size: 10.5px; }
 .contract-rule { color: var(--text-2); }
+
+/* ---------- Forensic trace UI (Sprint 17 #81 scaffold; #82-#85 fill in) ---------- */
+.forensic-empty {
+  padding: 28px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text-2);
+}
+.forensic-empty h3 {
+  margin: 0 0 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 13px;
+}
+.forensic-empty p { margin: 0; line-height: 1.6; }
+.forensic-empty code {
+  font-family: var(--mono);
+  background: var(--surface-2);
+  padding: 1px 6px;
+  font-size: 11.5px;
+}
+.forensic-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr 360px;
+  gap: 14px;
+  align-items: stretch;
+  min-height: 500px;
+}
+.forensic-pane {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+.forensic-pane-head {
+  padding: 10px 14px;
+  border-bottom: 1.5px solid var(--border);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  font-weight: 600;
+  background: var(--surface-2);
+}
+.forensic-pane-body {
+  padding: 14px;
+  flex: 1;
+  overflow: auto;
+}
+.forensic-pane-placeholder {
+  padding: 22px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  border: 1px dashed var(--border-2);
+  background: var(--surface-2);
+}
+@media (max-width: 1024px) {
+  .forensic-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+}
