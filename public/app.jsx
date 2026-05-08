@@ -5,6 +5,7 @@ const D = window.CONCORD_DATA;
 const SCREENS = [
   { id: "overview",   num: "01", label: "Overview" },
   { id: "trace",      num: "02", label: "Agent Trace" },
+  { id: "forensic",   num: "03", label: "Forensic" },
   { id: "violations", num: "04", label: "Violations" },
   { id: "repair",     num: "04", label: "Repair Patch" },
   { id: "regression", num: "05", label: "Regression" },
@@ -12,6 +13,19 @@ const SCREENS = [
   { id: "submit",     num: "07", label: "Submit Run" },
   { id: "workflows",  num: "08", label: "Workflows" },
 ];
+
+const FORENSIC_KIND_ICONS = {
+  workflow:       "▣",
+  agent:          "●",
+  tool:           "◆",
+  handoff:        "→",
+  guardrail:      "▲",
+  human_gate:     "◉",
+  action:         "★",
+  contract_check: "✕",
+  repair:         "✚",
+  regression:     "✓",
+};
 
 const TASK_MAX = 1000;
 const RESEARCH_QUESTION_MAX = 500;
@@ -844,6 +858,75 @@ function Report({ setScreen, runId }) {
   );
 }
 
+/* ---------------- FORENSIC ---------------- */
+function Forensic({ selectedSpanId, setSelectedSpanId }) {
+  const spans = D.spans || [];
+  const hasSpans = spans.length > 0;
+
+  return (
+    <>
+      <div className="section-head">
+        <h2>Forensic Trace &nbsp;//&nbsp; span tree · timeline · inspector</h2>
+        <div className="right">
+          {hasSpans
+            ? `${spans.length} span${spans.length === 1 ? "" : "s"}`
+            : "no span data"}
+        </div>
+      </div>
+
+      {!hasSpans && (
+        <div className="forensic-empty" role="status">
+          <h3>No span data yet</h3>
+          <p>
+            Spans appear when a run is executed via the Submit Run screen against an
+            AG2 swarm. Submit a <code>task_spec</code> in stub or live mode to populate
+            this view.
+          </p>
+        </div>
+      )}
+
+      {hasSpans && (
+        <div className="forensic-grid" role="region" aria-label="Forensic span explorer">
+          <aside className="forensic-pane forensic-tree" aria-label="Span tree">
+            <div className="forensic-pane-head">Span tree</div>
+            <div className="forensic-pane-body">
+              {/* Span tree (#82) renders here */}
+              <div className="forensic-pane-placeholder">
+                Span tree — wired in #82
+              </div>
+            </div>
+          </aside>
+
+          <section className="forensic-pane forensic-waterfall" aria-label="Timeline waterfall">
+            <div className="forensic-pane-head">Timeline waterfall</div>
+            <div className="forensic-pane-body">
+              {/* Timeline waterfall (#83) renders here */}
+              <div className="forensic-pane-placeholder">
+                Timeline waterfall — wired in #83
+              </div>
+            </div>
+          </section>
+
+          <aside className="forensic-pane forensic-inspector" aria-label="Span inspector">
+            <div className="forensic-pane-head">Span inspector</div>
+            <div className="forensic-pane-body">
+              {selectedSpanId ? (
+                <div className="forensic-pane-placeholder">
+                  Inspector for span {selectedSpanId} — wired in #84
+                </div>
+              ) : (
+                <div className="forensic-pane-placeholder">
+                  Select a span from the tree or waterfall to inspect
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+    </>
+  );
+}
+
 /* ---------------- WORKFLOWS ---------------- */
 function WorkflowsScreen({ setScreen, onPickWorkflow }) {
   const [workflows, setWorkflows] = useState([]);
@@ -1242,6 +1325,7 @@ function App() {
   const [currentRunId, setCurrentRunId] = useState(null);
   const [streamToken, setStreamToken] = useState(null);
   const [streamTokenError, setStreamTokenError] = useState(null);
+  const [selectedSpanId, setSelectedSpanId] = useState(null);
 
   // when leaving repair screen, clear filter
   useEffect(() => { if (screen !== "repair") setSelectedPatch(null); }, [screen]);
@@ -1295,6 +1379,7 @@ function App() {
         {screen === "report"     && <Report setScreen={setScreen} runId={currentRunId} />}
         {screen === "submit"     && <SubmitRun setScreen={setScreen} onRunSubmitted={handleRunSubmitted} />}
         {screen === "workflows"  && <WorkflowsScreen setScreen={setScreen} />}
+        {screen === "forensic"   && <Forensic selectedSpanId={selectedSpanId} setSelectedSpanId={setSelectedSpanId} />}
       </main>
     </div>
   );
@@ -1307,9 +1392,9 @@ if (_rootEl) {
 
 export {
   App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun,
-  WorkflowsScreen,
+  WorkflowsScreen, Forensic,
   RunProgress, useRunEventStream, fetchStreamToken,
   ApprovalPanel,
-  TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS,
+  TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS, FORENSIC_KIND_ICONS,
   SCREENS,
 };
