@@ -21,8 +21,11 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any, Literal
+
+from shared.logging import get_logger
 
 from autogen import ConversableAgent
 from autogen.agentchat.group import (
@@ -235,14 +238,34 @@ def build_swarm(
     return [researcher, critic, verifier, reporter, human_gate, action], ctx
 
 
+_TAVILY_FALLBACK_PATH = Path(__file__).parent / "fixtures" / "tavily_fallback.json"
+
+
+def _load_tavily_fallback() -> list[dict[str, Any]]:
+    """Read the committed offline fallback fixture (3 sources)."""
+    return json.loads(_TAVILY_FALLBACK_PATH.read_text()).get("results", [])
+
+
 def _build_initial_message(task: str, research_question: str) -> str:
-    """Optionally pre-fetch Tavily results so ResearcherAgent has context."""
+    """Pre-fetch Tavily results so ResearcherAgent has context.
+
+    All failure paths (missing key, network error, rate limit, bad response
+    shape) fall back to the committed offline fixture. Every path emits a
+    structured log line so failures are debuggable in production. Tavily
+    stays the ONLY search source — the fallback is offline data, not another
+    vendor.
+    """
+    logger = get_logger("zone_a.swarm")
     tavily_key = os.environ.get("TAVILY_API_KEY", "").strip()
     if not tavily_key:
-        return (
-            f"Task: {task}\n\nResearch question: {research_question}\n\n"
-            "(no search results available — proceed with what you know)"
+        logger.warning(
+            "zone_a.tavily.missing_key",
+            extra={"using_fallback": True, "reason": "no TAVILY_API_KEY env var"},
         )
+        results = _load_tavily_fallback()
+        return _render_initial_message(task, research_question, results, source="fallback:no_key")
+
+    start = time.monotonic()
     try:
         from tavily import TavilyClient
 
@@ -250,17 +273,55 @@ def _build_initial_message(task: str, research_question: str) -> str:
         raw = client.search(
             query=research_question, max_results=3, search_depth="basic"
         )
-        results = json.dumps(raw.get("results", []), indent=2)
-        return (
-            f"Task: {task}\n\nResearch question: {research_question}\n\n"
-            f"Tavily search results:\n{results}\n\n"
-            "Call `record_research` to record sources and tool_call_id."
+        if not isinstance(raw, dict) or not isinstance(raw.get("results"), list):
+            logger.warning(
+                "zone_a.tavily.bad_response_shape",
+                extra={
+                    "using_fallback": True,
+                    "latency_ms": int((time.monotonic() - start) * 1000),
+                },
+            )
+            return _render_initial_message(
+                task, research_question, _load_tavily_fallback(), source="fallback:bad_shape"
+            )
+        results = raw["results"]
+        logger.info(
+            "zone_a.tavily.search",
+            extra={
+                "query": research_question,
+                "status": "success",
+                "source_count": len(results),
+                "latency_ms": int((time.monotonic() - start) * 1000),
+            },
         )
-    except Exception as e:
-        return (
-            f"Task: {task}\n\nResearch question: {research_question}\n\n"
-            f"(Tavily search failed: {e})"
+        return _render_initial_message(task, research_question, results, source="tavily")
+    except Exception as exc:
+        logger.warning(
+            "zone_a.tavily.error",
+            extra={
+                "using_fallback": True,
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+                "latency_ms": int((time.monotonic() - start) * 1000),
+            },
         )
+        return _render_initial_message(
+            task,
+            research_question,
+            _load_tavily_fallback(),
+            source=f"fallback:{type(exc).__name__}",
+        )
+
+
+def _render_initial_message(
+    task: str, research_question: str, results: list[dict[str, Any]], source: str
+) -> str:
+    serialized = json.dumps(results, indent=2)
+    return (
+        f"Task: {task}\n\nResearch question: {research_question}\n\n"
+        f"Search results (source={source}):\n{serialized}\n\n"
+        "Call `record_research` to record sources and tool_call_id."
+    )
 
 
 def _chat_history_to_trace_events(
