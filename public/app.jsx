@@ -10,6 +10,7 @@ const SCREENS = [
   { id: "regression", num: "05", label: "Regression" },
   { id: "report",     num: "06", label: "Final Report" },
   { id: "submit",     num: "07", label: "Submit Run" },
+  { id: "workflows",  num: "08", label: "Workflows" },
 ];
 
 const TASK_MAX = 1000;
@@ -843,6 +844,184 @@ function Report({ setScreen, runId }) {
   );
 }
 
+/* ---------------- WORKFLOWS ---------------- */
+function WorkflowsScreen({ setScreen, onPickWorkflow }) {
+  const [workflows, setWorkflows] = useState([]);
+  const [state, setState] = useState("loading"); // loading|loaded|error
+  const [error, setError] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [detailState, setDetailState] = useState("idle");
+  const [detailError, setDetailError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/workflows");
+        if (!res.ok) throw new Error(`workflows fetch ${res.status}`);
+        const body = await res.json();
+        const list = Array.isArray(body) ? body : (body.workflows || []);
+        if (!cancelled) {
+          setWorkflows(list);
+          setState("loaded");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(String(err.message || err));
+          setState("error");
+        }
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function loadDetail(workflowId) {
+    setSelectedId(workflowId);
+    setDetail(null);
+    setDetailState("loading");
+    setDetailError("");
+    try {
+      const res = await fetch(`/api/workflows/${encodeURIComponent(workflowId)}`);
+      if (res.status === 404) {
+        setDetailError(`Workflow ${workflowId} doesn't exist or was deleted.`);
+        setDetailState("error");
+        return;
+      }
+      if (!res.ok) {
+        setDetailError(`Server error ${res.status} loading workflow detail.`);
+        setDetailState("error");
+        return;
+      }
+      const body = await res.json();
+      setDetail(body);
+      setDetailState("loaded");
+    } catch (err) {
+      setDetailError(`Network error: ${err.message || err}`);
+      setDetailState("error");
+    }
+  }
+
+  function _id(wf) { return wf.workflow_id || wf.id; }
+  function _name(wf) { return wf.name || _id(wf); }
+  function _agentCount(wf) { return (wf.agents || []).length; }
+  function _contractCount(wf) { return (wf.contracts || []).length; }
+
+  return (
+    <>
+      <div className="section-head">
+        <h2>Workflows &nbsp;//&nbsp; registered topology</h2>
+        <div className="right">
+          {state === "loaded" ? `${workflows.length} workflow${workflows.length === 1 ? "" : "s"}` : ""}
+        </div>
+      </div>
+
+      {state === "loading" && (
+        <div className="workflows-loading" role="status" aria-live="polite">Loading workflows…</div>
+      )}
+
+      {state === "error" && (
+        <div className="workflows-error" role="alert">
+          Could not load workflows: {error}
+        </div>
+      )}
+
+      {state === "loaded" && workflows.length === 0 && (
+        <div className="workflows-empty">
+          <h3>No workflows registered yet</h3>
+          <p>
+            Register a workflow via <code>POST /api/workflows</code> first, then submit a
+            run against it from the <button className="btn-link" onClick={() => setScreen("submit")}>Submit Run</button> screen.
+          </p>
+        </div>
+      )}
+
+      {state === "loaded" && workflows.length > 0 && (
+        <div className="workflows-grid">
+          <div className="workflows-list" role="list" aria-label="Registered workflows">
+            {workflows.map(wf => (
+              <button
+                key={_id(wf)}
+                role="listitem"
+                className={`workflow-row ${selectedId === _id(wf) ? "selected" : ""}`}
+                onClick={() => loadDetail(_id(wf))}
+              >
+                <div className="workflow-row-name">{_name(wf)}</div>
+                <div className="workflow-row-id">{_id(wf)}</div>
+                <div className="workflow-row-meta">
+                  {_agentCount(wf)} agent{_agentCount(wf) === 1 ? "" : "s"}
+                  &nbsp;·&nbsp; {_contractCount(wf)} contract{_contractCount(wf) === 1 ? "" : "s"}
+                </div>
+                {wf.owner && <div className="workflow-row-owner">{wf.owner}</div>}
+              </button>
+            ))}
+          </div>
+
+          <div className="workflow-detail" aria-live="polite">
+            {!selectedId && (
+              <div className="workflow-detail-empty">Pick a workflow on the left.</div>
+            )}
+            {selectedId && detailState === "loading" && (
+              <div role="status">Loading workflow detail…</div>
+            )}
+            {selectedId && detailState === "error" && (
+              <div role="alert" className="workflows-error">{detailError}</div>
+            )}
+            {selectedId && detailState === "loaded" && detail && (
+              <>
+                <div className="workflow-detail-head">
+                  <h3>{detail.name || detail.workflow_id}</h3>
+                  <span className="muted">{detail.workflow_id}</span>
+                </div>
+
+                <section className="workflow-section">
+                  <h4>Topology</h4>
+                  <pre className="topology-preview">{JSON.stringify(detail.declared_topology || {}, null, 2)}</pre>
+                </section>
+
+                <section className="workflow-section">
+                  <h4>Agents ({(detail.agents || []).length})</h4>
+                  <ul className="workflow-agent-list">
+                    {(detail.agents || []).map((a, i) => (
+                      <li key={a.name || i}>{a.name || JSON.stringify(a)}</li>
+                    ))}
+                  </ul>
+                </section>
+
+                <section className="workflow-section">
+                  <h4>Contracts ({(detail.contracts || []).length})</h4>
+                  <ul className="workflow-contract-list">
+                    {(detail.contracts || []).map((c, i) => (
+                      <li key={c.id || i}>
+                        <span className="contract-id">{c.id || `C-${i + 1}`}</span>
+                        <span className="contract-type">{c.type || "—"}</span>
+                        <span className="contract-rule">{c.rule || ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+
+                <div className="btn-row">
+                  <button
+                    className="btn"
+                    onClick={() => {
+                      if (onPickWorkflow) onPickWorkflow(detail);
+                      setScreen("submit");
+                    }}
+                  >
+                    SUBMIT RUN AGAINST THIS WORKFLOW
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 /* ---------------- SUBMIT RUN ---------------- */
 function SubmitRun({ setScreen, onRunSubmitted }) {
   const [workflows, setWorkflows] = useState([]);
@@ -1115,6 +1294,7 @@ function App() {
         {screen === "regression" && <Regression />}
         {screen === "report"     && <Report setScreen={setScreen} runId={currentRunId} />}
         {screen === "submit"     && <SubmitRun setScreen={setScreen} onRunSubmitted={handleRunSubmitted} />}
+        {screen === "workflows"  && <WorkflowsScreen setScreen={setScreen} />}
       </main>
     </div>
   );
@@ -1127,6 +1307,7 @@ if (_rootEl) {
 
 export {
   App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun,
+  WorkflowsScreen,
   RunProgress, useRunEventStream, fetchStreamToken,
   ApprovalPanel,
   TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS,
