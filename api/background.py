@@ -8,10 +8,9 @@ from api.adapter import report_to_concord_data
 from api.store import get_run_inputs, set_run_status
 from zone_b.agents.attribution import run_attribution
 from zone_b.agents.contract_checker import run_contract_checker
-from zone_b.agents.regression_test import run_regression_test
-from zone_b.agents.repair import run_repair
 from zone_b.agents.reporter import run_reporter
 from zone_b.agents.trace_collector import run_trace_collector
+from zone_b.orchestrator import run_repair_test_iterations
 
 
 def process_run(run_id: str, tenant_id: str = "local") -> None:
@@ -41,12 +40,14 @@ async def _process_run(run_id: str, tenant_id: str) -> None:
         attributed = await run_attribution(
             violations, collected["run_trace"], collected["context_snapshot"]
         )
-        repaired = await run_repair(
-            violations, attributed["failed_agent"], attributed["failed_step"]
+        iteration = await run_repair_test_iterations(
+            violations,
+            collected["run_trace"],
+            attributed["failed_agent"],
+            attributed["failed_step"],
         )
-        tested = await run_regression_test(
-            repaired["repair_patch"], violations, collected["run_trace"]
-        )
+        repaired = iteration["repair"]
+        tested = iteration["regression"]
         reported = await run_reporter(
             collected["run_trace"],
             violations,
@@ -55,6 +56,7 @@ async def _process_run(run_id: str, tenant_id: str) -> None:
             tested,
             collected["context_snapshot"],
             approval_status="pending",
+            iteration_count=iteration["iteration_count"],
         )
         report = reported["report"]
     else:
@@ -86,5 +88,15 @@ def _clean_report(raw_trace: dict[str, Any]) -> dict[str, Any]:
         "patches": [],
         "regression_tests": [],
         "regression_summary": {"pass": 0, "fail": 0, "error": 0},
+        "iteration_count": 0,
+        "sandbox_id": "",
+        "regression_duration_ms": 0,
+        "regression_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        "regression_cost": {
+            "daytona_seconds": 0,
+            "llm_tokens": 0,
+            "llm_cost_usd": 0,
+            "daytona_cost_usd": 0,
+        },
         "narrative": "No contract violations were detected for this run.",
     }

@@ -101,7 +101,7 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 34. **"Tavily is live. `zone_a/agents/researcher.py` calls `TavilyClient.search` for every Zone A run, returns up to three sources, formats them with the LLM."**
 
-35. **"Daytona is live. `zone_b/agents/regression_test.py` creates a sandbox per run via `daytona_sdk.Daytona().create()`, executes the test with `sandbox.process.code_run(test_code)`, parses stdout for PASS or FAIL, deletes the sandbox in `finally`."**
+35. **"Daytona is live. `zone_b/agents/regression_test.py` runs tests through `zone_b.sandbox.DaytonaExecutorPool`, backed by AG2's `DaytonaCodeExecutor`. It executes the generated Python block, parses stdout for PASS or FAIL, records duration/cost, and reports an explicit error if credentials are missing."**
 
 36. **"LLM is Gemini 2.5 Flash via OpenRouter. Cheap, fast, structured-JSON friendly. Temperature 0.1 because we're parsing every response, not generating prose."**
 

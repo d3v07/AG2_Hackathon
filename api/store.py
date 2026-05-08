@@ -37,6 +37,12 @@ _FIXTURE_RUN_041: dict[str, Any] = {
         "events_total": 12,
         "tool_events": 1,
     },
+    "cost": {
+        "daytona_seconds": 4.128,
+        "llm_tokens": 0,
+        "llm_cost_usd": 0,
+        "daytona_cost_usd": 0.0008256,
+    },
     "agents": [
         {"id": "RES", "name": "ResearcherAgent", "steps": 3, "status": "PASS", "note": "tavily_search x1"},
         {"id": "CRT", "name": "CriticAgent", "steps": 2, "status": "PASS", "note": "3 critique notes"},
@@ -307,6 +313,24 @@ def _get_workflow_record(
 def _seed_fixture(session: Session, tenant_id: str = "local") -> None:
     existing = _get_run_record(session, "RUN-041", tenant_id)
     if existing is not None:
+        data = _from_json(existing.report_json, {})
+        if not isinstance(data.get("cost"), dict) or not any(
+            (
+                existing.daytona_seconds,
+                existing.llm_tokens,
+                existing.llm_cost_usd,
+                existing.daytona_cost_usd,
+            )
+        ):
+            data["cost"] = deepcopy(_FIXTURE_RUN_041["cost"])
+            existing.report_json = _to_json(data)
+            cost = _cost_from_payload(data)
+            existing.daytona_seconds = cost["daytona_seconds"]
+            existing.llm_tokens = cost["llm_tokens"]
+            existing.llm_cost_usd = cost["llm_cost_usd"]
+            existing.daytona_cost_usd = cost["daytona_cost_usd"]
+            session.add(existing)
+            session.commit()
         return
 
     workflow = WorkflowRecord(
@@ -412,6 +436,12 @@ def _upsert_run_record(
     record.raw_trace_json = _to_json(raw_trace) if raw_trace is not None else record.raw_trace_json
     record.task_spec_json = _to_json(task_spec) if task_spec is not None else record.task_spec_json
     record.report_json = _to_json(data) if data is not None else record.report_json
+    if data is not None:
+        cost = _cost_from_payload(data)
+        record.daytona_seconds = cost["daytona_seconds"]
+        record.llm_tokens = cost["llm_tokens"]
+        record.llm_cost_usd = cost["llm_cost_usd"]
+        record.daytona_cost_usd = cost["daytona_cost_usd"]
     record.error = error
     record.status_history_json = _to_json(status_history or [status])
     record.updated_at = _utc_now()
@@ -423,10 +453,42 @@ def _upsert_run_record(
 
 def _record_to_run(record: RunRecord) -> dict[str, Any]:
     data = _from_json(record.report_json, _empty_run_payload(record))
+    data["cost"] = _cost_from_record(record, data.get("cost"))
     data["status"] = record.status
     data["error"] = record.error
     data["status_history"] = _from_json(record.status_history_json, [])
     return deepcopy(data)
+
+
+def _cost_from_payload(data: dict[str, Any]) -> dict[str, Any]:
+    cost = data.get("cost")
+    if not isinstance(cost, dict):
+        cost = {}
+    return {
+        "daytona_seconds": float(cost.get("daytona_seconds", 0) or 0),
+        "llm_tokens": int(cost.get("llm_tokens", 0) or 0),
+        "llm_cost_usd": float(cost.get("llm_cost_usd", 0) or 0),
+        "daytona_cost_usd": float(cost.get("daytona_cost_usd", 0) or 0),
+    }
+
+
+def _cost_from_record(record: RunRecord, fallback: Any = None) -> dict[str, Any]:
+    cost = _cost_from_payload({"cost": fallback if isinstance(fallback, dict) else {}})
+    if any(
+        (
+            record.daytona_seconds,
+            record.llm_tokens,
+            record.llm_cost_usd,
+            record.daytona_cost_usd,
+        )
+    ):
+        cost = {
+            "daytona_seconds": float(record.daytona_seconds or 0),
+            "llm_tokens": int(record.llm_tokens or 0),
+            "llm_cost_usd": float(record.llm_cost_usd or 0),
+            "daytona_cost_usd": float(record.daytona_cost_usd or 0),
+        }
+    return cost
 
 
 def _empty_run_payload(record: RunRecord) -> dict[str, Any]:
@@ -447,6 +509,7 @@ def _empty_run_payload(record: RunRecord) -> dict[str, Any]:
             "events_total": 0,
             "tool_events": 0,
         },
+        "cost": _cost_from_record(record),
         "agents": [],
         "contracts": [],
         "trace": [],

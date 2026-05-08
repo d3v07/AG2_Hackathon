@@ -129,10 +129,10 @@ TraceCollector → ContractChecker → Attribution → Repair
 ### B5. RegressionTest (`zone_b/agents/regression_test.py`) — **Daytona-powered**
 
 - **Input:** `repair_patch` + violations + run trace
-- **Output:** `test_name`, `test_code`, `assertions`, `test_status` (pass/fail/error), `stdout`, `sandbox_id`, `per_violation_results[]`, `per_violation_summary`
+- **Output:** `test_name`, `test_code`, `assertions`, `test_status` (pass/fail/error), `stdout`, `sandbox_id`, `duration_ms`, `usage`, `cost`, `per_violation_results[]`, `per_violation_summary`
 - **Two-step:**
   1. `_ask_llm_for_test:19-57` — `ConversableAgent` writes a self-contained Python script that simulates post-repair state and asserts each violation is no longer reachable. Script must print `PASS` or `FAIL: <reason>`. Standard library only.
-  2. `_run_in_daytona:98-123` — creates a fresh Daytona sandbox via `daytona_sdk.Daytona(DaytonaConfig(...)).create()`, runs the test with `sandbox.process.code_run(test_code)`, parses stdout, **always deletes the sandbox in `finally`**.
+  2. `_run_in_daytona` delegates to `zone_b.sandbox.run_python_in_daytona`, which uses AG2's `autogen.coding.DaytonaCodeExecutor` through a warm `DaytonaExecutorPool`, executes the test with `execute_code_blocks`, parses stdout, and records Daytona duration/cost. After each execution the pool calls `restart()` before reuse, so generated test code gets a clean sandbox state while keeping the next executor warm.
 - **Hand-rolled fallback** (`_fallback_test:60-81`): if the LLM call or parse fails, we use a known-good test that asserts the four enforced contracts directly. Means the demo never breaks just because the LLM had a bad turn.
 - `_parse_status:82-88` is intentionally strict: needs `PASS` and not `FAIL` to count as pass. Anything else is `error`.
 
@@ -345,6 +345,6 @@ This is a multi-agent observability + repair system. Both tracks fit. Concord is
 
 - **The dashboard's per-violation patch diffs are still template-driven** in the fixture. The backend now emits one repair entry per violation in `report.patches[]`, but the public dashboard adapter still synthesizes its visual diff rows until the API passthrough work lands.
 - **The topology/routes block on the Workflow DAG screen is not yet derived from a real workflow declaration.** It's a fixture today. Real implementation would parse the operator's AG2 program (or a YAML manifest) to get the declared topology.
-- **We use Daytona as a real, live integration**, not a stub. `_run_in_daytona` calls `daytona_sdk.Daytona(...).create()` and `sandbox.process.code_run(...)`. Without `DAYTONA_API_KEY` it returns `("Daytona credentials missing", "no-sandbox", "error")` — not a fake `pass`.
+- **We use Daytona as a real, live integration**, not a stub. `_run_in_daytona` calls the AG2 `DaytonaCodeExecutor` runner. Without `DAYTONA_API_KEY`/`DAYTONA_API_URL` it returns `("Daytona credentials missing", "no-sandbox", "error")` — not a fake `pass`.
 - **Tavily is also live.** `zone_a/agents/researcher.py` actually hits `client.search(...)` for every Zone A run.
 - **Live LLM is Gemini 2.5 Flash.** Not local, not stubbed.

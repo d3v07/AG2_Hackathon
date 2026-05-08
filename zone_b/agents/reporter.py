@@ -125,6 +125,7 @@ async def run_reporter(
     regression_out: dict,
     context_snapshot: ContextSnapshot | None = None,
     approval_status: str = "pending",
+    iteration_count: int = 1,
 ) -> dict:
     """Assemble the final Contract Violation Report."""
     regression_tests = _regression_tests(regression_out, violations)
@@ -156,6 +157,22 @@ async def run_reporter(
         "patches": _repair_patches(repair_out),
         "regression_tests": regression_tests,
         "regression_summary": _violation_status_summary(violation_dicts),
+        "iteration_count": int(iteration_count),
+        "sandbox_id": regression_out.get("sandbox_id", ""),
+        "regression_duration_ms": int(regression_out.get("duration_ms", 0)),
+        "regression_usage": regression_out.get(
+            "usage",
+            {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        ),
+        "regression_cost": regression_out.get(
+            "cost",
+            {
+                "daytona_seconds": 0,
+                "llm_tokens": 0,
+                "llm_cost_usd": 0,
+                "daytona_cost_usd": 0,
+            },
+        ),
     }
 
     try:

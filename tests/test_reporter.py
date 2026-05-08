@@ -113,7 +113,11 @@ class TestRunReporterShape:
 
     def _regression(self):
         return {"test_name": "test_fix", "test_code": "print('PASS')", "assertions": [],
-                "test_status": "pass", "stdout": "PASS", "sandbox_id": "sb_001"}
+                "test_status": "pass", "stdout": "PASS", "sandbox_id": "sb_001",
+                "duration_ms": 1250,
+                "usage": {"prompt_tokens": 8, "completion_tokens": 4, "total_tokens": 12},
+                "cost": {"daytona_seconds": 1.25, "llm_tokens": 12,
+                         "llm_cost_usd": 0.00006, "daytona_cost_usd": 0.00025}}
 
     def test_report_has_required_keys(self, monkeypatch):
         monkeypatch.setattr(
@@ -186,6 +190,34 @@ class TestRunReporterShape:
             _trace(), [_v()], self._attribution(), self._repair(), self._regression(), _snap()
         ))
         assert result["report"]["regression_test_status"] == "pass"
+
+    def test_regression_metadata_and_iteration_count_propagate(self, monkeypatch):
+        monkeypatch.setattr("zone_b.agents.reporter._ask_llm_for_narrative", lambda _: "x")
+        result = asyncio.run(run_reporter(
+            _trace(),
+            [_v()],
+            self._attribution(),
+            self._repair(),
+            self._regression(),
+            _snap(),
+            iteration_count=3,
+        ))
+
+        report = result["report"]
+        assert report["iteration_count"] == 3
+        assert report["sandbox_id"] == "sb_001"
+        assert report["regression_duration_ms"] == 1250
+        assert report["regression_usage"] == {
+            "prompt_tokens": 8,
+            "completion_tokens": 4,
+            "total_tokens": 12,
+        }
+        assert report["regression_cost"] == {
+            "daytona_seconds": 1.25,
+            "llm_tokens": 12,
+            "llm_cost_usd": 0.00006,
+            "daytona_cost_usd": 0.00025,
+        }
 
     def test_fallback_narrative_on_llm_failure(self, monkeypatch):
         monkeypatch.setattr(

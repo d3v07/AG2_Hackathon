@@ -405,18 +405,42 @@ def _regression_passed(regression_status: str) -> bool:
     return str(regression_status).lower() in {"pass", "passed"}
 
 
-def _build_test_block(regression_status: str, sandbox_id: str, violations_block: list[dict]) -> dict[str, Any]:
+def _build_cost_block(report: dict[str, Any]) -> dict[str, Any]:
+    cost = report.get("regression_cost")
+    if not isinstance(cost, dict):
+        cost = {}
+    usage = report.get("regression_usage")
+    if not isinstance(usage, dict):
+        usage = {}
+    return {
+        "daytona_seconds": float(cost.get("daytona_seconds", 0) or 0),
+        "llm_tokens": int(cost.get("llm_tokens", usage.get("total_tokens", 0)) or 0),
+        "llm_cost_usd": float(cost.get("llm_cost_usd", 0) or 0),
+        "daytona_cost_usd": float(cost.get("daytona_cost_usd", 0) or 0),
+    }
+
+
+def _build_test_block(
+    regression_status: str,
+    sandbox_id: str,
+    violations_block: list[dict],
+    *,
+    duration_ms: int = 4128,
+) -> dict[str, Any]:
     status = "PASS" if _regression_passed(regression_status) else "FAIL"
     assertions = [
         {"id": f"A{i}", "name": f"assert_{v['contract'].lower()}_repair_holds", "time_ms": 200 + 100 * i, "status": status}
         for i, v in enumerate(violations_block, start=1)
     ]
+    duration = int(duration_ms or 0) if duration_ms is not None else 4128
+    duration_seconds = max(0, duration // 1000)
+    duration_stamp = f"00:{duration_seconds:02d}.{duration % 1000:03d}"
     return {
         "name": "test_contract_repair",
         "runner": "Daytona Sandbox",
         "sandbox_id": sandbox_id or "dt-local",
         "image": "python:3.11-slim",
-        "duration_ms": 4128,
+        "duration_ms": duration,
         "lines": [
             {"t": "00:00.012", "k": "info", "v": f"daytona create sandbox {sandbox_id or 'dt-local'}"},
             {"t": "00:00.612", "k": "info", "v": "pip install autogen-ag2 pytest"},
@@ -425,19 +449,30 @@ def _build_test_block(regression_status: str, sandbox_id: str, violations_block:
                 {"t": f"00:0{2 + i}.{500 + i * 100:03d}", "k": "pass" if a["status"] == "PASS" else "fail", "v": f"tests/test_contract_repair.py::{a['name']} {a['status']}"}
                 for i, a in enumerate(assertions)
             ],
-            {"t": "00:04.128", "k": "info", "v": f"daytona stop {sandbox_id or 'dt-local'}"},
+            {"t": duration_stamp, "k": "info", "v": f"daytona stop {sandbox_id or 'dt-local'}"},
         ],
         "assertions": assertions,
     }
 
 
-def _build_report_block(report: dict, patches_block: list[dict]) -> dict[str, Any]:
+def _build_report_block(
+    report: dict,
+    patches_block: list[dict],
+    cost_block: dict[str, Any],
+) -> dict[str, Any]:
     return {
         "summary": report.get("narrative", ""),
         "patches_applied": [
             f"{p['id']}  {p['primitive']:<22} {p['target']}"
             for p in patches_block
         ],
+        "regression_summary": report.get("regression_summary", {}),
+        "regression_tests": report.get("regression_tests", []),
+        "usage_summary": report.get(
+            "regression_usage",
+            {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        ),
+        "cost_summary": cost_block,
         "approval": {
             "status": "PENDING_OPERATOR" if report.get("approval_status") == "pending" else report.get("approval_status", "PENDING_OPERATOR").upper(),
             "operator": "j.kowalski",
@@ -479,6 +514,9 @@ def report_to_concord_data(
     violations_block = _build_violations_block(violations)
     patches_block = _build_patches_block(violations_block, report)
     topology_block, routes_block = _build_topology_and_routes(events, violations)
+    cost_block = _build_cost_block(report)
+    report_sandbox_id = report.get("sandbox_id") or sandbox_id
+    duration_ms = report.get("regression_duration_ms", 4128)
 
     return {
         "run": _build_run_block(run_trace_dict, started_at),
@@ -490,6 +528,12 @@ def report_to_concord_data(
         "trace": _build_trace_block(events, base_dt, violation_steps),
         "violations": violations_block,
         "patches": patches_block,
-        "test": _build_test_block(report.get("regression_test_status", "passed"), sandbox_id, violations_block),
-        "report": _build_report_block(report, patches_block),
+        "test": _build_test_block(
+            report.get("regression_test_status", "passed"),
+            report_sandbox_id,
+            violations_block,
+            duration_ms=duration_ms,
+        ),
+        "cost": cost_block,
+        "report": _build_report_block(report, patches_block, cost_block),
     }
