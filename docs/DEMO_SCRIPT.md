@@ -77,7 +77,7 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 26. **"Contracts are declared in Zone A's `workflow_contract.py` as a plain manifest — five rules with IDs C1 through C5, types, and severities. That's the workflow author's promise."**
 
-27. **"Contracts are enforced in Zone B's `contract_checker.py` as deterministic Python lambdas. The verdict is pure code — never delegated to an LLM. Same trace, same violations, every time."**
+27. **"Contracts are enforced from Zone B's `zone_b/contracts` registry as deterministic Python checks. `contract_checker.py` loads that registry and adds the operator-facing text. The verdict is pure code — never delegated to an LLM. Same trace, same violations, every time."**
 
 28. **"Today all five contracts are enforced: evidence, tool, routing, approval, and schema. The fixture fails four of them and passes schema."**
 
@@ -151,7 +151,7 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 51. **"Exactly the four shown on the Repair Patch screen — Guardrail with an evidence condition, ToolGate on the verifier's verdict function, OnContextCondition gating the Verifier→Reporter handoff, and UserProxyAgent with `human_input_mode='ALWAYS'` before any side-effect agent. These are AG2 framework primitives — they paste straight into the operator's existing code."**
 
 **Q: How would you extend this beyond Literature Review?**
-52. **"Zone B reads any trace JSON matching the shared models. Define your own contracts as lambdas in the CONTRACTS list and your own primitive map. The architecture is workflow-agnostic — Zone A is just our demo target."**
+52. **"Zone B reads any trace JSON matching the shared models. Define your contracts in `zone_b/contracts` or register normalized YAML contracts through the API, then add your primitive map. The architecture is workflow-agnostic — Zone A is just our demo target."**
 
 **Q: What's the track classification — Multi-Agent Collaboration or Open?**
 53. **"Both fit. Concord is meta — it observes and repairs other multi-agent collaborations. We pitch it as multi-agent collaboration because that's what we're improving."**

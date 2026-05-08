@@ -1,5 +1,6 @@
 fastapi==0.136.1
 falkordb>=1.0.10
 pydantic==2.13.4
+PyYAML>=6.0
 sqlmodel==0.0.38
 uvicorn==0.38.0

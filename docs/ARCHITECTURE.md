@@ -341,7 +341,7 @@ Exactly the four shown on the Repair Patch screen:
 These are AG2 framework primitives — they paste directly into the operator's existing workflow code.
 
 **Q: How would you extend this beyond Literature Review?**
-Zone B reads any trace JSON matching `shared/models.py`. Define your own contracts as lambdas in `CONTRACTS = [...]` and your own primitive map. The architecture is workflow-agnostic — Zone A is just our demo target.
+Zone B reads any trace JSON matching `shared/models.py`. Define executable checks in `zone_b/contracts/` or submit normalized YAML contracts through `/api/workflows`, then add your primitive map. The architecture is workflow-agnostic — Zone A is just our demo target.
 
 **Q: Track classification — why "Multi-Agent Collaboration" vs "Open"?**
 This is a multi-agent observability + repair system. Both tracks fit. Concord is meta — it observes and repairs other multi-agent collaborations. Frame it however the judges respond best to.

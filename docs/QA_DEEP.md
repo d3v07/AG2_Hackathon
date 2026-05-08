@@ -425,16 +425,16 @@ The sequential mode (used for fixture generation) intentionally lets the violati
 
 Three steps:
 1. Add a rule to `WORKFLOW_CONTRACT["rules"]` in `zone_a/workflow_contract.py` — declarative, IDs C1-C5.
-2. Add a check lambda to `CONTRACTS = [...]` in `zone_b/agents/contract_checker.py` — `{"type": "...", "severity": "...", "rule": "...", "failed_agent": "...", "check": lambda trace, snap: ...}`.
+2. Add the executable check and registry entry under `zone_b/contracts/` — `types.py` defines the dataclass, `checks.py` owns deterministic predicates, and `registry.py` assembles the canonical list.
 3. Add the `(violation_type → AG2 primitive)` mapping to `PRIMITIVE_MAP` in `zone_b/agents/repair.py:15-21`.
 
-That's it. No agent code changes. The pipeline picks up new contracts automatically because `contract_checker.py` iterates over the list.
+That's it. No agent code changes. The pipeline picks up new contracts automatically because `contract_checker.py` iterates over the registry-backed list.
 
 ### Q50: How would I support a new workflow (not Literature Review)?
 
 Two steps:
 1. Build your AG2 workflow as `ConversableAgent`s. Have it emit traces in the `RunTrace` shape (use `trace_emitter.py` as reference — it's a thin wrapper).
-2. Update `WORKFLOW_CONTRACT` in `zone_a/workflow_contract.py` with your domain's rules. Or define a new contract file and point `contract_checker.py` at it.
+2. Update `WORKFLOW_CONTRACT` in `zone_a/workflow_contract.py` with your domain's rules. Or register normalized YAML contracts through `/api/workflows` using `contracts_yaml`.
 
 Zone B is workflow-agnostic. The 7 diagnostic agents care about violations, not what the workflow does.
 
