@@ -167,20 +167,21 @@ _FAILURE_MODE_CASES: list[tuple[str, str]] = [
 
 @pytest.mark.parametrize("failure_mode,expected_contract_type", _FAILURE_MODE_CASES)
 @pytest.mark.xfail(
-    strict=False,
-    raises=Exception,
-    reason="failure_mode parameter lands in #70; run_swarm rejects unknown kwargs today",
+    strict=True,
+    raises=TypeError,
+    reason="run_swarm rejects unknown failure_mode kwarg with TypeError until #70",
 )
 def test_failure_mode_produces_expected_violation(
     failure_mode: str,
     expected_contract_type: str,
     tmp_path,
 ) -> None:
-    """run_swarm(mode='stub', failure_mode=X) must produce at least one
-    violation with contract_type == expected_contract_type after Zone B
-    contract checking.
+    """run_swarm(mode='stub', failure_mode=X) must produce exactly the
+    contract violation type for that mode after Zone B contract checking.
 
-    Blocked on #70: run_swarm does not accept mode/failure_mode yet.
+    Blocked on #70: run_swarm does not accept failure_mode yet — call raises
+    TypeError. Once #70 lands, the xfail strict=True will force XPASS, which
+    fails the suite and prompts removing the marker.
     """
     from zone_a.swarm import run_swarm  # local import — module may not be on path in all envs
 
@@ -199,8 +200,8 @@ def test_failure_mode_produces_expected_violation(
     checker_result = _run_contracts(raw)
 
     violation_types = {v.contract_type for v in checker_result["violations"]}
-    assert expected_contract_type in violation_types, (
-        f"Expected violation of type '{expected_contract_type}' "
+    assert violation_types == {expected_contract_type}, (
+        f"Expected exactly violations of type '{expected_contract_type}' "
         f"for failure_mode='{failure_mode}', got: {violation_types}"
     )
 
