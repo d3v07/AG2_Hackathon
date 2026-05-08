@@ -885,3 +885,181 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
   color: var(--text-3);
   text-align: right;
 }
+
+/* ---------- Forensic span inspector (Sprint 17 #84) ---------- */
+.forensic-pane-body-inspector { padding: 0; overflow: auto; }
+.span-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.inspector-head {
+  padding: 14px 16px 12px;
+  border-bottom: 1.5px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inspector-kind-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.inspector-kind {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.inspector-kind.kind-workflow       { color: var(--text); font-weight: 700; }
+.inspector-kind.kind-agent          { color: var(--gold); }
+.inspector-kind.kind-tool           { color: var(--orange); }
+.inspector-kind.kind-handoff        { color: var(--text-3); }
+.inspector-kind.kind-guardrail      { color: var(--brick); }
+.inspector-kind.kind-human_gate     { color: var(--sage); }
+.inspector-kind.kind-action         { color: var(--gold); }
+.inspector-kind.kind-contract_check { color: var(--brick); }
+.inspector-kind.kind-repair         { color: var(--sage); }
+.inspector-kind.kind-regression     { color: var(--sage); }
+.inspector-status {
+  margin-left: auto;
+  border: 1px solid currentColor;
+  padding: 1px 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+}
+.inspector-status.status-ok    { color: var(--sage); }
+.inspector-status.status-error { color: var(--brick); }
+.inspector-name {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+}
+.inspector-section {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.inspector-section h4 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.inspector-error h4 { color: var(--brick); }
+.inspector-kv {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 4px 12px;
+  font-size: 11px;
+}
+.inspector-kv dt {
+  color: var(--text-3);
+  letter-spacing: 0.06em;
+}
+.inspector-kv dd {
+  margin: 0;
+  color: var(--text);
+  word-break: break-word;
+}
+.inspector-kv .mono { font-family: var(--mono); font-size: 10.5px; }
+.inspector-block {
+  border-bottom: 1px solid var(--border);
+}
+.inspector-block-toggle {
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  color: var(--text-2);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+}
+.inspector-block-toggle:hover { background: var(--surface-2); }
+.inspector-block-arrow { color: var(--text-3); width: 12px; }
+.inspector-block-body {
+  padding: 6px 16px 12px;
+  font-size: 11px;
+}
+.inspector-json {
+  background: var(--surface-2);
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  white-space: pre-wrap;
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+}
+.inspector-violation-list,
+.inspector-repair-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.inspector-violation-link,
+.inspector-repair-link {
+  display: grid;
+  grid-template-columns: 80px 70px 1fr;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+.inspector-violation-link:hover,
+.inspector-repair-link:hover {
+  background: var(--gold-dim);
+}
+.violation-contract,
+.patch-id {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--brick);
+  font-size: 11px;
+}
+.patch-id { color: var(--gold); }
+.violation-severity {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--brick);
+}
+.patch-primitive {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--orange);
+  text-transform: uppercase;
+}
+.violation-rule,
+.patch-title {
+  font-size: 11px;
+  color: var(--text);
+}
+.inspector-regression .pill {
+  text-transform: uppercase;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+}
+.inspector-regression .pill.ok   { color: var(--sage); }
+.inspector-regression .pill.fail { color: var(--brick); }

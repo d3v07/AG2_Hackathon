@@ -290,7 +290,10 @@ window.CONCORD_DATA = {
       input: { sources: 7 },
       output: { verified_sources_count: 0, tool_call_id: null },
       error: { type: "verification_failed", message: "0 sources verified, no tool_call_id" },
-      contract_refs: []
+      contract_refs: [
+        { contract_id: "C-EVD", violation_id: "V-001", severity: "HIGH", rule: "Reporter may write final answer only when verified_sources_count > 0" },
+        { contract_id: "C-TOL", violation_id: "V-002", severity: "HIGH", rule: "Claims of 'verified' / 'searched' / 'checked' require a matching tool_event" }
+      ]
     },
     {
       trace_id: "tr_041", span_id: "sp_guardrail_verifier", parent_span_id: "sp_verifier",
@@ -311,7 +314,9 @@ window.CONCORD_DATA = {
       input: { verified_sources_count: 0 },
       output: { final_output: "(emitted despite unverified sources)" },
       error: { type: "C-RTE", message: "Reporter ran without successful verifier tool event" },
-      contract_refs: []
+      contract_refs: [
+        { contract_id: "C-RTE", violation_id: "V-003", severity: "HIGH", rule: "Reporter must run after Verifier with a successful tool event" }
+      ]
     },
     {
       trace_id: "tr_041", span_id: "sp_human_gate", parent_span_id: "sp_workflow",
@@ -331,7 +336,9 @@ window.CONCORD_DATA = {
       input: { approval_status: "pending" },
       output: { action: "save_report" },
       error: { type: "C-APR", message: "Action ran without approval" },
-      contract_refs: []
+      contract_refs: [
+        { contract_id: "C-APR", violation_id: "V-004", severity: "HIGH", rule: "ActionAgent requires approval_status == approved" }
+      ]
     },
     {
       trace_id: "tr_041", span_id: "sp_contract_check", parent_span_id: "sp_workflow",
