@@ -1,4 +1,39 @@
-/* Concord Lite — terminal/instruments aesthetic */
+/* Concord Lite — terminal/instruments aesthetic
+ * ============================================================
+ * VISUAL IDENTITY (Sprint 18 #89 — TASTE CHECK)
+ * ============================================================
+ *
+ * Defaults rejected (per global ~/.claude/rules/common/taste.md):
+ *   - Font: not Inter / Roboto / system-ui as design choice.
+ *     Use ui-monospace stack (SF Mono → Menlo → Consolas) — terminal
+ *     aesthetic anchors the forensic / audit-grade product positioning.
+ *   - Icons: not Lucide / Heroicons / Tabler as default. Concord uses
+ *     Unicode glyphs (▣ ● ◆ → ▲ ◉ ★ ✕ ✚ ✓ for span kinds; ▾ ▸ for
+ *     tree disclosure). One glyph per span kind, semantic colors.
+ *   - Palette: not purple→blue gradient. Dark earth-tone terminal:
+ *     #0c0f0a / #13160f bg, #c8b560 gold accent, #b85c4a brick errors,
+ *     #7a9e7e sage success, #c4854a orange warnings.
+ *   - Layout: not the SaaS hero/features/pricing/CTA template. The
+ *     dashboard is a forensic instrument panel — meta-strip, tabs,
+ *     three-pane forensic view, terminal-style log feeds.
+ *
+ * Distinguishing decisions:
+ *   - Monospace EVERYTHING (including chrome, not just code).
+ *   - Solid blocks over gradients; sharp corners over rounded.
+ *   - Warm dark palette anchored on gold accent — not the typical
+ *     blue/cyan SaaS dark mode.
+ *   - Status pills are square-edged outlines, not pills.
+ *   - Span kinds get distinguishable but project-coherent earth tones,
+ *     never the rainbow trap.
+ *
+ * Copy rules:
+ *   - No "Welcome to Concord", "Get started for free", "Revolutionize",
+ *     "Supercharge", "Seamlessly integrate", "blazingly fast".
+ *   - Error messages are specific (per global taste.md): never
+ *     "Something went wrong" — see ErrorState component.
+ *   - Audit-grade language: "contract violation", "repair patch",
+ *     "regression test", "forensic span".
+ */
 :root {
   --bg:        #0c0f0a;
   --surface:   #13160f;
@@ -288,3 +323,994 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border-2); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+/* ---------- Submit Run form (Sprint 16 #77) ---------- */
+.submit-run-form {
+  max-width: 720px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  padding: 22px;
+  display: grid;
+  gap: 18px;
+}
+.submit-run-form .form-row { display: grid; gap: 6px; }
+.submit-run-form .form-label {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  font-weight: 600;
+}
+.submit-run-form .form-select,
+.submit-run-form .form-textarea {
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  padding: 10px 12px;
+  border-radius: 0;
+}
+.submit-run-form .form-select:focus,
+.submit-run-form .form-textarea:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+  border-color: var(--gold);
+}
+.submit-run-form .form-textarea { resize: vertical; min-height: 60px; font-family: var(--mono); }
+.submit-run-form .form-counter {
+  font-size: 10.5px;
+  color: var(--text-3);
+  letter-spacing: 0.1em;
+  text-align: right;
+}
+.submit-run-form .form-field-error,
+.submit-run-form .form-error {
+  color: var(--brick);
+  font-size: 12px;
+  border-left: 3px solid var(--brick);
+  padding: 6px 10px;
+  background: #fbe9e6;
+}
+.submit-run-form .form-loading,
+.submit-run-form .form-empty {
+  color: var(--text-3);
+  font-size: 12px;
+  padding: 6px 0;
+}
+.submit-run-form .form-mode {
+  border: 1px dashed var(--border);
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+.submit-run-form .form-mode legend { padding: 0 6px; }
+.submit-run-form .form-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.submit-run-form .form-actions { display: flex; justify-content: flex-end; }
+.submit-run-form .btn-primary {
+  background: var(--gold);
+  border: 1.5px solid var(--gold);
+  color: #1F1F33;
+  padding: 10px 22px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+.submit-run-form .btn-primary:disabled {
+  background: var(--border);
+  border-color: var(--border-2);
+  color: var(--text-3);
+  cursor: not-allowed;
+}
+.submit-run-form .btn-primary:hover:not(:disabled) { filter: brightness(1.05); }
+
+/* ---------- Run progress / SSE consumer (Sprint 16 #78) ---------- */
+.run-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 22px;
+  border-bottom: 1.5px solid var(--border);
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+}
+.run-progress-pill {
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  padding: 4px 10px;
+  border: 1.5px solid currentColor;
+}
+.run-progress-pill[data-status="queued"]      { color: var(--text-2); }
+.run-progress-pill[data-status="analyzing"],
+.run-progress-pill[data-status="repairing"],
+.run-progress-pill[data-status="testing"]     { color: var(--orange); }
+.run-progress-pill[data-status="completed"]   { color: var(--sage); }
+.run-progress-pill[data-status="failed"]      { color: var(--brick); }
+.run-progress-runid {
+  font-family: var(--mono);
+  color: var(--text-2);
+}
+.run-progress-elapsed {
+  margin-left: auto;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.run-progress-reconnect {
+  color: var(--orange);
+  font-style: italic;
+}
+.run-progress-error {
+  color: var(--brick);
+}
+.run-progress-neutral { background: var(--surface); }
+.run-progress-warn    { background: #FCEFD8; }
+.run-progress-ok      { background: #E5EDD5; }
+.run-progress-err     { background: #FBE9E6; }
+
+/* ---------- Approval panel (Sprint 16 #79) ---------- */
+.approval .label[data-status^="APPROVED"] { color: var(--sage); }
+.approval .label[data-status^="REJECTED"] { color: var(--brick); }
+.approval .label[data-status^="PENDING"]  { color: var(--orange); }
+.approval-ok    { border-left: 3px solid var(--sage); }
+.approval-err   { border-left: 3px solid var(--brick); }
+.approval-warn  { border-left: 3px solid var(--orange); }
+
+.approval-form { display: grid; gap: 12px; padding-top: 6px; }
+.approval-form .form-input,
+.approval-form .form-textarea {
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  padding: 8px 10px;
+  border-radius: 0;
+}
+.approval-form .form-input:focus,
+.approval-form .form-textarea:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+  border-color: var(--gold);
+}
+.approval-form .form-textarea { resize: vertical; min-height: 50px; font-family: var(--mono); }
+.approval-form .form-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--brick);
+  font-size: 12px;
+  border-left: 3px solid var(--brick);
+  padding: 6px 10px;
+  background: #fbe9e6;
+}
+.approval-form .btn-retry {
+  background: transparent;
+  border: 1px solid var(--brick);
+  color: var(--brick);
+  padding: 4px 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.approval-form .btn-retry:hover { background: var(--brick); color: white; }
+.approval-comments-display .lbl {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.approval-comments-display .val { color: var(--text); font-size: 12px; }
+
+/* ---------- Workflows screen (Sprint 16 #80) ---------- */
+.workflows-loading,
+.workflows-empty,
+.workflow-detail-empty {
+  padding: 22px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.workflows-empty h3 {
+  margin: 0 0 8px;
+  letter-spacing: 0.16em;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+.workflows-empty p { margin: 0; line-height: 1.6; }
+.workflows-empty code {
+  font-family: var(--mono);
+  background: var(--surface-2);
+  padding: 1px 6px;
+  font-size: 11.5px;
+}
+.workflows-error {
+  padding: 12px 16px;
+  border-left: 3px solid var(--brick);
+  background: #fbe9e6;
+  color: var(--brick);
+  font-size: 12px;
+}
+.btn-link {
+  background: none;
+  border: 0;
+  color: var(--gold);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.workflows-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.workflows-list {
+  display: grid;
+  gap: 6px;
+}
+.workflow-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.workflow-row:hover { border-color: var(--border-2); }
+.workflow-row.selected {
+  border-color: var(--gold);
+  background: #FFF8EC;
+}
+.workflow-row-name { font-weight: 600; font-size: 12.5px; }
+.workflow-row-id {
+  font-family: var(--mono);
+  color: var(--text-3);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+}
+.workflow-row-meta { font-size: 11px; color: var(--text-2); }
+.workflow-row-owner {
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.workflow-detail {
+  padding: 22px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  display: grid;
+  gap: 18px;
+}
+.workflow-detail-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+.workflow-detail-head h3 { margin: 0; letter-spacing: 0.12em; }
+.workflow-detail-head .muted { color: var(--text-3); font-family: var(--mono); font-size: 11px; }
+.workflow-section h4 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.topology-preview {
+  background: var(--surface-2);
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  margin: 0;
+  max-height: 280px;
+  overflow: auto;
+}
+.workflow-agent-list,
+.workflow-contract-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.workflow-agent-list li {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+}
+.workflow-contract-list li {
+  display: grid;
+  grid-template-columns: 80px 100px 1fr;
+  gap: 10px;
+  font-size: 11.5px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+}
+.contract-id { font-family: var(--mono); color: var(--text); font-weight: 600; }
+.contract-type { color: var(--orange); letter-spacing: 0.12em; text-transform: uppercase; font-size: 10.5px; }
+.contract-rule { color: var(--text-2); }
+
+/* ---------- Forensic trace UI (Sprint 17 #81 scaffold; #82-#85 fill in) ---------- */
+.forensic-empty {
+  padding: 28px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text-2);
+}
+.forensic-empty h3 {
+  margin: 0 0 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 13px;
+}
+.forensic-empty p { margin: 0; line-height: 1.6; }
+.forensic-empty code {
+  font-family: var(--mono);
+  background: var(--surface-2);
+  padding: 1px 6px;
+  font-size: 11.5px;
+}
+.forensic-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr 360px;
+  gap: 14px;
+  align-items: stretch;
+  min-height: 500px;
+}
+.forensic-pane {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+.forensic-pane-head {
+  padding: 10px 14px;
+  border-bottom: 1.5px solid var(--border);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  font-weight: 600;
+  background: var(--surface-2);
+}
+.forensic-pane-body {
+  padding: 14px;
+  flex: 1;
+  overflow: auto;
+}
+.forensic-pane-placeholder {
+  padding: 22px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  border: 1px dashed var(--border-2);
+  background: var(--surface-2);
+}
+@media (max-width: 1024px) {
+  .forensic-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+}
+
+/* ---------- Forensic span tree (Sprint 17 #82) ---------- */
+.forensic-pane-body-tree { padding: 6px; }
+.span-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  outline: none;
+}
+.span-tree:focus { box-shadow: inset 0 0 0 2px var(--gold); }
+.span-tree-row {
+  display: grid;
+  grid-template-columns: 18px 18px 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 8px 5px 8px;
+  cursor: pointer;
+  font-size: 11.5px;
+  border-left: 2px solid transparent;
+}
+.span-tree-row:hover { background: var(--surface-2); }
+.span-tree-row.selected {
+  background: #FFF8EC;
+  border-left-color: var(--gold);
+}
+.span-tree-row.err .span-tree-icon { color: var(--brick); }
+.span-tree-chevron {
+  background: none;
+  border: 0;
+  font: inherit;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 0;
+  width: 18px;
+  text-align: center;
+}
+.span-tree-chevron-spacer {
+  color: var(--border-2);
+  text-align: center;
+  font-size: 10px;
+}
+.span-tree-icon {
+  font-family: var(--mono);
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.span-tree-icon.kind-workflow       { color: var(--text); font-weight: 700; }
+.span-tree-icon.kind-agent          { color: var(--gold); }
+.span-tree-icon.kind-tool           { color: var(--orange); }
+.span-tree-icon.kind-handoff        { color: var(--text-3); }
+.span-tree-icon.kind-guardrail      { color: var(--brick); }
+.span-tree-icon.kind-human_gate     { color: var(--sage); }
+.span-tree-icon.kind-action         { color: var(--gold); }
+.span-tree-icon.kind-contract_check { color: var(--brick); }
+.span-tree-icon.kind-repair         { color: var(--sage); }
+.span-tree-icon.kind-regression     { color: var(--sage); }
+.span-tree-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.span-tree-name {
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.span-tree-agent {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-2);
+}
+.span-tree-tool {
+  font-size: 10px;
+  color: var(--orange);
+}
+.span-tree-duration {
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-family: var(--mono);
+}
+.span-tree-badge {
+  background: var(--brick);
+  color: white;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  letter-spacing: 0.06em;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ---------- Forensic timeline waterfall (Sprint 17 #83) ---------- */
+.forensic-pane-body-waterfall { padding: 14px; overflow: auto; }
+.waterfall {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: var(--mono);
+}
+.waterfall-axis {
+  position: relative;
+  height: 18px;
+  border-bottom: 1px solid var(--border);
+  margin-left: 220px; /* matches label column */
+  margin-right: 60px; /* matches duration column */
+}
+.waterfall-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.waterfall-tick:first-child { transform: none; }
+.waterfall-tick:last-child { transform: translateX(-100%); }
+.waterfall-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.waterfall-row {
+  display: grid;
+  grid-template-columns: 220px 1fr 60px;
+  gap: 8px;
+  align-items: center;
+  background: none;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+.waterfall-row:hover { background: var(--surface-2); }
+.waterfall-row.selected {
+  background: #FFF8EC;
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+.waterfall-row-label {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.waterfall-row-icon {
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-2);
+}
+.waterfall-row-icon.kind-workflow       { color: var(--text); font-weight: 700; }
+.waterfall-row-icon.kind-agent          { color: var(--gold); }
+.waterfall-row-icon.kind-tool           { color: var(--orange); }
+.waterfall-row-icon.kind-handoff        { color: var(--text-3); }
+.waterfall-row-icon.kind-guardrail      { color: var(--brick); }
+.waterfall-row-icon.kind-human_gate     { color: var(--sage); }
+.waterfall-row-icon.kind-action         { color: var(--gold); }
+.waterfall-row-icon.kind-contract_check { color: var(--brick); }
+.waterfall-row-icon.kind-repair         { color: var(--sage); }
+.waterfall-row-icon.kind-regression     { color: var(--sage); }
+.waterfall-row-name {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.waterfall-bar-track {
+  position: relative;
+  height: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.waterfall-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--gold);
+  border-right: 2px solid var(--orange);
+}
+.waterfall-bar.kind-workflow       { background: var(--text); }
+.waterfall-bar.kind-agent          { background: var(--gold); }
+.waterfall-bar.kind-tool           { background: var(--orange); }
+.waterfall-bar.kind-handoff        { background: var(--border-2); }
+.waterfall-bar.kind-guardrail      { background: var(--brick); }
+.waterfall-bar.kind-human_gate     { background: var(--sage); }
+.waterfall-bar.kind-action         { background: var(--gold); border-right-color: var(--brick); }
+.waterfall-bar.kind-contract_check { background: var(--brick); }
+.waterfall-bar.kind-repair         { background: var(--sage); }
+.waterfall-bar.kind-regression     { background: #4A6E29; }
+.waterfall-bar.err {
+  background: var(--brick) !important;
+  border: 1px solid #6E1A0A;
+}
+.waterfall-row-duration {
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--text-3);
+  text-align: right;
+}
+
+/* ---------- Forensic span inspector (Sprint 17 #84) ---------- */
+.forensic-pane-body-inspector { padding: 0; overflow: auto; }
+.span-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.inspector-head {
+  padding: 14px 16px 12px;
+  border-bottom: 1.5px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inspector-kind-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.inspector-kind {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.inspector-kind.kind-workflow       { color: var(--text); font-weight: 700; }
+.inspector-kind.kind-agent          { color: var(--gold); }
+.inspector-kind.kind-tool           { color: var(--orange); }
+.inspector-kind.kind-handoff        { color: var(--text-3); }
+.inspector-kind.kind-guardrail      { color: var(--brick); }
+.inspector-kind.kind-human_gate     { color: var(--sage); }
+.inspector-kind.kind-action         { color: var(--gold); }
+.inspector-kind.kind-contract_check { color: var(--brick); }
+.inspector-kind.kind-repair         { color: var(--sage); }
+.inspector-kind.kind-regression     { color: var(--sage); }
+.inspector-status {
+  margin-left: auto;
+  border: 1px solid currentColor;
+  padding: 1px 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+}
+.inspector-status.status-ok    { color: var(--sage); }
+.inspector-status.status-error { color: var(--brick); }
+.inspector-name {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+}
+.inspector-section {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.inspector-section h4 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.inspector-error h4 { color: var(--brick); }
+.inspector-kv {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 4px 12px;
+  font-size: 11px;
+}
+.inspector-kv dt {
+  color: var(--text-3);
+  letter-spacing: 0.06em;
+}
+.inspector-kv dd {
+  margin: 0;
+  color: var(--text);
+  word-break: break-word;
+}
+.inspector-kv .mono { font-family: var(--mono); font-size: 10.5px; }
+.inspector-block {
+  border-bottom: 1px solid var(--border);
+}
+.inspector-block-toggle {
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  color: var(--text-2);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+}
+.inspector-block-toggle:hover { background: var(--surface-2); }
+.inspector-block-arrow { color: var(--text-3); width: 12px; }
+.inspector-block-body {
+  padding: 6px 16px 12px;
+  font-size: 11px;
+}
+.inspector-json {
+  background: var(--surface-2);
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  white-space: pre-wrap;
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+}
+.inspector-violation-list,
+.inspector-repair-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.inspector-violation-link,
+.inspector-repair-link {
+  display: grid;
+  grid-template-columns: 80px 70px 1fr;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+.inspector-violation-link:hover,
+.inspector-repair-link:hover {
+  background: var(--gold-dim);
+}
+.violation-contract,
+.patch-id {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--brick);
+  font-size: 11px;
+}
+.patch-id { color: var(--gold); }
+.violation-severity {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--brick);
+}
+.patch-primitive {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--orange);
+  text-transform: uppercase;
+}
+.violation-rule,
+.patch-title {
+  font-size: 11px;
+  color: var(--text);
+}
+.inspector-regression .pill {
+  text-transform: uppercase;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+}
+.inspector-regression .pill.ok   { color: var(--sage); }
+.inspector-regression .pill.fail { color: var(--brick); }
+
+/* ---------- Cross-screen deep-link button (Sprint 17 #85) ---------- */
+.view-span-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 1px dashed var(--gold-dim);
+  color: var(--gold);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  margin-top: 4px;
+  cursor: pointer;
+}
+.view-span-link:hover {
+  background: var(--gold-dim);
+  color: #1F1F33;
+  border-style: solid;
+}
+.view-span-link:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+/* ---------- Sprint 18 #86 — a11y utilities ---------- */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  z-index: 10000;
+  background: var(--gold);
+  color: #1F1F33;
+  font-weight: 700;
+  padding: 8px 16px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 11px;
+  text-decoration: none;
+  border: 2px solid var(--gold);
+}
+.skip-link:focus {
+  top: 8px;
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.main:focus { outline: none; }
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.tab:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+/* ---------- Sprint 18 #88 — reusable state components ---------- */
+.state-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 22px;
+  background: var(--surface);
+  border: 1px dashed var(--border-2);
+  color: var(--text-2);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+.state-loading.inline {
+  padding: 8px 12px;
+  display: inline-flex;
+}
+.state-spinner {
+  display: inline-block;
+  font-size: 14px;
+  color: var(--gold);
+  animation: state-spin 1.4s linear infinite;
+}
+@keyframes state-spin { to { transform: rotate(360deg); } }
+.state-empty,
+.state-error {
+  padding: 22px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.state-empty h3,
+.state-error h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.state-empty p,
+.state-error p {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  line-height: 1.6;
+  font-size: 12.5px;
+}
+.state-error {
+  border-left: 3px solid var(--brick);
+}
+.state-error h3 { color: var(--brick); }
+.state-action,
+.state-error .btn-retry {
+  margin-top: 8px;
+}
+.state-error .btn-retry {
+  background: transparent;
+  border: 1px solid var(--brick);
+  color: var(--brick);
+  padding: 6px 14px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: inherit;
+}
+.state-error .btn-retry:hover {
+  background: var(--brick);
+  color: white;
+}
+
+/* ---------- Sprint 18 #87 — responsive layouts (375 / 768 / 1440) ---------- */
+/* Tablet: collapse 6-column meta strip + simplify forensic panes */
+@media (max-width: 1024px) {
+  .meta-strip { grid-template-columns: repeat(3, 1fr); }
+  .meta-cell:nth-child(n+4) { border-top: 1px solid var(--border); }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .pipeline { grid-template-columns: repeat(2, 1fr); }
+  .pipeline .agent-box { border-right: 1px solid var(--border); }
+  .workflows-grid { grid-template-columns: 1fr; }
+  .forensic-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(200px, auto) minmax(300px, 1fr) minmax(200px, auto);
+  }
+}
+
+/* Mobile: hamburger nav + single-column everything + larger tap targets */
+@media (max-width: 640px) {
+  .topbar {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+  .brand { border-right: 0; border-bottom: 1px solid var(--border); }
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+  }
+  .tab {
+    min-height: 44px;            /* WCAG 2.5.5 / iOS HIG tap target */
+    padding: 0 14px;
+    flex: 0 0 auto;
+  }
+  .status-cluster {
+    border-left: 0;
+    padding: 8px 18px;
+    justify-content: space-between;
+  }
+  .meta-strip {
+    grid-template-columns: repeat(2, 1fr);
+    font-size: 10.5px;
+  }
+  .meta-cell:nth-child(n+3) { border-top: 1px solid var(--border); }
+  .meta-cell { padding: 6px 10px; }
+  .main { padding: 12px 14px 32px; }
+  .stat-grid { grid-template-columns: 1fr; }
+  .pipeline { grid-template-columns: 1fr; }
+  .pipeline .agent-box {
+    border-right: 1px solid var(--border);
+    min-height: auto;
+  }
+  .row { flex-direction: column; }
+  .row .card[style*="width: 360"] { width: 100% !important; }
+  .submit-run-form { padding: 14px; }
+  .approval .btn-row { flex-direction: column; }
+  .approval .btn-row .btn { width: 100%; min-height: 44px; }
+  .workflows-grid { grid-template-columns: 1fr; }
+  .workflow-row { padding: 14px; min-height: 44px; }
+  /* Forensic stacks vertically on mobile; waterfall scrolls horizontally
+     (designed affordance — too dense for column-only) */
+  .forensic-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    min-height: auto;
+  }
+  .forensic-pane { min-height: 300px; }
+  .forensic-pane-body-waterfall { overflow-x: auto; }
+  /* Section heads stack on mobile so the right-side meta doesn't truncate */
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}

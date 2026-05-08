@@ -224,5 +224,149 @@ window.CONCORD_DATA = {
       requested_at: "2026-05-03T14:22:26Z",
       sla: "4h"
     }
-  }
+  },
+  /* Sprint 17 #81 spans fixture — covers all 10 kinds. Parent refs resolve;
+     child timestamps are within parent. */
+  spans: [
+    {
+      trace_id: "tr_041", span_id: "sp_workflow", parent_span_id: null,
+      name: "concord.workflow.LiteratureReviewAssistant", kind: "workflow",
+      agent: null, tool: null, status: "error",
+      start_time: 0.0, end_time: 18.4, duration_ms: 18432,
+      attributes: { "workflow.name": "LiteratureReviewAssistant", "run.id": "RUN-041" },
+      input: {}, output: { summary: "Final memo emitted (with violations)" },
+      error: null, contract_refs: []
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_researcher", parent_span_id: "sp_workflow",
+      name: "concord.agent.ResearcherAgent", kind: "agent",
+      agent: "ResearcherAgent", tool: null, status: "ok",
+      start_time: 0.1, end_time: 3.2, duration_ms: 3100,
+      attributes: { "concord.step": 1 },
+      input: { task: "Multi-agent reliability review" },
+      output: { sources_found: 7 }, error: null, contract_refs: []
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_tavily", parent_span_id: "sp_researcher",
+      name: "concord.tool.tavily_search", kind: "tool",
+      agent: "ResearcherAgent", tool: "tavily_search", status: "ok",
+      start_time: 0.3, end_time: 1.2, duration_ms: 900,
+      attributes: { "gen_ai.tool.name": "tavily_search" },
+      input: { query: "multi-agent reliability" },
+      output: { results: 7 }, error: null, contract_refs: []
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_record_research", parent_span_id: "sp_researcher",
+      name: "concord.tool.record_research", kind: "tool",
+      agent: "ResearcherAgent", tool: "record_research", status: "ok",
+      start_time: 1.4, end_time: 2.0, duration_ms: 600,
+      attributes: { "gen_ai.tool.name": "record_research", "tool_call_id": "tc_001" },
+      input: { sources: 7 }, output: { tool_call_id: "tc_001" },
+      error: null, contract_refs: []
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_handoff_res_to_crt", parent_span_id: "sp_workflow",
+      name: "concord.handoff.researcher->critic", kind: "handoff",
+      agent: null, tool: null, status: "ok",
+      start_time: 3.2, end_time: 3.3, duration_ms: 100,
+      attributes: { from: "ResearcherAgent", to: "CriticAgent" },
+      input: {}, output: {}, error: null, contract_refs: []
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_critic", parent_span_id: "sp_workflow",
+      name: "concord.agent.CriticAgent", kind: "agent",
+      agent: "CriticAgent", tool: null, status: "ok",
+      start_time: 3.3, end_time: 5.1, duration_ms: 1800,
+      attributes: { "concord.step": 2 },
+      input: { sources: 7 }, output: { critique_notes: 3 },
+      error: null, contract_refs: []
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_verifier", parent_span_id: "sp_workflow",
+      name: "concord.agent.VerifierAgent", kind: "agent",
+      agent: "VerifierAgent", tool: null, status: "error",
+      start_time: 5.1, end_time: 7.4, duration_ms: 2300,
+      attributes: { "concord.step": 3 },
+      input: { sources: 7 },
+      output: { verified_sources_count: 0, tool_call_id: null },
+      error: { type: "verification_failed", message: "0 sources verified, no tool_call_id" },
+      contract_refs: [
+        { contract_id: "C-EVD", violation_id: "V-001", severity: "HIGH", rule: "Reporter may write final answer only when verified_sources_count > 0" },
+        { contract_id: "C-TOL", violation_id: "V-002", severity: "HIGH", rule: "Claims of 'verified' / 'searched' / 'checked' require a matching tool_event" }
+      ]
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_guardrail_verifier", parent_span_id: "sp_verifier",
+      name: "concord.guardrail.C2_missing_tool_call_id", kind: "guardrail",
+      agent: "VerifierAgent", tool: null, status: "error",
+      start_time: 7.3, end_time: 7.4, duration_ms: 100,
+      attributes: { "guardrail.name": "C2_missing_tool_call_id" },
+      input: {}, output: { triggered: true },
+      error: { type: "C2_violation", message: "tool_call_id missing on VerifierAgent" },
+      contract_refs: []
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_reporter", parent_span_id: "sp_workflow",
+      name: "concord.agent.ReporterAgent", kind: "agent",
+      agent: "ReporterAgent", tool: null, status: "error",
+      start_time: 7.4, end_time: 11.0, duration_ms: 3600,
+      attributes: { "concord.step": 4 },
+      input: { verified_sources_count: 0 },
+      output: { final_output: "(emitted despite unverified sources)" },
+      error: { type: "C-RTE", message: "Reporter ran without successful verifier tool event" },
+      contract_refs: [
+        { contract_id: "C-RTE", violation_id: "V-003", severity: "HIGH", rule: "Reporter must run after Verifier with a successful tool event" }
+      ]
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_human_gate", parent_span_id: "sp_workflow",
+      name: "concord.human_gate.HumanGateAgent", kind: "human_gate",
+      agent: "HumanGateAgent", tool: null, status: "ok",
+      start_time: 11.0, end_time: 11.3, duration_ms: 300,
+      attributes: { approval_status: "pending" },
+      input: {}, output: { approval_status: "pending" },
+      error: null, contract_refs: []
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_action", parent_span_id: "sp_workflow",
+      name: "concord.action.ActionAgent", kind: "action",
+      agent: "ActionAgent", tool: null, status: "error",
+      start_time: 11.3, end_time: 13.5, duration_ms: 2200,
+      attributes: { "concord.step": 5 },
+      input: { approval_status: "pending" },
+      output: { action: "save_report" },
+      error: { type: "C-APR", message: "Action ran without approval" },
+      contract_refs: [
+        { contract_id: "C-APR", violation_id: "V-004", severity: "HIGH", rule: "ActionAgent requires approval_status == approved" }
+      ]
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_contract_check", parent_span_id: "sp_workflow",
+      name: "concord.contract_check.zone_b", kind: "contract_check",
+      agent: null, tool: null, status: "error",
+      start_time: 13.5, end_time: 14.2, duration_ms: 700,
+      attributes: { violations: 4, contracts_passed: 1, contracts_total: 5 },
+      input: {}, output: { violation_types: ["evidence", "tool", "routing", "approval"] },
+      error: { type: "contract_violations", message: "4 violations found" },
+      contract_refs: []
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_repair", parent_span_id: "sp_workflow",
+      name: "concord.repair.zone_b", kind: "repair",
+      agent: null, tool: null, status: "ok",
+      start_time: 14.2, end_time: 18.4, duration_ms: 4200,
+      attributes: { "patches.count": 4, target_span_id: "sp_verifier" },
+      input: { violations: 4 }, output: { patches: 4 },
+      error: null, contract_refs: []
+    },
+    {
+      trace_id: "tr_041", span_id: "sp_regression", parent_span_id: "sp_repair",
+      name: "concord.regression.daytona", kind: "regression",
+      agent: null, tool: null, status: "ok",
+      start_time: 16.7, end_time: 18.4, duration_ms: 1700,
+      attributes: { sandbox_id: "dt-xxx", test_status: "passed" },
+      input: { patches: 4 }, output: { test_status: "passed", duration_ms: 1700 },
+      error: null, contract_refs: []
+    }
+  ]
 };

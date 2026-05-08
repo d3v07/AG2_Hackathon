@@ -58,8 +58,40 @@ def _generate_violation_text(contract: dict, run_trace: RunTrace, snap: ContextS
         return contract["rule"], "contract check failed"
 
 
-def run_contract_checker(run_trace: RunTrace, context_snapshot: ContextSnapshot) -> dict:
-    """Check all contracts and return list of Violation objects."""
+def _find_matching_span_id(
+    spans: list[dict] | None,
+    failed_agent: str,
+    failed_step: int,
+) -> str | None:
+    """Find the span that owns this violation, by step then by agent.
+    Returns None when spans aren't available (legacy raw_trace) so the
+    forensic UI link gracefully falls back to step+agent attribution."""
+    if not spans:
+        return None
+    # Prefer step-based match if any span carries concord.step in attributes
+    for span in spans:
+        attrs = span.get("attributes") or {}
+        if attrs.get("concord.step") == failed_step and span.get("agent") == failed_agent:
+            return span.get("span_id")
+    # Fallback: first span whose agent matches
+    for span in spans:
+        if span.get("agent") == failed_agent:
+            return span.get("span_id")
+    return None
+
+
+def run_contract_checker(
+    run_trace: RunTrace,
+    context_snapshot: ContextSnapshot,
+    spans: list[dict] | None = None,
+) -> dict:
+    """Check all contracts and return list of Violation objects.
+
+    When ``spans`` is provided (Sprint 15 #75), each violation gets its
+    ``span_id`` stamped so the forensic UI can deep-link from a violation
+    to the offending span. Legacy callers without spans are unaffected —
+    ``span_id`` stays None.
+    """
     violations: list[Violation] = []
 
     for contract in CONTRACTS:
@@ -67,6 +99,7 @@ def run_contract_checker(run_trace: RunTrace, context_snapshot: ContextSnapshot)
         if not passed:
             expected, observed = _generate_violation_text(contract, run_trace, context_snapshot)
             failed_step = _find_failed_step(run_trace, contract["failed_agent"])
+            span_id = _find_matching_span_id(spans, contract["failed_agent"], failed_step)
             violations.append(Violation(
                 contract_type=contract["type"],
                 severity=contract["severity"],
@@ -75,6 +108,7 @@ def run_contract_checker(run_trace: RunTrace, context_snapshot: ContextSnapshot)
                 observed=observed,
                 failed_agent=contract["failed_agent"],
                 failed_step=failed_step,
+                span_id=span_id,
             ))
 
     severity_summary = {"high": 0, "medium": 0, "low": 0}
