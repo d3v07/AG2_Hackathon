@@ -157,7 +157,13 @@ def test_task_spec_submission_is_rejected_until_zone_a_runtime_is_wired(tmp_path
 
     response = client.post(
         "/api/runs",
-        json={"workflow_id": workflow_id, "task_spec": {"topic": "multi-agent reliability"}},
+        json={
+            "workflow_id": workflow_id,
+            "task_spec": {
+                "task": "research multi-agent reliability",
+                "research_question": "What makes multi-agent systems reliable?",
+            },
+        },
     )
 
     assert response.status_code == 400
