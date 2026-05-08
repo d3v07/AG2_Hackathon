@@ -1,4 +1,0 @@
-ag2>=0.12
-python-dotenv
-tavily-python
-daytona-sdk
