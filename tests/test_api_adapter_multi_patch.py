@@ -88,6 +88,20 @@ def test_backend_report_patches_passthrough_one_per_violation():
             },
         ],
         "regression_test_status": "passed",
+        "sandbox_id": "dt-report",
+        "regression_duration_ms": 1250,
+        "regression_usage": {"prompt_tokens": 8, "completion_tokens": 4, "total_tokens": 12},
+        "regression_cost": {
+            "daytona_seconds": 1.25,
+            "llm_tokens": 12,
+            "llm_cost_usd": 0.00006,
+            "daytona_cost_usd": 0.00025,
+        },
+        "regression_summary": {"pass": 2, "fail": 0, "error": 0},
+        "regression_tests": [
+            {"test_name": "test_tool", "test_status": "pass", "sandbox_id": "dt-report"},
+            {"test_name": "test_routing", "test_status": "pass", "sandbox_id": "dt-report"},
+        ],
         "approval_status": "approved",
     }
 
@@ -112,6 +126,22 @@ def test_backend_report_patches_passthrough_one_per_violation():
         "P-001  OnContextCondition     VerifierAgent",
         "P-002  Handoff                GroupChatManager",
     ]
+    assert data["test"]["sandbox_id"] == "dt-report"
+    assert data["test"]["duration_ms"] == 1250
+    assert data["cost"] == {
+        "daytona_seconds": 1.25,
+        "llm_tokens": 12,
+        "llm_cost_usd": 0.00006,
+        "daytona_cost_usd": 0.00025,
+    }
+    assert data["report"]["regression_summary"] == {"pass": 2, "fail": 0, "error": 0}
+    assert data["report"]["regression_tests"][0]["test_name"] == "test_tool"
+    assert data["report"]["usage_summary"] == {
+        "prompt_tokens": 8,
+        "completion_tokens": 4,
+        "total_tokens": 12,
+    }
+    assert data["report"]["cost_summary"] == data["cost"]
 
 
 def test_adapter_keeps_scalar_patch_fallback_when_native_patches_absent():

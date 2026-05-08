@@ -3,11 +3,11 @@
 ## Overview
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
-- Phase: Sprint 7 ready to land
-- Branch: feat/sprint-7-live-dashboard
-- Current Sprint: Sprint 7
-- Current Task: #24-#26 live run events, dashboard LIVE/FIXTURE mode, and SSE badge
-- Last Checkpoint: Sprint 7 reviewer findings were addressed and the current tree passed focused tests, full pytest, fixture pipeline, OTel spike, repo-valid import smoke, local tokenized SSE probe, deployed demo probe, diff check, and browser QA.
+- Phase: Sprint 8 implementation
+- Branch: feat/sprint-8-daytona-costs
+- Current Sprint: Sprint 8
+- Current Task: #27-#29 DaytonaCodeExecutor pool, repair-test-iterate loop, and run cost tracking
+- Last Checkpoint: Sprint 8 RED tests were added and then passed after implementation; the focused compatibility gate passed `pytest -q tests/test_daytona_runner.py tests/test_repair_iterate.py tests/test_cost_tracking.py tests/test_regression_test.py tests/test_per_violation_repairs.py tests/test_reporter.py tests/test_api_adapter_multi_patch.py tests/test_api_runs.py tests/test_api_persistence.py tests/test_group_chat.py tests/test_integration.py` with 107 tests.
 
 ## Sprint Board
 Sprint 3: Foundation
@@ -31,9 +31,14 @@ Sprint 6: AG2 tracing and SDK
 - #23 P0 SDK: Add one-line instrumentation and API client package — closed on `main`
 
 Sprint 7: Live run events and dashboard mode controls
-- #24 P0 API: Add in-process SSE event bus and `/api/runs/{id}/events`
-- #25 P0 Dashboard: Wire live updates from SSE while keeping fixture mode default
-- #26 P0 Dashboard: Add LIVE/FIXTURE toggle and badge
+- #24 P0 API: Add in-process SSE event bus and `/api/runs/{id}/events` — closed on `main`
+- #25 P0 Dashboard: Wire live updates from SSE while keeping fixture mode default — closed on `main`
+- #26 P0 Dashboard: Add LIVE/FIXTURE toggle and badge — closed on `main`
+
+Sprint 8: Real Daytona repair-test-iterate loop
+- #27 P0 Zone B: Replace raw Daytona SDK execution with AG2 `DaytonaCodeExecutor` pool — in progress
+- #28 P0 Zone B: Add repair-test-iterate loop capped at 3 iterations — in progress
+- #29 P1 Zone B/API: Track Daytona duration and cost fields on persisted runs — in progress
 
 ## What Worked
 - GitHub issues #12-#15 are closed on `main`.
@@ -165,6 +170,23 @@ Sprint 7: Live run events and dashboard mode controls
 - Sprint 7 final local API probe passed: health 200, `GET /api/runs/RUN-041` returned completed with 4 patches and 7 routes, `/events/token` issued a token, `/events?stream_token=...` replayed through sequence 3, and unauthenticated non-local tenant events returned 401.
 - Sprint 7 deployed demo probe returned HTTP 200.
 - Sprint 7 final browser QA passed with gstack browse: desktop and mobile fixture defaults, LIVE reaches `LIVE COMPLETED`, DAG renders, mobile has no horizontal document overflow, and the only console warning is the existing in-browser Babel warning.
+- PR #50 merged Sprint 7 into `production`; PR #51 merged `production` into `main`; GitHub issues #24, #25, and #26 are closed.
+- Merged Sprint 7 branch `feat/sprint-7-live-dashboard` was deleted locally and remotely after landing on `main`.
+- Sprint 8 branch `feat/sprint-8-daytona-costs` was created from updated `main`.
+- #27 RED tests failed for the expected reason before implementation: `zone_b.sandbox` did not exist.
+- #28 RED tests failed for the expected reason before implementation: `run_repair_test_iterations` did not exist.
+- #27 now uses `zone_b.sandbox.DaytonaExecutorPool` backed by AG2 `DaytonaCodeExecutor`; missing Daytona credentials return explicit `error` with `no-sandbox`.
+- #28 now retries Repair -> RegressionTest only on regression `fail`, stops on `pass` or infrastructure `error`, and caps at 3 iterations.
+- #29 now carries `duration_ms`, usage, and `{daytona_seconds, llm_tokens, llm_cost_usd, daytona_cost_usd}` through reporter, adapter, persisted run records, and `GET /api/runs/{id}`.
+- Sprint 8 focused compatibility gate passed: 107 tests across Daytona runner, repair iteration, cost tracking, regression, reporter, adapter, API runs/persistence, group chat, and integration.
+- Sprint 8 reviewer found blocking issues in sandbox isolation and cost accounting; these were fixed with executor restart-before-reuse, multi-iteration cost aggregation, and LLM usage preservation for malformed/non-object generated output.
+- Sprint 8 final full gate passed: `pytest -x --tb=short` passed 373 tests.
+- Sprint 8 final fixture gate passed: `python3 run_all.py --fixture` reported `Regression status : pass` and `Regression tests   : 4 pass / 0 fail / 0 error`.
+- Sprint 8 final OTel spike passed: `python3 scripts/otel_spike.py`.
+- Sprint 8 final repo-valid import smoke passed for AG2 `DaytonaCodeExecutor`, `CodeBlock`, `daytona.Daytona`, run event classes, and `DaytonaExecutorPool`.
+- Sprint 8 final local API probe passed: health 200, `GET /api/runs/RUN-041` returned completed with 4 patches and non-zero Daytona cost, and `/events/token` issued a token.
+- Sprint 8 final deployed demo probe returned HTTP 200.
+- Sprint 8 `git diff --check` and `python3 -m compileall -q api zone_b` passed.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -175,6 +197,8 @@ Sprint 7: Live run events and dashboard mode controls
 - Sprint 6 initial native span support still required Concord attributes; fixed with native AG2 `gen_ai.*` mapping and tests.
 - Sprint 6 clean SDK install initially missed the provider extra required by the Zone A spike; fixed by declaring `ag2[openai]>=0.12`.
 - Sprint 6 reusable SDK sessions initially leaked prior spans into later submissions; fixed by resetting submitted span buffers after each `complete()`.
+- Sprint 8 first reviewer found sandbox-state leakage and per-iteration cost undercounting; fixed with pool reset and cost aggregation tests.
+- Sprint 8 second reviewer found LLM cost double-counting and non-object generated JSON usage loss; fixed with AG2-shaped cost parsing tests.
 - `docs/PLAN_VS_REALITY.md` is referenced by the handoff but missing locally.
 
 ## Blockers
@@ -184,7 +208,8 @@ Sprint 7: Live run events and dashboard mode controls
 - No Sprint 5 blocker remains.
 - No Sprint 6 blocker remains.
 - No Sprint 7 blocker remains; final reviewer medium findings were fixed locally.
+- No Sprint 8 blocker remains after final reviewer fixes and full gate.
 - Remaining toolchain gaps: `ruff` unavailable in the current Python environment; `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Commit Sprint 7 with `Closes #24`, `Closes #25`, and `Closes #26`, push PR to `production`, merge through `production` and `main`, verify `main`, delete the merged sprint branch, then start Sprint 8 (#27-#29).
+Commit Sprint 8 with `Closes #27`, `Closes #28`, and `Closes #29`, then push PR to `production`, inspect comments/checks, merge through `production` and `main`, verify `main`, delete the merged sprint branch, and continue to Sprint 9 (#30-#32).

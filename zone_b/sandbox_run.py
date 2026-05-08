@@ -3,10 +3,8 @@ Run Zone B pipeline (TraceCollector + ContractChecker) in a Daytona sandbox
 against mock Tavily-enriched trace data.
 """
 import json
-import os
-from pathlib import Path
-from daytona_sdk import Daytona
 from dotenv import load_dotenv
+from zone_b.sandbox.runner import run_python_in_daytona
 
 load_dotenv()
 
@@ -300,27 +298,21 @@ asyncio.run(main())
 
 
 def main():
-    print("Creating Daytona sandbox...")
-    daytona = Daytona()
-    sandbox = daytona.create()
-    print(f"Sandbox ID: {sandbox.id}")
-
-    try:
-        # write mock trace locally then upload
-        print("Uploading mock trace...")
-        local_tmp = Path("/tmp/mock_trace.json")
-        local_tmp.write_text(json.dumps(MOCK_TRACE, indent=2))
-        sandbox.fs.upload_file(str(local_tmp), "/tmp/mock_trace.json")
-
-        # run pipeline
-        print("Running pipeline...\n")
-        result = sandbox.process.code_run(PIPELINE_CODE)
-        print(result.result)
-
-    finally:
-        print(f"\nCleaning up sandbox {sandbox.id}...")
-        sandbox.delete()
-        print("Done.")
+    print("Running pipeline in Daytona...\n")
+    mock_trace_json = json.dumps(MOCK_TRACE)
+    code = (
+        f"MOCK_TRACE_JSON = {mock_trace_json!r}\n"
+        + PIPELINE_CODE.replace(
+            'raw = json.loads(open("/tmp/mock_trace.json").read())',
+            "raw = json.loads(MOCK_TRACE_JSON)",
+        )
+    )
+    result = run_python_in_daytona(code)
+    print(f"Sandbox ID: {result.sandbox_id}")
+    print(result.stdout)
+    if result.exit_code != 0:
+        raise SystemExit(1)
+    print("Done.")
 
 
 if __name__ == "__main__":

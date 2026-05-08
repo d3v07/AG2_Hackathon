@@ -13,10 +13,30 @@ import json
 import os
 import subprocess
 import sys
+import time
 from autogen import ConversableAgent
 from shared.models import RunTrace, Violation
 from zone_b.config import get_llm_config
 from zone_b.utils import parse_json_body as _parse_json_body, make_proxy as _make_proxy
+from zone_b.sandbox.runner import (
+    SandboxRunResult,
+    run_python_in_daytona,
+    zero_cost,
+    zero_usage,
+)
+
+
+class RegressionTestGenerationError(Exception):
+    def __init__(
+        self,
+        message: str,
+        *,
+        usage: dict[str, int] | None = None,
+        llm_cost_usd: float = 0.0,
+    ) -> None:
+        super().__init__(message)
+        self.usage = usage or zero_usage()
+        self.llm_cost_usd = llm_cost_usd
 
 
 def _ask_llm_for_test(
@@ -56,8 +76,25 @@ def _ask_llm_for_test(
         '  "assertions": list of one-line strings describing each assertion'
     )
     result = proxy.initiate_chat(tester, message=prompt, max_turns=1)
+    usage, llm_cost_usd = _extract_llm_usage(result)
     body = result.chat_history[-1]["content"]
-    return _parse_json_body(body)
+    try:
+        parsed = _parse_json_body(body)
+    except Exception as exc:
+        raise RegressionTestGenerationError(
+            "could not parse generated regression test",
+            usage=usage,
+            llm_cost_usd=llm_cost_usd,
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise RegressionTestGenerationError(
+            "generated regression test was not a JSON object",
+            usage=usage,
+            llm_cost_usd=llm_cost_usd,
+        )
+    parsed["_usage"] = usage
+    parsed["_llm_cost_usd"] = llm_cost_usd
+    return parsed
 
 
 def _fallback_test(repair_patch: str, violations: list[Violation]) -> dict:
@@ -179,35 +216,13 @@ def _status_summary(results: list[dict]) -> dict:
     return summary
 
 
-def _run_in_daytona(test_code: str) -> tuple[str, str, str]:
-    """Execute test_code in a fresh Daytona sandbox. Returns (stdout, sandbox_id, status)."""
-    api_key = os.environ.get("DAYTONA_API_KEY", "").strip()
-    api_url = os.environ.get("DAYTONA_API_URL", "").strip()
-    if not api_key or not api_url:
-        return ("Daytona credentials missing", "no-sandbox", "error")
-
-    from daytona_sdk import Daytona, DaytonaConfig
-
-    daytona = Daytona(DaytonaConfig(api_key=api_key, api_url=api_url))
-    sandbox = None
-    sandbox_id = "no-sandbox"
-    try:
-        sandbox = daytona.create()
-        sandbox_id = getattr(sandbox, "id", "unknown")
-        result = sandbox.process.code_run(test_code)
-        stdout = getattr(result, "result", "") or getattr(result, "stdout", "") or ""
-        return (stdout, sandbox_id, _parse_status(stdout))
-    except Exception as e:
-        return (f"Daytona error: {e!r}", sandbox_id, "error")
-    finally:
-        if sandbox is not None:
-            try:
-                daytona.delete(sandbox)
-            except Exception:
-                pass
+def _run_in_daytona(test_code: str) -> SandboxRunResult:
+    """Execute test_code in a DaytonaCodeExecutor sandbox."""
+    return run_python_in_daytona(test_code)
 
 
-def _run_locally(test_code: str) -> tuple[str, str, str]:
+def _run_locally(test_code: str) -> SandboxRunResult:
+    start = time.perf_counter()
     try:
         proc = subprocess.run(
             [sys.executable, "-c", test_code],
@@ -215,18 +230,121 @@ def _run_locally(test_code: str) -> tuple[str, str, str]:
             text=True,
             timeout=10,
         )
+        duration = time.perf_counter() - start
         stdout = proc.stdout
         if proc.stderr:
             stdout = f"{stdout}{proc.stderr}"
-        return stdout, "local-regression", _parse_status(stdout)
+        return SandboxRunResult(
+            stdout=stdout,
+            sandbox_id="local-regression",
+            status=_parse_status(stdout),
+            duration_ms=int(round(duration * 1000)),
+            cost=zero_cost(),
+            usage=zero_usage(),
+            exit_code=proc.returncode,
+        )
     except subprocess.TimeoutExpired as exc:
-        return f"Local regression timeout: {exc!r}", "local-regression", "error"
+        duration = time.perf_counter() - start
+        return SandboxRunResult(
+            stdout=f"Local regression timeout: {exc!r}",
+            sandbox_id="local-regression",
+            status="error",
+            duration_ms=int(round(duration * 1000)),
+            cost=zero_cost(),
+            usage=zero_usage(),
+            exit_code=1,
+        )
     except OSError as exc:
-        return f"Local regression error: {exc!r}", "local-regression", "error"
+        duration = time.perf_counter() - start
+        return SandboxRunResult(
+            stdout=f"Local regression error: {exc!r}",
+            sandbox_id="local-regression",
+            status="error",
+            duration_ms=int(round(duration * 1000)),
+            cost=zero_cost(),
+            usage=zero_usage(),
+            exit_code=1,
+        )
 
 
 def _use_local_regression_runner() -> bool:
     return os.environ.get("CONCORD_REGRESSION_RUNNER", "").strip().lower() == "local"
+
+
+def _coerce_execution_result(value) -> SandboxRunResult:
+    if isinstance(value, SandboxRunResult):
+        return value
+    stdout, sandbox_id, status = value[:3]
+    return SandboxRunResult(
+        stdout=stdout,
+        sandbox_id=sandbox_id,
+        status=status,
+        cost=zero_cost(),
+        usage=zero_usage(),
+        exit_code=0 if status == "pass" else 1,
+    )
+
+
+def _sum_numeric(payload, names: set[str]) -> float:
+    total = 0.0
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if key in names and isinstance(value, int | float):
+                total += float(value)
+            elif isinstance(value, dict | list):
+                total += _sum_numeric(value, names)
+    elif isinstance(payload, list):
+        for item in payload:
+            total += _sum_numeric(item, names)
+    return total
+
+
+def _llm_cost_from_usage(payload) -> float:
+    if not isinstance(payload, dict):
+        return 0.0
+    total_cost = payload.get("total_cost")
+    if isinstance(total_cost, int | float):
+        return float(total_cost)
+    cost = payload.get("cost")
+    if isinstance(cost, int | float):
+        return float(cost)
+    return sum(_llm_cost_from_usage(value) for value in payload.values())
+
+
+def _extract_llm_usage(chat_result) -> tuple[dict[str, int], float]:
+    cost = getattr(chat_result, "cost", {}) or {}
+    usage_data = cost.get("usage_including_cached_inference", cost)
+    prompt = int(_sum_numeric(usage_data, {"prompt_tokens", "input_tokens"}))
+    completion = int(_sum_numeric(usage_data, {"completion_tokens", "output_tokens"}))
+    total = int(_sum_numeric(usage_data, {"total_tokens"})) or prompt + completion
+    llm_cost = _llm_cost_from_usage(usage_data)
+    return (
+        {
+            "prompt_tokens": prompt,
+            "completion_tokens": completion,
+            "total_tokens": total,
+        },
+        round(llm_cost, 8),
+    )
+
+
+def _aggregate_execution_cost(
+    results: list[SandboxRunResult],
+    usage: dict[str, int],
+    llm_cost_usd: float,
+) -> dict[str, float | int]:
+    cost = zero_cost()
+    cost["daytona_seconds"] = round(
+        sum(float((result.cost or {}).get("daytona_seconds", 0)) for result in results),
+        3,
+    )
+    cost["daytona_cost_usd"] = round(
+        sum(float((result.cost or {}).get("daytona_cost_usd", 0)) for result in results),
+        8,
+    )
+    cost["llm_tokens"] = int(usage.get("total_tokens", 0))
+    cost["llm_cost_usd"] = round(float(llm_cost_usd), 8)
+    return cost
 
 
 async def run_regression_test(
@@ -241,6 +359,14 @@ async def run_regression_test(
     generated_stdout = ""
     generated_sandbox_id = ""
     generated_test_ran = False
+    execution_results: list[SandboxRunResult] = []
+    llm_usage = zero_usage()
+    llm_cost_usd = 0.0
+
+    def record_execution(value) -> SandboxRunResult:
+        result = _coerce_execution_result(value)
+        execution_results.append(result)
+        return result
 
     if _use_local_regression_runner():
         fallback = _fallback_test(repair_patch, violations)
@@ -249,15 +375,27 @@ async def run_regression_test(
         assertions = fallback["assertions"]
         fallback_used = True
         fallback_reason = "local_regression_runner"
-        stdout, sandbox_id, test_status = _run_locally(test_code)
+        execution = record_execution(_run_locally(test_code))
+        stdout, sandbox_id, test_status = execution.as_legacy_tuple()
     else:
         try:
             gen = _ask_llm_for_test(repair_patch, violations, run_trace)
             test_name = gen.get("test_name", "test_repair_resolves_violations")
             test_code = gen.get("test_code", "")
             assertions = _normalize_assertions(gen.get("assertions", []))
+            llm_usage = gen.get("_usage", zero_usage())
+            llm_cost_usd = float(gen.get("_llm_cost_usd", 0.0))
             if not test_code.strip():
                 raise ValueError("LLM returned empty test_code")
+        except RegressionTestGenerationError as exc:
+            llm_usage = exc.usage
+            llm_cost_usd = exc.llm_cost_usd
+            fallback = _fallback_test(repair_patch, violations)
+            test_name = fallback["test_name"]
+            test_code = fallback["test_code"]
+            assertions = fallback["assertions"]
+            fallback_used = True
+            fallback_reason = "generation_error"
         except Exception:
             fallback = _fallback_test(repair_patch, violations)
             test_name = fallback["test_name"]
@@ -266,7 +404,8 @@ async def run_regression_test(
             fallback_used = True
             fallback_reason = "generation_error"
 
-        stdout, sandbox_id, test_status = _run_in_daytona(test_code)
+        execution = record_execution(_run_in_daytona(test_code))
+        stdout, sandbox_id, test_status = execution.as_legacy_tuple()
         if not fallback_used:
             generated_test_ran = True
             generated_test_status = test_status
@@ -284,7 +423,8 @@ async def run_regression_test(
             assertions = fallback["assertions"]
             fallback_used = True
             fallback_reason = f"generated_test_{test_status}"
-            stdout, sandbox_id, test_status = _run_in_daytona(test_code)
+            execution = record_execution(_run_in_daytona(test_code))
+            stdout, sandbox_id, test_status = execution.as_legacy_tuple()
 
     per_violation_results = _per_violation_results(
         violations,
@@ -310,6 +450,9 @@ async def run_regression_test(
         "generated_sandbox_id": generated_sandbox_id,
         "per_violation_results": per_violation_results,
         "per_violation_summary": _status_summary(per_violation_results),
+        "duration_ms": sum(result.duration_ms for result in execution_results),
+        "usage": llm_usage,
+        "cost": _aggregate_execution_cost(execution_results, llm_usage, llm_cost_usd),
     }
 
 

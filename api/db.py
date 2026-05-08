@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from collections.abc import Iterator
 
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -46,7 +47,28 @@ def get_engine() -> Engine:
 def init_db() -> None:
     from api import models  # noqa: F401
 
-    SQLModel.metadata.create_all(get_engine())
+    engine = get_engine()
+    SQLModel.metadata.create_all(engine)
+    _ensure_run_cost_columns(engine)
+
+
+def _ensure_run_cost_columns(engine: Engine) -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    inspector = inspect(engine)
+    if not inspector.has_table("runs"):
+        return
+    existing = {column["name"] for column in inspector.get_columns("runs")}
+    columns = {
+        "daytona_seconds": "FLOAT DEFAULT 0.0",
+        "llm_tokens": "INTEGER DEFAULT 0",
+        "llm_cost_usd": "FLOAT DEFAULT 0.0",
+        "daytona_cost_usd": "FLOAT DEFAULT 0.0",
+    }
+    with engine.begin() as connection:
+        for name, definition in columns.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE runs ADD COLUMN {name} {definition}"))
 
 
 def get_session() -> Iterator[Session]:

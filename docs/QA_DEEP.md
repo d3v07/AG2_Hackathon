@@ -177,45 +177,34 @@ No. Zone B is purely diagnostic — it reads traces, not the web. The only exter
 
 ### Q17: Where is Daytona used?
 
-`zone_b/agents/regression_test.py:91-117` — the `_run_in_daytona()` function. Also `zone_b/sandbox_run.py` — a standalone runner that demonstrates the full Zone B pipeline executing inside a Daytona sandbox against a mock Tavily-enriched trace.
+`zone_b/agents/regression_test.py` — `_run_in_daytona()` delegates to `zone_b.sandbox.run_python_in_daytona()`. Also `zone_b/sandbox_run.py` — a standalone runner that demonstrates the full Zone B pipeline executing inside a Daytona sandbox against a mock Tavily-enriched trace.
 
-### Q18: What's the exact Daytona SDK call sequence?
+### Q18: What's the exact Daytona executor sequence?
 
 ```python
-from daytona_sdk import Daytona, DaytonaConfig
+from autogen.coding import DaytonaCodeExecutor
+from autogen.coding.base import CodeBlock
 
-daytona = Daytona(DaytonaConfig(api_key=api_key, api_url=api_url))
-sandbox = None
-sandbox_id = "no-sandbox"
-try:
-    sandbox = daytona.create()
-    sandbox_id = getattr(sandbox, "id", "unknown")
-    result = sandbox.process.code_run(test_code)
-    stdout = getattr(result, "result", "") or getattr(result, "stdout", "") or ""
-    return (stdout, sandbox_id, _parse_status(stdout))
-except Exception as e:
-    return (f"Daytona error: {e!r}", sandbox_id, "error")
-finally:
-    if sandbox is not None:
-        try:
-            daytona.delete(sandbox)
-        except Exception:
-            pass
+executor = DaytonaCodeExecutor(api_key=api_key, api_url=api_url, timeout=60)
+result = executor.execute_code_blocks([CodeBlock(code=test_code, language="python")])
+stdout = result.output
+sandbox_id = result.sandbox_id
+status = _parse_status(stdout)
 ```
 
 Five things to note:
-1. **Per-run sandbox** — `daytona.create()` spins a fresh container every time. No state leaks between repair tests.
-2. **`sandbox.process.code_run(test_code)`** — executes arbitrary Python directly. The test_code comes from the LLM (or fallback) — that's why it MUST run in isolation.
-3. **`finally: daytona.delete(sandbox)`** — sandbox deletion is guaranteed even on exception. No resource leaks even when the test crashes mid-execution.
-4. **Defensive attribute access** — Daytona SDK responses sometimes use `result.result` and sometimes `result.stdout` depending on version. `getattr(...)` handles both.
+1. **Warm pool with reset** — `DaytonaExecutorPool` keeps N executors ready and calls `restart()` after each execution before reuse, so repeat runs avoid cold start without leaking sandbox state.
+2. **`execute_code_blocks([...])`** — executes arbitrary Python inside Daytona. The test_code comes from the LLM or deterministic fallback.
+3. **Pool cleanup** — `DaytonaExecutorPool.close()` calls `delete()` on every warm executor.
+4. **Structured result** — the runner records `stdout`, `sandbox_id`, `duration_ms`, and cost fields.
 5. **No `raise` on Daytona failure** — we return `("Daytona error: ...", "no-sandbox", "error")`. The pipeline continues; Reporter shows `regression_test_status="error"` honestly.
 
 ### Q19: What if `DAYTONA_API_KEY` or `DAYTONA_API_URL` is missing?
 
-`regression_test.py:93-96`:
+`zone_b/sandbox/runner.py`:
 ```python
-if not api_key or not api_url:
-    return ("Daytona credentials missing", "no-sandbox", "error")
+if not _credentials_present():
+    return execution_error("Daytona credentials missing")
 ```
 Pipeline continues with `test_status="error"`. Reporter dutifully reports the error. No fake PASS — we don't lie about the regression result just because credentials are missing.
 
@@ -229,7 +218,7 @@ Because Daytona is the review. The whole point of sandboxing is that we can run 
 
 ### Q22: How long does a Daytona run take?
 
-Sandbox cold-start ~3-5s, test execution typically <1s for our generated tests, deletion ~1s. Total ~6-8s per run. Acceptable for a diagnostic that runs once per workflow execution, not per request.
+Cold-start is still a few seconds, but the warm `DaytonaExecutorPool` keeps executors ready for repeat regression runs. Warm execution is expected to stay under roughly 2s for these generated tests.
 
 ### Q23: What if Daytona throttles us during the demo?
 
