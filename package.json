@@ -4,11 +4,13 @@
   "private": true,
   "description": "Concord Lite dashboard frontend tooling",
   "scripts": {
-    "lighthouse": "lhci autorun",
-    "lighthouse:collect": "lhci collect",
-    "lighthouse:assert": "lhci assert"
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:install": "playwright install chromium firefox",
+    "test:visual": "playwright test tests/e2e/visual --project=chromium",
+    "test:visual:update": "playwright test tests/e2e/visual --project=chromium --update-snapshots"
   },
   "devDependencies": {
-    "@lhci/cli": "^0.14.0"
+    "@playwright/test": "^1.48.0"
   }
 }
