@@ -773,3 +773,115 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
   min-width: 18px;
   text-align: center;
 }
+
+/* ---------- Forensic timeline waterfall (Sprint 17 #83) ---------- */
+.forensic-pane-body-waterfall { padding: 14px; overflow: auto; }
+.waterfall {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: var(--mono);
+}
+.waterfall-axis {
+  position: relative;
+  height: 18px;
+  border-bottom: 1px solid var(--border);
+  margin-left: 220px; /* matches label column */
+  margin-right: 60px; /* matches duration column */
+}
+.waterfall-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.waterfall-tick:first-child { transform: none; }
+.waterfall-tick:last-child { transform: translateX(-100%); }
+.waterfall-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.waterfall-row {
+  display: grid;
+  grid-template-columns: 220px 1fr 60px;
+  gap: 8px;
+  align-items: center;
+  background: none;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+.waterfall-row:hover { background: var(--surface-2); }
+.waterfall-row.selected {
+  background: #FFF8EC;
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+.waterfall-row-label {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.waterfall-row-icon {
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-2);
+}
+.waterfall-row-icon.kind-workflow       { color: var(--text); font-weight: 700; }
+.waterfall-row-icon.kind-agent          { color: var(--gold); }
+.waterfall-row-icon.kind-tool           { color: var(--orange); }
+.waterfall-row-icon.kind-handoff        { color: var(--text-3); }
+.waterfall-row-icon.kind-guardrail      { color: var(--brick); }
+.waterfall-row-icon.kind-human_gate     { color: var(--sage); }
+.waterfall-row-icon.kind-action         { color: var(--gold); }
+.waterfall-row-icon.kind-contract_check { color: var(--brick); }
+.waterfall-row-icon.kind-repair         { color: var(--sage); }
+.waterfall-row-icon.kind-regression     { color: var(--sage); }
+.waterfall-row-name {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.waterfall-bar-track {
+  position: relative;
+  height: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.waterfall-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--gold);
+  border-right: 2px solid var(--orange);
+}
+.waterfall-bar.kind-workflow       { background: var(--text); }
+.waterfall-bar.kind-agent          { background: var(--gold); }
+.waterfall-bar.kind-tool           { background: var(--orange); }
+.waterfall-bar.kind-handoff        { background: var(--border-2); }
+.waterfall-bar.kind-guardrail      { background: var(--brick); }
+.waterfall-bar.kind-human_gate     { background: var(--sage); }
+.waterfall-bar.kind-action         { background: var(--gold); border-right-color: var(--brick); }
+.waterfall-bar.kind-contract_check { background: var(--brick); }
+.waterfall-bar.kind-repair         { background: var(--sage); }
+.waterfall-bar.kind-regression     { background: #4A6E29; }
+.waterfall-bar.err {
+  background: var(--brick) !important;
+  border: 1px solid #6E1A0A;
+}
+.waterfall-row-duration {
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--text-3);
+  text-align: right;
+}

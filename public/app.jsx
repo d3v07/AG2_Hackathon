@@ -1006,6 +1006,92 @@ function SpanTree({ spans, selectedSpanId, setSelectedSpanId }) {
   );
 }
 
+/* ---------------- FORENSIC: timeline waterfall ---------------- */
+function _formatTimeAxis(seconds) {
+  const total = Math.max(0, Math.floor(seconds * 1000));
+  const m = Math.floor(total / 60000);
+  const s = Math.floor((total % 60000) / 1000);
+  const ms = total % 1000;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}.${ms.toString().padStart(3, "0")}`;
+}
+
+function _waterfallBounds(spans) {
+  if (!spans || spans.length === 0) return { t0: 0, total: 1 };
+  const t0 = Math.min(...spans.map(s => s.start_time));
+  const tEnd = Math.max(...spans.map(s => s.end_time));
+  const total = Math.max(tEnd - t0, 0.001); // avoid /0
+  return { t0, total };
+}
+
+function TimelineWaterfall({ spans, selectedSpanId, setSelectedSpanId }) {
+  const ordered = useMemo(
+    () => [...(spans || [])].sort((a, b) => a.start_time - b.start_time),
+    [spans],
+  );
+  const { t0, total } = useMemo(() => _waterfallBounds(ordered), [ordered]);
+
+  const tickCount = 5;
+  const ticks = Array.from({ length: tickCount + 1 }, (_, i) => {
+    const fraction = i / tickCount;
+    return { fraction, label: _formatTimeAxis(t0 + fraction * total) };
+  });
+
+  if (ordered.length === 0) {
+    return <div className="forensic-pane-placeholder">No spans to plot</div>;
+  }
+
+  return (
+    <div className="waterfall" role="figure" aria-label="Span timing plot">
+      <div className="waterfall-axis" aria-hidden="true">
+        {ticks.map((t, i) => (
+          <span key={i} className="waterfall-tick" style={{ left: `${t.fraction * 100}%` }}>
+            {t.label}
+          </span>
+        ))}
+      </div>
+      <div className="waterfall-rows" role="list">
+        {ordered.map((span) => {
+          const offset = ((span.start_time - t0) / total) * 100;
+          const width = Math.max(((span.end_time - span.start_time) / total) * 100, 0.3);
+          const isSelected = span.span_id === selectedSpanId;
+          const isError = span.status === "error";
+          const violations = (span.contract_refs || []).length;
+          return (
+            <button
+              type="button"
+              key={span.span_id}
+              role="listitem"
+              data-span-id={span.span_id}
+              className={`waterfall-row ${isSelected ? "selected" : ""} ${isError ? "err" : ""}`}
+              onClick={() => setSelectedSpanId(span.span_id)}
+              aria-label={
+                `${span.name} ${span.agent || ""} ${(span.duration_ms / 1000).toFixed(2)}s `
+                + `${isError ? "(error)" : ""} ${violations > 0 ? `${violations} violations` : ""}`
+              }
+              aria-pressed={isSelected}
+              title={`${span.name}\n${(span.duration_ms / 1000).toFixed(2)}s · ${span.status}`}
+            >
+              <span className="waterfall-row-label">
+                <span className={`waterfall-row-icon kind-${span.kind}`} aria-hidden="true">
+                  {FORENSIC_KIND_ICONS[span.kind] || "·"}
+                </span>
+                <span className="waterfall-row-name">{span.name.replace(/^concord\./, "")}</span>
+              </span>
+              <span className="waterfall-bar-track" aria-hidden="true">
+                <span
+                  className={`waterfall-bar kind-${span.kind} ${isError ? "err" : ""}`}
+                  style={{ left: `${offset}%`, width: `${width}%` }}
+                />
+              </span>
+              <span className="waterfall-row-duration">{(span.duration_ms / 1000).toFixed(2)}s</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- FORENSIC ---------------- */
 function Forensic({ selectedSpanId, setSelectedSpanId }) {
   const spans = D.spans || [];
@@ -1046,13 +1132,14 @@ function Forensic({ selectedSpanId, setSelectedSpanId }) {
             </div>
           </aside>
 
-          <section className="forensic-pane forensic-waterfall" aria-label="Timeline waterfall">
+          <section className="forensic-pane forensic-waterfall" aria-label="Timeline waterfall pane">
             <div className="forensic-pane-head">Timeline waterfall</div>
-            <div className="forensic-pane-body">
-              {/* Timeline waterfall (#83) renders here */}
-              <div className="forensic-pane-placeholder">
-                Timeline waterfall — wired in #83
-              </div>
+            <div className="forensic-pane-body forensic-pane-body-waterfall">
+              <TimelineWaterfall
+                spans={spans}
+                selectedSpanId={selectedSpanId}
+                setSelectedSpanId={setSelectedSpanId}
+              />
             </div>
           </section>
 
@@ -1541,7 +1628,7 @@ if (_rootEl) {
 
 export {
   App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun,
-  WorkflowsScreen, Forensic, SpanTree,
+  WorkflowsScreen, Forensic, SpanTree, TimelineWaterfall,
   RunProgress, useRunEventStream, fetchStreamToken,
   ApprovalPanel,
   TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS, FORENSIC_KIND_ICONS,
