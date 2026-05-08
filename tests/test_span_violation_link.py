@@ -1,18 +1,17 @@
-"""Sprint 15 #72 — violation-to-span linking contract test (xfail until #74/#75).
+"""Sprint 15 #72/#74/#75 — violation-to-span linking contract test.
 
-Each violation in `data["violations"]` must carry a `span_id` field once
-spans are wired through (#74 + #75). The referenced span_id must exist in
-`data["spans"]` and the span's `agent` must match the violation's
+Each violation in `data["violations"]` carries a `span_id` field stamped
+by Zone B's contract checker (#75). The referenced span_id exists in
+`data["spans"]` (#74) and the span's `agent` matches the violation's
 `failed_agent` when both are present.
 
-For runs without spans (legacy), `span_id` may be `None` or missing —
-that's the spans-empty backward-compat case.
+For runs without spans (legacy raw_trace), `span_id` is `None` — that's
+the spans-empty backward-compat case.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -142,7 +141,6 @@ def _submit_failing_run_with_spans(
     return fetched.json()
 
 
-@pytest.mark.xfail(strict=True, reason="violation.span_id stamped in #75; remove this marker once it does")
 def test_each_violation_has_span_id_field(tmp_path, sample_trace_raw):
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)
@@ -155,7 +153,6 @@ def test_each_violation_has_span_id_field(tmp_path, sample_trace_raw):
         assert "span_id" in v, f"Violation {v.get('id')!r} missing span_id field"
 
 
-@pytest.mark.xfail(strict=True, reason="violation.span_id stamped in #75; remove this marker once it does")
 def test_violation_span_id_references_existing_span(tmp_path, sample_trace_raw):
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)
@@ -170,7 +167,6 @@ def test_violation_span_id_references_existing_span(tmp_path, sample_trace_raw):
             )
 
 
-@pytest.mark.xfail(strict=True, reason="violation.span_id stamped in #75; remove this marker once it does")
 def test_violation_span_agent_matches_failed_agent(tmp_path, sample_trace_raw):
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)

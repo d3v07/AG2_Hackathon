@@ -52,6 +52,7 @@ class Violation:
     observed: str
     failed_agent: str
     failed_step: int
+    span_id: str | None = None  # Sprint 15 #75: stamped when raw_trace carries spans
 
 
 @dataclass

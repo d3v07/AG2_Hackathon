@@ -42,7 +42,11 @@ async def _process_run(run_id: str, tenant_id: str) -> None:
         raise ValueError("raw_trace.events must be a list")
 
     collected = await run_trace_collector(raw_trace)
-    checked = run_contract_checker(collected["run_trace"], collected["context_snapshot"])
+    checked = run_contract_checker(
+        collected["run_trace"],
+        collected["context_snapshot"],
+        spans=collected.get("spans"),
+    )
     violations = checked["violations"]
 
     if violations:
