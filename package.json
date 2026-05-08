@@ -1,0 +1,14 @@
+{
+  "name": "concord-lite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Concord Lite dashboard frontend tooling",
+  "scripts": {
+    "lighthouse": "lhci autorun",
+    "lighthouse:collect": "lhci collect",
+    "lighthouse:assert": "lhci assert"
+  },
+  "devDependencies": {
+    "@lhci/cli": "^0.14.0"
+  }
+}
