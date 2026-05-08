@@ -76,6 +76,17 @@ def _agent_short(name: str) -> str:
     return _AGENT_ID_BY_NAME.get(name, name[:3].upper())
 
 
+def _unique_id(base: str, used: set[str]) -> str:
+    normalized = "".join(char for char in base.upper() if char.isalnum())[:6] or "NODE"
+    candidate = normalized
+    suffix = 2
+    while candidate in used:
+        candidate = f"{normalized[:4]}{suffix}"
+        suffix += 1
+    used.add(candidate)
+    return candidate
+
+
 def _build_run_block(run_trace: dict[str, Any], started_at: str) -> dict[str, Any]:
     events = run_trace.get("events", [])
     last_ts = events[-1].get("timestamp", 0.0) if events else 0.0
@@ -137,6 +148,147 @@ def _build_contracts_block(violation_contract_ids: set[str]) -> list[dict]:
         {**c, "status": "FAIL" if c["id"] in violation_contract_ids else "PASS"}
         for c in _CANONICAL_CONTRACTS
     ]
+
+
+def _node_role(agent_name: str) -> str:
+    role = agent_name.removesuffix("Agent").removesuffix("Manager")
+    return (role or agent_name).lower()
+
+
+def _tool_names_from_event(event: dict[str, Any]) -> list[str]:
+    ctx = event.get("context_delta") or {}
+    names: list[str] = []
+    if isinstance(ctx, dict):
+        direct_tool = ctx.get("tool")
+        if direct_tool:
+            names.append(str(direct_tool))
+        for tool_event in ctx.get("tool_events") or []:
+            if isinstance(tool_event, dict) and tool_event.get("tool_name"):
+                names.append(str(tool_event["tool_name"]))
+    if event.get("type") == "tool_call" and event.get("tool_call_id"):
+        names.append(str(event.get("tool_call_id")))
+    return list(dict.fromkeys(names))
+
+
+def _build_topology_and_routes(
+    events: list[dict],
+    violations: list[dict],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    used_ids: set[str] = set()
+    node_by_name: dict[str, dict[str, Any]] = {}
+    nodes: list[dict[str, Any]] = []
+
+    def ensure_node(name: str, kind: str = "agent", proposed: bool = False) -> str:
+        if name in node_by_name:
+            return node_by_name[name]["id"]
+        if name == "GroupChatManager":
+            base_id = "MGR"
+        elif kind == "tool":
+            base_id = name[:3]
+        else:
+            base_id = _agent_short(name)
+        node_id = _unique_id(base_id, used_ids)
+        node = {
+            "id": node_id,
+            "name": name,
+            "role": _node_role(name),
+            "kind": kind,
+            "contracts": [],
+        }
+        if proposed:
+            node["proposed"] = True
+        node_by_name[name] = node
+        nodes.append(node)
+        return node_id
+
+    ordered_agent_ids: list[str] = []
+    edges: list[dict[str, Any]] = []
+    seen_edges: set[tuple[str, str, str]] = set()
+
+    def add_edge(from_id: str, to_id: str, kind: str, **extra: Any) -> None:
+        key = (from_id, to_id, kind)
+        if from_id == to_id or key in seen_edges:
+            return
+        seen_edges.add(key)
+        edges.append({"from": from_id, "to": to_id, "kind": kind, "declared": True, **extra})
+
+    for event in events:
+        agent = event.get("agent")
+        if not agent:
+            continue
+        kind = "manager" if agent == "GroupChatManager" else "agent"
+        agent_id = ensure_node(str(agent), kind=kind)
+        if not ordered_agent_ids or ordered_agent_ids[-1] != agent_id:
+            ordered_agent_ids.append(agent_id)
+
+        for tool_name in _tool_names_from_event(event):
+            tool_id = ensure_node(tool_name, kind="tool")
+            add_edge(agent_id, tool_id, "tool_call")
+            add_edge(tool_id, agent_id, "tool_call", returns=True)
+
+        handoff_to = event.get("handoff_to")
+        ctx = event.get("context_delta") or {}
+        if not handoff_to and isinstance(ctx, dict):
+            handoff_to = ctx.get("handoff_to")
+        if handoff_to:
+            to_id = ensure_node(str(handoff_to), kind="agent")
+            add_edge(agent_id, to_id, "handoff")
+
+    for from_id, to_id in zip(ordered_agent_ids, ordered_agent_ids[1:], strict=False):
+        add_edge(from_id, to_id, "handoff")
+
+    event_agent_by_step = {
+        event.get("step"): str(event.get("agent"))
+        for event in events
+        if event.get("step") is not None and event.get("agent")
+    }
+    violation_contracts_by_node: dict[str, list[str]] = {}
+    route_contract_by_target: dict[str, str] = {}
+    for violation in violations:
+        contract_id = _CONTRACT_TYPE_BY_KEY.get(violation.get("contract_type", ""), "")
+        if not contract_id:
+            continue
+        failed_agent = str(violation.get("failed_agent") or "")
+        failed_step_agent = event_agent_by_step.get(violation.get("failed_step"))
+        node_name = failed_agent if failed_agent in node_by_name else failed_step_agent
+        if not node_name or node_name not in node_by_name:
+            continue
+        node_id = node_by_name[node_name]["id"]
+        violation_contracts_by_node.setdefault(node_id, []).append(contract_id)
+        if contract_id in {"C-RTE", "C-APR"}:
+            route_contract_by_target[node_id] = contract_id
+
+    for node_id, contracts in violation_contracts_by_node.items():
+        node = next(node for node in nodes if node["id"] == node_id)
+        node["contracts"] = sorted(set([*node.get("contracts", []), *contracts]))
+
+    routes = []
+    for index, edge in enumerate([edge for edge in edges if not edge.get("returns")], start=1):
+        contract = route_contract_by_target.get(edge["to"], "")
+        status = "ok"
+        note = ""
+        if contract == "C-RTE":
+            status = "skipped_guard"
+            note = "handoff reached a routing contract violation"
+        elif contract == "C-APR":
+            status = "missing_approval"
+            note = "approval contract failed on this route"
+        routes.append(
+            {
+                "id": f"R-{index:02d}",
+                "from": edge["from"],
+                "to": edge["to"],
+                "declared": bool(edge.get("declared", True)),
+                "observed": not edge.get("proposed", False),
+                "status": status if not edge.get("proposed", False) else "unexpected",
+                "contract": contract,
+                "note": note,
+            }
+        )
+
+    if not nodes:
+        ensure_node("Run", kind="manager")
+    return {"entry": nodes[0]["id"], "nodes": nodes, "edges": edges}, routes
 
 
 def _build_trace_block(events: list[dict], base_dt: datetime, violation_steps: dict[int, str]) -> list[dict]:
@@ -326,11 +478,14 @@ def report_to_concord_data(
     agents_block = _build_agents_block(events, failed_agents)
     violations_block = _build_violations_block(violations)
     patches_block = _build_patches_block(violations_block, report)
+    topology_block, routes_block = _build_topology_and_routes(events, violations)
 
     return {
         "run": _build_run_block(run_trace_dict, started_at),
         "stats": _build_stats_block(violations, events, tool_event_count, contracts_block, agents_block),
         "agents": agents_block,
+        "topology": topology_block,
+        "routes": routes_block,
         "contracts": contracts_block,
         "trace": _build_trace_block(events, base_dt, violation_steps),
         "violations": violations_block,

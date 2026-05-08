@@ -1,6 +1,9 @@
 """Tests for backend repair patch passthrough into dashboard data."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from api.adapter import report_to_concord_data
 from api.store import get_run
 
@@ -48,7 +51,7 @@ def _violations() -> list[dict]:
             "rule": "Reporter handoff must be gated",
             "expected": "successful Verifier tool event before ReporterAgent",
             "observed": "ReporterAgent ran without gate",
-            "failed_agent": "GroupChatManager",
+            "failed_agent": "ReporterAgent",
             "failed_step": 2,
         },
     ]
@@ -156,3 +159,127 @@ def test_seeded_dashboard_fixture_still_serves_patch_shape():
         assert patch["title"]
         assert isinstance(patch["removed"], list)
         assert patch["added"]
+
+
+def test_adapter_emits_topology_and_routes_for_live_dashboard():
+    report = {
+        "narrative": "live repair",
+        "patch_code": "legacy_patch()",
+        "regression_test_status": "passed",
+        "approval_status": "approved",
+    }
+
+    data = report_to_concord_data(report, _run_trace(), _violations(), sandbox_id="dt-test")
+
+    assert data["topology"]["entry"] == "VRF"
+    assert {node["name"] for node in data["topology"]["nodes"]} == {
+        "VerifierAgent",
+        "ReporterAgent",
+    }
+    assert {(edge["from"], edge["to"], edge["kind"]) for edge in data["topology"]["edges"]} == {
+        ("VRF", "RPT", "handoff"),
+    }
+    assert [(route["from"], route["to"], route["observed"]) for route in data["routes"]] == [
+        ("VRF", "RPT", True),
+    ]
+    assert data["routes"][0]["contract"] == "C-RTE"
+    assert data["routes"][0]["status"] == "skipped_guard"
+    assert all(node["name"] not in {"GroupChatManager", "HumanGate"} for node in data["topology"]["nodes"])
+    assert all({"id", "from", "to", "declared", "observed", "status"} <= route.keys() for route in data["routes"])
+
+
+def test_adapter_does_not_leak_fixture_topology_into_custom_live_runs():
+    report = {
+        "narrative": "custom repair",
+        "patch_code": "legacy_patch()",
+        "regression_test_status": "passed",
+        "approval_status": "approved",
+    }
+    run_trace = {
+        "run_id": "RUN-X",
+        "workflow_name": "custom",
+        "events": [
+            {
+                "step": 1,
+                "agent": "AlphaAgent",
+                "type": "agent_turn",
+                "content": "",
+                "context_delta": {},
+                "handoff_to": "BetaAgent",
+                "timestamp": 0.1,
+            },
+            {
+                "step": 2,
+                "agent": "BetaAgent",
+                "type": "agent_turn",
+                "content": "",
+                "context_delta": {},
+                "timestamp": 0.2,
+            },
+        ],
+        "final_output": None,
+    }
+    violations = [
+        {
+            "contract_type": "approval",
+            "severity": "high",
+            "rule": "approval required",
+            "expected": "approved before side effect",
+            "observed": "ran without approval",
+            "failed_agent": "BetaAgent",
+            "failed_step": 2,
+        },
+    ]
+
+    data = report_to_concord_data(report, run_trace, violations, sandbox_id="dt-test")
+
+    assert {node["name"] for node in data["topology"]["nodes"]} == {"AlphaAgent", "BetaAgent"}
+    assert all(
+        node["name"] not in {
+            "HumanGate",
+            "GroupChatManager",
+            "ResearcherAgent",
+            "CriticAgent",
+            "VerifierAgent",
+            "ReporterAgent",
+            "ActionAgent",
+            "tavily_search",
+        }
+        for node in data["topology"]["nodes"]
+    )
+    assert all(route["observed"] is True for route in data["routes"])
+    assert all(route["status"] != "unexpected" for route in data["routes"])
+
+
+def test_adapter_derives_sample_trace_topology_without_manager_or_gate():
+    report = {
+        "narrative": "sample repair",
+        "patch_code": "legacy_patch()",
+        "regression_test_status": "passed",
+        "approval_status": "approved",
+    }
+    sample_trace_raw = json.loads(Path("zone_b/fixtures/sample_trace.json").read_text())
+    violations = [
+        {
+            "contract_type": "approval",
+            "severity": "high",
+            "rule": "approval required",
+            "expected": "approved before side effect",
+            "observed": "ran without approval",
+            "failed_agent": "ActionAgent",
+            "failed_step": 5,
+        },
+    ]
+
+    data = report_to_concord_data(report, sample_trace_raw, violations, sandbox_id="dt-test")
+
+    assert {node["name"] for node in data["topology"]["nodes"]} == {
+        "ResearcherAgent",
+        "tavily_search",
+        "CriticAgent",
+        "VerifierAgent",
+        "ReporterAgent",
+        "ActionAgent",
+    }
+    assert "GroupChatManager" not in {node["name"] for node in data["topology"]["nodes"]}
+    assert "HumanGate" not in {node["name"] for node in data["topology"]["nodes"]}
