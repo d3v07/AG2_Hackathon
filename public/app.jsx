@@ -253,14 +253,16 @@ function TopBar({ screen, setScreen }) {
         <div className="mark">CONCORD · LITE</div>
         <div className="sub">CONTRACT &nbsp;&middot;&nbsp; REPAIR &nbsp;&middot;&nbsp; REGRESSION</div>
       </div>
-      <nav className="tabs">
+      <nav className="tabs" aria-label="Primary screens">
         {SCREENS.map(s => (
           <button
             key={s.id}
             className={`tab ${screen === s.id ? "active" : ""}`}
             onClick={() => setScreen(s.id)}
+            aria-current={screen === s.id ? "page" : undefined}
+            aria-label={`${s.label} (screen ${s.num})`}
           >
-            <span className="num">{s.num}</span>
+            <span className="num" aria-hidden="true">{s.num}</span>
             <span>{s.label}</span>
           </button>
         ))}
@@ -1890,6 +1892,7 @@ function App() {
 
   return (
     <div className="shell" data-screen-label={SCREENS.find(s=>s.id===screen).num + " " + SCREENS.find(s=>s.id===screen).label}>
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <TopBar screen={screen} setScreen={setScreen} />
       <MetaStrip />
       {currentRunId && (
@@ -1900,7 +1903,10 @@ function App() {
           stream token failed: {streamTokenError.message}
         </div>
       )}
-      <main className="main">
+      <main className="main" id="main-content" tabIndex={-1} aria-label={`${SCREENS.find(s=>s.id===screen).label} screen`}>
+        <h1 className="visually-hidden">
+          {SCREENS.find(s=>s.id===screen).label} — Concord Lite
+        </h1>
         {screen === "overview"   && <Overview setScreen={setScreen} />}
         {screen === "trace"      && <Trace />}
         {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} goToForensicSpan={goToForensicSpan} />}
