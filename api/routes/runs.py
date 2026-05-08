@@ -1,11 +1,24 @@
 """Run submission and dashboard data routes."""
 from __future__ import annotations
 
+import asyncio
 import json
-from typing import Any
+from collections.abc import AsyncIterator
+from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+)
+from fastapi.responses import EventSourceResponse
 
+from api.events import TERMINAL_STATUSES, replay_status_events, run_event_bus, run_event_tokens
 from api.schemas import ApprovalBody, RunCreate
 from api.routes.deps import get_tenant_id
 from api.store import (
@@ -66,6 +79,113 @@ def get_run_status_endpoint(run_id: str, tenant_id: str = Depends(get_tenant_id)
     if status is None:
         raise HTTPException(status_code=404, detail=f"run {run_id} not found")
     return status
+
+
+STREAM_TOKEN_TTL_SECONDS = 300
+
+
+@router.post("/{run_id}/events/token")
+def create_run_events_token_endpoint(
+    run_id: str,
+    tenant_id: str = Depends(get_tenant_id),
+) -> dict[str, Any]:
+    status = get_run_status(run_id, tenant_id=tenant_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail=f"run {run_id} not found")
+    token = run_event_tokens.create(
+        tenant_id,
+        run_id,
+        ttl_seconds=STREAM_TOKEN_TTL_SECONDS,
+    )
+    return {"stream_token": token, "expires_in": STREAM_TOKEN_TTL_SECONDS}
+
+
+def _parse_last_event_id(request: Request) -> int:
+    raw = request.headers.get("last-event-id")
+    if not raw:
+        return 0
+    try:
+        sequence = int(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Last-Event-ID must be an integer") from exc
+    if sequence < 0:
+        raise HTTPException(status_code=400, detail="Last-Event-ID must be non-negative")
+    return sequence
+
+
+def _event_after(event: dict[str, Any], sequence: int) -> bool:
+    return int(event.get("sequence", 0)) > sequence
+
+
+def _server_event(event: dict[str, Any]) -> str:
+    data = json.dumps(event, ensure_ascii=False)
+    return (
+        f"id: {event['sequence']}\n"
+        f"event: {event['type']}\n"
+        "retry: 1500\n"
+        f"data: {data}\n\n"
+    )
+
+
+@router.get("/{run_id}/events")
+async def get_run_events_endpoint(
+    run_id: str,
+    request: Request,
+    stream_token: str | None = Query(default=None),
+    x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
+    x_concord_api_key: Annotated[str | None, Header(alias="X-Concord-API-Key")] = None,
+) -> EventSourceResponse:
+    if stream_token:
+        tenant_id = run_event_tokens.validate(stream_token, run_id)
+        if tenant_id is None:
+            raise HTTPException(status_code=401, detail="invalid or expired stream token")
+    else:
+        tenant_id = get_tenant_id(x_tenant_id, x_concord_api_key)
+
+    status = get_run_status(run_id, tenant_id=tenant_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail=f"run {run_id} not found")
+
+    last_sequence = _parse_last_event_id(request)
+
+    async def event_stream() -> AsyncIterator[str]:
+        sent_sequence = last_sequence
+        replayed = replay_status_events(status)
+        for event in replayed:
+            if not _event_after(event, sent_sequence):
+                continue
+            sent_sequence = event["sequence"]
+            yield _server_event(event)
+        if replayed and replayed[-1]["status"] in TERMINAL_STATUSES:
+            return
+
+        subscription = run_event_bus.subscribe(tenant_id, run_id)
+        try:
+            latest_status = get_run_status(run_id, tenant_id=tenant_id)
+            if latest_status is not None and latest_status != status:
+                latest_replay = replay_status_events(latest_status)
+                for event in latest_replay:
+                    if not _event_after(event, sent_sequence):
+                        continue
+                    sent_sequence = event["sequence"]
+                    yield _server_event(event)
+                if latest_replay and latest_replay[-1]["status"] in TERMINAL_STATUSES:
+                    return
+
+            while not await request.is_disconnected():
+                event = await asyncio.to_thread(subscription.get, 0.25)
+                if event is None:
+                    continue
+                if not _event_after(event, sent_sequence):
+                    continue
+                sent_sequence = event["sequence"]
+                yield _server_event(event)
+                if event["status"] in TERMINAL_STATUSES:
+                    return
+        finally:
+            subscription.close()
+
+    return EventSourceResponse(event_stream())
 
 
 @router.get("/{run_id}")

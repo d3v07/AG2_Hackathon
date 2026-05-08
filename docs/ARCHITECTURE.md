@@ -190,9 +190,9 @@ We use AG2 deliberately, not as a library skin over LLM calls. Specific primitiv
 
 ## 7. The 7 Frontend Screens — What They Show & Where the Data Comes From
 
-The frontend is a self-contained React app served as static assets from Vercel (`public/index.html`). All seven screens render off `window.CONCORD_DATA`. Currently the live deploy uses an inlined fixture (`window.CONCORD_DATA = {...}` in `index.html`) so the demo never depends on a backend round-trip.
+The frontend is a self-contained React app served as static assets from Vercel (`public/index.html`). All seven screens default to the inlined `window.CONCORD_DATA` fixture, and local API mode can switch to live data through `GET /api/runs/{run_id}` plus a short-lived stream token for `GET /api/runs/{run_id}/events`.
 
-> **Honest framing for Q&A:** The dashboard is currently fixture-driven. The `api/` directory in the repo (`api/adapter.py`, `api/store.py`, `api/index.py`) contains a working FastAPI layer that converts a real Zone B `report` dict into the `CONCORD_DATA` shape — it's wired but not deployed. We chose static-only deploy for stage reliability. Next sprint = swap the inline fixture for `fetch('/api/runs/{run_id}')`.
+> **Honest framing for Q&A:** The deployed demo still opens in fixture mode for stage reliability. The local FastAPI app serves the same dashboard with a FIXTURE/LIVE toggle; LIVE fetches the persisted run payload and subscribes to the run's SSE lifecycle stream.
 
 ### Screen 1 — **Overview** (`screen === "overview"`)
 - **Renders:** run metadata strip, 3 stat blocks (4 violations / 5 agents run / 4 patches ready), animated 5-node pipeline graph with REPLAY/PLAY/END STATE controls, contract status table (1/5 passing), run task card.
@@ -201,9 +201,9 @@ The frontend is a self-contained React app served as static assets from Vercel (
 - **Interactivity:** clicking any pipeline node navigates to **Agent Trace**. Replay button steps through 12 events at ~520ms/step.
 
 ### Screen 2 — **Workflow DAG** (`screen === "topology"`)
-- **Renders:** declared-vs-observed graph. 8 nodes (manager, 5 agents, Tavily tool, proposed HumanGate). Edges colored by status: OK (sage), SKIPPED GUARD (orange), MISSING APPROVAL (brick), PROPOSED (gold dashed). Below the graph: routes table (R-01..R-07) showing every declared edge and its observed status.
+- **Renders:** declared-vs-observed graph. Fixture mode shows the full demo topology; live mode renders the observed agents, tools, handoffs, and route status derived from the run trace. Edges are colored by status: OK (sage), SKIPPED GUARD (orange), MISSING APPROVAL (brick), PROPOSED (gold dashed). Below the graph: routes table showing every observed edge and its status.
 - **Data sources:** `D.topology.{nodes, edges}`, `D.routes`.
-- **Backend equivalent:** the topology block is currently fixture-only — the backend doesn't emit it yet. Next sprint: derive from `RunTrace.events` + a declared-workflow YAML.
+- **Backend equivalent:** `api/adapter.py` derives live `topology` and `routes` from `RunTrace.events`, then annotates observed nodes/routes with violation contract IDs. It does not synthesize fixture nodes for arbitrary live runs.
 - **Why this screen matters:** routing violations are *structural* (handoff fired without satisfying a condition). Showing the topology with the broken edge highlighted makes the violation legible at a glance.
 
 ### Screen 3 — **Agent Trace** (`screen === "trace"`)
@@ -275,7 +275,7 @@ Frontend CONCORD_DATA (rendered shape, public/index.html inline)
 └── report      {summary, patches_applied[], approval{status, operator, requested_at, sla}}
 ```
 
-The `api/adapter.py` module (in repo, not deployed) does the conversion: `report_to_concord_data(report, run_trace_dict, violations) → CONCORD_DATA`. It synthesises the per-agent rollup from the trace, derives stats, and uses templates for the patch diffs.
+The `api/adapter.py` module does the conversion: `report_to_concord_data(report, run_trace_dict, violations) → CONCORD_DATA`. It synthesises the per-agent rollup from the trace, derives stats, passes native `report.patches[]` through when present, and builds observed topology/routes from the trace.
 
 ---
 
@@ -295,7 +295,9 @@ python run_all.py
 # Frontend (already deployed, but for local dev)
 .venv/bin/uvicorn api.index:app --port 8765
 # → http://localhost:8765 serves the dashboard via the FastAPI app
-#   plus /api/runs/RUN-041 returns the same CONCORD_DATA shape.
+#   plus /api/runs/RUN-041 returns the same CONCORD_DATA shape
+#   /api/runs/RUN-041/events/token issues a short-lived stream token
+#   and /api/runs/RUN-041/events streams status lifecycle events.
 ```
 
 The 298-test pytest suite covers parsing, contract lambdas, primitive map, fallback paths, per-violation regression status, and Zone A→B integration.
@@ -320,7 +322,7 @@ Every Zone B agent has a deterministic fallback path — see `run_attribution:96
 LLM-generated code execution is inherently untrusted. Daytona gives per-run sandboxing with deterministic cleanup (`finally: daytona.delete(sandbox)`). Also, the sandbox image is reproducible — the repair test runs in the same `python:3.11-slim` every time, regardless of what's installed on the operator's machine.
 
 **Q: Is the dashboard wired to the backend?**
-Currently no — the live deploy uses inline fixture data so the demo can't fail on a stage Wi-Fi blip. The `api/` directory has a working FastAPI adapter that converts Zone B's `report` into `CONCORD_DATA`; it works locally. Live integration is one config change away.
+Locally yes. The dashboard defaults to fixture mode, but the LIVE toggle fetches `GET /api/runs/{run_id}`, obtains a stream token from `POST /api/runs/{run_id}/events/token`, and listens to `GET /api/runs/{run_id}/events?stream_token=...`. The live deploy can still remain fixture-first for demo reliability.
 
 **Q: What AG2 primitives would a real-world operator install based on this report?**
 Exactly the four shown on the Repair Patch screen:
