@@ -858,6 +858,154 @@ function Report({ setScreen, runId }) {
   );
 }
 
+/* ---------------- FORENSIC: span tree ---------------- */
+function _buildSpanTree(spans) {
+  const byId = Object.fromEntries(spans.map(s => [s.span_id, { ...s, children: [] }]));
+  const roots = [];
+  for (const span of spans) {
+    const node = byId[span.span_id];
+    if (span.parent_span_id == null) {
+      roots.push(node);
+    } else {
+      const parent = byId[span.parent_span_id];
+      if (parent) parent.children.push(node);
+      else roots.push(node);
+    }
+  }
+  return { roots, byId };
+}
+
+function _flattenVisible(roots, expandedSet) {
+  const out = [];
+  function walk(node, depth, path) {
+    out.push({ ...node, depth, path });
+    if (expandedSet.has(node.span_id)) {
+      for (const child of node.children) {
+        walk(child, depth + 1, [...path, node.span_id]);
+      }
+    }
+  }
+  for (const root of roots) walk(root, 0, []);
+  return out;
+}
+
+function SpanTreeRow({ node, isExpanded, isSelected, onSelect, onToggle }) {
+  const icon = FORENSIC_KIND_ICONS[node.kind] || "·";
+  const violationCount = (node.contract_refs || []).length;
+  const hasChildren = node.children && node.children.length > 0;
+  const isError = node.status === "error";
+
+  return (
+    <div
+      role="treeitem"
+      aria-expanded={hasChildren ? isExpanded : undefined}
+      aria-selected={isSelected}
+      aria-level={node.depth + 1}
+      tabIndex={isSelected ? 0 : -1}
+      data-span-id={node.span_id}
+      className={`span-tree-row ${isSelected ? "selected" : ""} ${isError ? "err" : ""}`}
+      style={{ paddingLeft: 8 + node.depth * 14 }}
+      onClick={(e) => { e.stopPropagation(); onSelect(node.span_id); }}
+    >
+      {hasChildren ? (
+        <button
+          type="button"
+          className="span-tree-chevron"
+          onClick={(e) => { e.stopPropagation(); onToggle(node.span_id); }}
+          aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
+        >
+          {isExpanded ? "▾" : "▸"}
+        </button>
+      ) : (
+        <span className="span-tree-chevron-spacer" aria-hidden="true">·</span>
+      )}
+      <span className={`span-tree-icon kind-${node.kind}`} aria-hidden="true">{icon}</span>
+      <span className="span-tree-label">
+        <span className="span-tree-name">{node.name.replace(/^concord\./, "")}</span>
+        {node.agent && <span className="span-tree-agent">{node.agent}</span>}
+        {node.tool && <span className="span-tree-tool">{node.tool}</span>}
+      </span>
+      <span className="span-tree-duration">{(node.duration_ms / 1000).toFixed(2)}s</span>
+      {violationCount > 0 && (
+        <span
+          className="span-tree-badge"
+          aria-label={`${violationCount} violation${violationCount === 1 ? "" : "s"}`}
+        >
+          {violationCount}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function SpanTree({ spans, selectedSpanId, setSelectedSpanId }) {
+  const { roots, byId } = useMemo(() => _buildSpanTree(spans), [spans]);
+  const [expanded, setExpanded] = useState(() => new Set(spans.map(s => s.span_id)));
+
+  const toggle = (id) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const visible = useMemo(() => _flattenVisible(roots, expanded), [roots, expanded]);
+
+  const handleKeyDown = (e) => {
+    const idx = visible.findIndex(n => n.span_id === selectedSpanId);
+    const current = idx >= 0 ? visible[idx] : null;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const next = visible[Math.min(idx + 1, visible.length - 1)] || visible[0];
+      if (next) setSelectedSpanId(next.span_id);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const prev = visible[Math.max(idx - 1, 0)] || visible[0];
+      if (prev) setSelectedSpanId(prev.span_id);
+    } else if (e.key === "ArrowRight" && current && current.children.length > 0) {
+      e.preventDefault();
+      if (!expanded.has(current.span_id)) toggle(current.span_id);
+    } else if (e.key === "ArrowLeft" && current && expanded.has(current.span_id) && current.children.length > 0) {
+      e.preventDefault();
+      toggle(current.span_id);
+    } else if (e.key === "Enter" && current && current.children.length > 0) {
+      e.preventDefault();
+      toggle(current.span_id);
+    } else if (e.key === " " && current) {
+      e.preventDefault();
+      setSelectedSpanId(current.span_id);
+    }
+  };
+
+  if (visible.length === 0) {
+    return <div className="forensic-pane-placeholder">No spans to render</div>;
+  }
+
+  return (
+    <div
+      role="tree"
+      aria-label="Span hierarchy"
+      className="span-tree"
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+    >
+      {visible.map(node => (
+        <SpanTreeRow
+          key={node.span_id}
+          node={node}
+          isExpanded={expanded.has(node.span_id)}
+          isSelected={node.span_id === selectedSpanId}
+          onSelect={setSelectedSpanId}
+          onToggle={toggle}
+        />
+      ))}
+    </div>
+  );
+}
+
 /* ---------------- FORENSIC ---------------- */
 function Forensic({ selectedSpanId, setSelectedSpanId }) {
   const spans = D.spans || [];
@@ -889,11 +1037,12 @@ function Forensic({ selectedSpanId, setSelectedSpanId }) {
         <div className="forensic-grid" role="region" aria-label="Forensic span explorer">
           <aside className="forensic-pane forensic-tree" aria-label="Span tree">
             <div className="forensic-pane-head">Span tree</div>
-            <div className="forensic-pane-body">
-              {/* Span tree (#82) renders here */}
-              <div className="forensic-pane-placeholder">
-                Span tree — wired in #82
-              </div>
+            <div className="forensic-pane-body forensic-pane-body-tree">
+              <SpanTree
+                spans={spans}
+                selectedSpanId={selectedSpanId}
+                setSelectedSpanId={setSelectedSpanId}
+              />
             </div>
           </aside>
 
@@ -1392,7 +1541,7 @@ if (_rootEl) {
 
 export {
   App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun,
-  WorkflowsScreen, Forensic,
+  WorkflowsScreen, Forensic, SpanTree,
   RunProgress, useRunEventStream, fetchStreamToken,
   ApprovalPanel,
   TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS, FORENSIC_KIND_ICONS,
