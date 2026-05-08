@@ -111,7 +111,8 @@ class TestFallbackTest:
         assert result["test_name"].islower() or "_" in result["test_name"]
 
     def test_fallback_test_code_executes_and_prints_pass(self):
-        import subprocess, sys
+        import subprocess
+        import sys
         result = _fallback_test("patch", [_v()])
         proc = subprocess.run(
             [sys.executable, "-c", result["test_code"]],
@@ -158,6 +159,10 @@ class TestRunRegressionTest:
             }
         }
 
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test.get_llm_config",
+            lambda: {"config_list": [{"model": "test", "api_key": "x"}]},
+        )
         monkeypatch.setattr(
             "zone_b.agents.regression_test._make_proxy",
             lambda *_: type(

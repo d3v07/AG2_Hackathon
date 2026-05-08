@@ -2,7 +2,7 @@ import json
 import pytest
 from pathlib import Path
 from shared.models import (
-    RunTrace, TraceEvent, ToolEvent, ContextSnapshot, Violation
+    RunTrace, TraceEvent, ContextSnapshot
 )
 
 

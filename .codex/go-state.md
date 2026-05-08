@@ -3,11 +3,11 @@
 ## Overview
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
-- Phase: Sprint 11 pre-landing gate
-- Branch: feat/sprint-11-auth-usage
-- Current Sprint: Sprint 11
-- Current Task: #36-#38 API key auth, tenant isolation, and usage/cost dashboard
-- Last Checkpoint: Sprint 11 reviewer blockers were fixed and rechecked clean. Focused suite passed 65 tests, full pytest passed 420 tests, fixture pipeline passed, import smoke passed, authenticated API probe passed, browser QA passed on desktop/mobile fixture and live modes, deployed demo returned 200, and `git diff --check` passed. `ruff` remains unavailable in the current environment.
+- Phase: Sprint 12 implementation and verification
+- Branch: feat/sprint-12-release-ops
+- Current Sprint: Sprint 12
+- Current Task: #39-#41 Docker stack, CI, deployment docs, and onboarding
+- Last Checkpoint: Sprint 11 landed on `production` through PR #58 and `main` through PR #59. Issues #36, #37, and #38 are closed. Sprint 12 branch was created from updated `production`; RED release-ops tests failed for the expected missing-artifact reasons, then passed after adding Docker, CI, smoke, deployment, and onboarding artifacts. Dev requirements were installed into `.venv`, and `ruff` is now passing through `.venv/bin/python -m ruff check .`.
 
 ## Sprint Board
 Sprint 3: Foundation
@@ -51,9 +51,14 @@ Sprint 10: Contract registry and YAML DSL
 - #35 P1 API: `POST /api/workflows` accepts contracts in YAML — closed on `main`
 
 Sprint 11: Auth, tenant isolation, and usage
-- #36 P1 API: API key auth middleware — implementation complete locally
-- #37 P1 API: Tenant isolation in storage queries — implementation complete locally
-- #38 P2 API/Dashboard: Cost dashboard endpoint and UI panel — implementation complete locally
+- #36 P1 API: API key auth middleware — closed on `main`
+- #37 P1 API: Tenant isolation in storage queries — closed on `main`
+- #38 P2 API/Dashboard: Cost dashboard endpoint and UI panel — closed on `main`
+
+Sprint 12: Release operations and onboarding
+- #39 P1 Infra: Dockerfile and docker-compose local stack — implementation in progress
+- #40 P1 Infra: GitHub Actions CI for tests and lint — implementation in progress
+- #41 P1 Docs: Hosted deploy docs and onboarding — implementation in progress
 
 ## What Worked
 - GitHub issues #12-#15 are closed on `main`.
@@ -247,6 +252,26 @@ Sprint 11: Auth, tenant isolation, and usage
 - Sprint 11 browser QA passed on desktop and mobile in fixture and live modes: Run Cost rendered, LIVE reached `LIVE COMPLETED`, no severe console errors, and no horizontal document overflow.
 - Sprint 11 reviewer found three blockers in the first pass: remote first-key bootstrap, tenant-biased startup recovery, and JSONP auth regression. All were fixed with tests; reviewer re-check found no blockers.
 - Sprint 11 deployed demo probe returned HTTP 200.
+- PR #58 merged Sprint 11 into `production`; PR #59 merged `production` into `main`; GitHub issues #36, #37, and #38 are closed.
+- Merged Sprint 11 branch `feat/sprint-11-auth-usage` was deleted locally and remotely after landing on `main`.
+- Operator steering: use multiple child agents for Sprint 12 discovery and reviewer coverage, while the main lane owns final implementation, verification, and landing.
+- Sprint 12 branch `feat/sprint-12-release-ops` was created from updated `production`.
+- #39/#40/#41 RED release-ops tests failed for the expected reason before implementation: Docker, compose API service, Makefile, dev requirements, CI workflow, smoke script, deployment docs, and onboarding docs were missing.
+- #39 now has a multi-stage Python 3.12 Dockerfile, provider `PORT` support, API compose service, persistent API and FalkorDB volumes, a pinned FalkorDB image digest, and a healthchecked local stack.
+- #40 now has `requirements-dev.txt` and a GitHub Actions workflow that installs editable dev requirements, runs lint, and runs `pytest -x --tb=short` on `main` and `production` PRs/pushes.
+- #41 now has deployment and onboarding docs plus a health smoke script. The docs explicitly stop before claiming hosted deploy completion without provider credentials and warn not to publish tenant API keys in browser-delivered static pages.
+- Sprint 12 targeted release-ops gate passed: `pytest -q tests/test_release_ops.py` passed 7 tests.
+- Sprint 12 static gates passed so far: `docker compose config`, `make -n dev test lint fixture smoke clean`, and `python3 -m compileall -q api graph shared zone_a zone_b`.
+- Sprint 12 dev requirements install into `.venv` passed; local `ruff` then exposed repo-wide lint issues that were fixed with behavior-neutral import and stale f-string cleanup.
+- Sprint 12 Docker gates passed: `docker compose build api`, `docker compose up -d --force-recreate api`, container healthcheck reached `healthy`, `./scripts/smoke_api.sh http://localhost:8000` passed, and a one-off container with `PORT=8010` returned `/api/health` `ok`.
+- Sprint 12 focused gate passed after reviewer fixes: `pytest -q tests/test_release_ops.py tests/test_auth.py tests/test_usage.py` passed 16 tests.
+- Sprint 12 full gate passed after reviewer fixes: `.venv/bin/python -m pytest -x --tb=short` passed 427 tests.
+- Sprint 12 fixture gate passed after reviewer fixes: `python3 run_all.py --fixture` reported `Regression status : pass` and `Regression tests   : 4 pass / 0 fail / 0 error`.
+- Sprint 12 lint and whitespace gates passed: `.venv/bin/python -m ruff check .` and `git diff --check`.
+- Sprint 12 import smoke and OTel spike passed.
+- Sprint 12 deployed demo probe returned HTTP 200.
+- Sprint 12 reviewer found three high release blockers: browser docs exposed tenant API keys, compose forced `CONCORD_ALLOW_DEV_AUTH`, and Dockerfile ignored provider `PORT`. All three were fixed and the reviewer re-check reported no blockers.
+- PR #60 first CI run failed because one regression-test unit required an ambient provider key before its monkeypatch path ran. Fixed by monkeypatching the regression-test config in that unit; targeted regression tests, lint, and full pytest passed locally afterward.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -262,6 +287,8 @@ Sprint 11: Auth, tenant isolation, and usage
 - `docs/PLAN_VS_REALITY.md` is referenced by the handoff but missing locally.
 - AG2 `graph-rag-falkor-db` extra could not install on Python 3.14 because `graphrag-sdk==0.8.2` has no compatible distribution here. Sprint 9 uses the real `falkordb` client when AG2's optional graph stack is unavailable, while keeping the verified AG2 wrapper import path documented.
 - Sprint 10 first reviewer lane stalled and was replaced with a narrower blocker-only reviewer. The replacement found two parser/API blockers, both fixed.
+- Sprint 12 first reviewer pass found three release blockers in docs, compose auth, and provider port binding. All were fixed with tests and a reviewer re-check.
+- PR #60 first CI run exposed a hermeticity gap in `tests/test_regression_test.py`; fixed locally and pushed as a normal follow-up commit.
 
 ## Blockers
 - No regression-gate blocker remains for Sprint 3.
@@ -274,7 +301,8 @@ Sprint 11: Auth, tenant isolation, and usage
 - No Sprint 9 blocker remains after reviewer re-check.
 - No Sprint 10 blocker remains after reviewer re-check.
 - No Sprint 11 blocker remains after reviewer re-check.
-- Remaining toolchain gaps: `ruff` unavailable in the current Python environment; `docs/PLAN_VS_REALITY.md` missing.
+- No Sprint 12 blocker remains after reviewer re-check.
+- Remaining baseline doc gap: `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Commit Sprint 11 with `Closes #36`, `Closes #37`, and `Closes #38`, then run the branch -> `production` -> `main` landing loop and delete the merged sprint branch.
+Commit Sprint 12 with `Closes #39`, `Closes #40`, and `Closes #41`, then run the branch -> `production` -> `main` landing loop and delete merged sprint branches.

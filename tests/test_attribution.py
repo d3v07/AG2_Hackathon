@@ -1,6 +1,5 @@
 """Tests for zone_b/agents/attribution.py — deterministic parts only."""
 import asyncio
-import pytest
 from shared.models import RunTrace, TraceEvent, ContextSnapshot, Violation
 from zone_b.agents.attribution import _deterministic_failed_step, run_attribution
 

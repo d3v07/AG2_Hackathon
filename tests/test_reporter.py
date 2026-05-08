@@ -1,6 +1,5 @@
 """Tests for zone_b/agents/reporter.py — deterministic parts only."""
 import asyncio
-import pytest
 from shared.models import RunTrace, TraceEvent, ContextSnapshot, Violation
 from zone_b.agents.reporter import _violations_to_dicts, _severity_summary, run_reporter
 
