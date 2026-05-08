@@ -1006,6 +1006,212 @@ function SpanTree({ spans, selectedSpanId, setSelectedSpanId }) {
   );
 }
 
+/* ---------------- FORENSIC: span inspector ---------------- */
+function _patchesForSpan(span, allPatches) {
+  if (!span || !Array.isArray(allPatches)) return [];
+  const violationIds = new Set((span.contract_refs || []).map(r => r.violation_id));
+  if (violationIds.size === 0) return [];
+  return allPatches.filter(p => p.violation && violationIds.has(p.violation));
+}
+
+function _regressionForSpan(span, regressionRoot) {
+  // Two link strategies:
+  //   1. span.kind === "regression" → it IS the regression
+  //   2. span.kind === "repair" → its child regression carries the result
+  // Otherwise fall back to the workflow-level regression summary.
+  if (!span) return null;
+  if (span.kind === "regression") {
+    return {
+      name: span.attributes?.test_name || span.name,
+      status: span.attributes?.test_status || (span.status === "ok" ? "passed" : "failed"),
+      sandbox_id: span.attributes?.sandbox_id,
+      duration_ms: span.duration_ms,
+    };
+  }
+  if (regressionRoot) {
+    return {
+      name: regressionRoot.name,
+      status: regressionRoot.duration_ms ? (regressionRoot.test_status || "passed") : "unknown",
+      sandbox_id: regressionRoot.sandbox_id,
+      duration_ms: regressionRoot.duration_ms,
+    };
+  }
+  return null;
+}
+
+function _prettyJson(value) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function CollapsibleBlock({ title, children, initialOpen = false }) {
+  const [open, setOpen] = useState(initialOpen);
+  return (
+    <div className={`inspector-block ${open ? "open" : "closed"}`}>
+      <button
+        type="button"
+        className="inspector-block-toggle"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        <span className="inspector-block-arrow" aria-hidden="true">{open ? "▾" : "▸"}</span>
+        <span>{title}</span>
+      </button>
+      {open && <div className="inspector-block-body">{children}</div>}
+    </div>
+  );
+}
+
+function SpanInspector({ span, allPatches, regressionRoot, onJumpToScreen }) {
+  if (!span) {
+    return (
+      <div className="forensic-pane-placeholder">
+        Select a span from the tree or waterfall to inspect
+      </div>
+    );
+  }
+
+  const patches = _patchesForSpan(span, allPatches);
+  const regression = _regressionForSpan(span, regressionRoot);
+  const violations = span.contract_refs || [];
+  const hasError = span.error && (span.error.type || span.error.message);
+
+  return (
+    <div className="span-inspector" aria-label={`Inspector for ${span.span_id}`}>
+      <header className="inspector-head">
+        <div className="inspector-kind-row">
+          <span className={`inspector-kind kind-${span.kind}`} aria-hidden="true">
+            {FORENSIC_KIND_ICONS[span.kind] || "·"}
+          </span>
+          <span className="inspector-kind-label">{span.kind}</span>
+          <span className={`inspector-status status-${span.status}`}>{span.status}</span>
+        </div>
+        <h3 className="inspector-name">{span.name.replace(/^concord\./, "")}</h3>
+      </header>
+
+      <section className="inspector-section">
+        <h4>Identity</h4>
+        <dl className="inspector-kv">
+          <dt>span_id</dt><dd className="mono">{span.span_id}</dd>
+          <dt>parent_span_id</dt><dd className="mono">{span.parent_span_id || "(root)"}</dd>
+          <dt>trace_id</dt><dd className="mono">{span.trace_id}</dd>
+          {span.agent && (<><dt>agent</dt><dd>{span.agent}</dd></>)}
+          {span.tool && (<><dt>tool</dt><dd>{span.tool}</dd></>)}
+        </dl>
+      </section>
+
+      <section className="inspector-section">
+        <h4>Timing</h4>
+        <dl className="inspector-kv">
+          <dt>start_time</dt><dd className="mono">{span.start_time.toFixed(3)}s</dd>
+          <dt>end_time</dt><dd className="mono">{span.end_time.toFixed(3)}s</dd>
+          <dt>duration</dt><dd className="mono">{span.duration_ms}ms</dd>
+        </dl>
+      </section>
+
+      {hasError && (
+        <section className="inspector-section inspector-error">
+          <h4>Error</h4>
+          <dl className="inspector-kv">
+            {span.error.type && (<><dt>type</dt><dd className="mono">{span.error.type}</dd></>)}
+            {span.error.message && (<><dt>message</dt><dd>{span.error.message}</dd></>)}
+          </dl>
+        </section>
+      )}
+
+      <CollapsibleBlock title={`Input ${typeof span.input === "object" && Object.keys(span.input).length === 0 ? "(empty)" : ""}`}>
+        <pre className="inspector-json">{_prettyJson(span.input)}</pre>
+      </CollapsibleBlock>
+
+      <CollapsibleBlock title={`Output ${typeof span.output === "object" && Object.keys(span.output).length === 0 ? "(empty)" : ""}`}>
+        <pre className="inspector-json">{_prettyJson(span.output)}</pre>
+      </CollapsibleBlock>
+
+      <CollapsibleBlock title={`Attributes (${Object.keys(span.attributes || {}).length})`}>
+        <dl className="inspector-kv">
+          {Object.keys(span.attributes || {}).sort().map(k => (
+            <React.Fragment key={k}>
+              <dt className="mono">{k}</dt>
+              <dd className="mono">{typeof span.attributes[k] === "object" ? _prettyJson(span.attributes[k]) : String(span.attributes[k])}</dd>
+            </React.Fragment>
+          ))}
+        </dl>
+      </CollapsibleBlock>
+
+      {violations.length > 0 && (
+        <section className="inspector-section inspector-violations">
+          <h4>Contract violations ({violations.length})</h4>
+          <ul className="inspector-violation-list">
+            {violations.map((v, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  className="inspector-violation-link"
+                  onClick={() => onJumpToScreen && onJumpToScreen("violations")}
+                  aria-label={`View violation ${v.violation_id} on Violations screen`}
+                >
+                  <span className="violation-contract">{v.contract_id}</span>
+                  <span className="violation-severity">{v.severity}</span>
+                  <span className="violation-rule">{v.rule}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {patches.length > 0 && (
+        <section className="inspector-section inspector-repair">
+          <h4>Repair ({patches.length})</h4>
+          <ul className="inspector-repair-list">
+            {patches.map(p => (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className="inspector-repair-link"
+                  onClick={() => onJumpToScreen && onJumpToScreen("repair")}
+                  aria-label={`Open patch ${p.id} on Repair screen`}
+                >
+                  <span className="patch-id">{p.id}</span>
+                  <span className="patch-primitive">{p.primitive}</span>
+                  <span className="patch-title">{p.title}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {regression && (
+        <section className="inspector-section inspector-regression">
+          <h4>Regression</h4>
+          <dl className="inspector-kv">
+            <dt>name</dt><dd>{regression.name}</dd>
+            <dt>status</dt>
+            <dd>
+              <span className={`pill ${regression.status === "passed" ? "ok" : "fail"}`}>{regression.status}</span>
+            </dd>
+            {regression.sandbox_id && (<><dt>sandbox</dt><dd className="mono">{regression.sandbox_id}</dd></>)}
+            {regression.duration_ms && (<><dt>duration</dt><dd className="mono">{regression.duration_ms}ms</dd></>)}
+          </dl>
+          {onJumpToScreen && (
+            <button
+              type="button"
+              className="btn-link"
+              onClick={() => onJumpToScreen("regression")}
+            >
+              Open on Regression screen →
+            </button>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
 /* ---------------- FORENSIC: timeline waterfall ---------------- */
 function _formatTimeAxis(seconds) {
   const total = Math.max(0, Math.floor(seconds * 1000));
@@ -1093,7 +1299,7 @@ function TimelineWaterfall({ spans, selectedSpanId, setSelectedSpanId }) {
 }
 
 /* ---------------- FORENSIC ---------------- */
-function Forensic({ selectedSpanId, setSelectedSpanId }) {
+function Forensic({ selectedSpanId, setSelectedSpanId, onJumpToScreen }) {
   const spans = D.spans || [];
   const hasSpans = spans.length > 0;
 
@@ -1143,18 +1349,15 @@ function Forensic({ selectedSpanId, setSelectedSpanId }) {
             </div>
           </section>
 
-          <aside className="forensic-pane forensic-inspector" aria-label="Span inspector">
+          <aside className="forensic-pane forensic-inspector" aria-label="Span inspector pane">
             <div className="forensic-pane-head">Span inspector</div>
-            <div className="forensic-pane-body">
-              {selectedSpanId ? (
-                <div className="forensic-pane-placeholder">
-                  Inspector for span {selectedSpanId} — wired in #84
-                </div>
-              ) : (
-                <div className="forensic-pane-placeholder">
-                  Select a span from the tree or waterfall to inspect
-                </div>
-              )}
+            <div className="forensic-pane-body forensic-pane-body-inspector">
+              <SpanInspector
+                span={selectedSpanId ? spans.find(s => s.span_id === selectedSpanId) : null}
+                allPatches={D.patches || []}
+                regressionRoot={D.test || null}
+                onJumpToScreen={onJumpToScreen}
+              />
             </div>
           </aside>
         </div>
@@ -1615,7 +1818,7 @@ function App() {
         {screen === "report"     && <Report setScreen={setScreen} runId={currentRunId} />}
         {screen === "submit"     && <SubmitRun setScreen={setScreen} onRunSubmitted={handleRunSubmitted} />}
         {screen === "workflows"  && <WorkflowsScreen setScreen={setScreen} />}
-        {screen === "forensic"   && <Forensic selectedSpanId={selectedSpanId} setSelectedSpanId={setSelectedSpanId} />}
+        {screen === "forensic"   && <Forensic selectedSpanId={selectedSpanId} setSelectedSpanId={setSelectedSpanId} onJumpToScreen={setScreen} />}
       </main>
     </div>
   );
@@ -1628,7 +1831,7 @@ if (_rootEl) {
 
 export {
   App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun,
-  WorkflowsScreen, Forensic, SpanTree, TimelineWaterfall,
+  WorkflowsScreen, Forensic, SpanTree, TimelineWaterfall, SpanInspector,
   RunProgress, useRunEventStream, fetchStreamToken,
   ApprovalPanel,
   TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS, FORENSIC_KIND_ICONS,
