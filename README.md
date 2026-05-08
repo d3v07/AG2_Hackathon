@@ -1,14 +1,38 @@
 # Concord Lite
 
+<!-- TODO: capture forensic UI screenshot after Sprint 18 polish lands -->
+<!-- ![CI](https://github.com/d3v07/AG2_Hackathon/actions/workflows/ci.yml/badge.svg) -->
+
 **A contract-to-repair diagnostic layer for AG2 multi-agent workflows.**
 
 Concord Lite monitors a multi-agent workflow run, detects when agents violate their behavioural contracts, attributes the root cause to the responsible agent, proposes a repair targeting the correct AG2 primitive, and validates the fix with a sandboxed regression test — all automatically, end-to-end.
+
+**Sprint 17 forensic trace UI:** click any contract violation to jump straight to the offending span; inspect the 16-field shape inline; cross-link from violations → patches → regression.
 
 > **Live demo:** https://concord-lite.vercel.app/
 > **Pipeline (CLI):** `python run_all.py --fixture`
 > **Architecture & Q&A doc:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 > **Demo script & cue cards:** [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)
 > **Deep Q&A reference (70 questions):** [`docs/QA_DEEP.md`](docs/QA_DEEP.md)
+
+## Submitting a run via task_spec
+
+```bash
+curl -X POST $CONCORD_API_BASE/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflow_id": "WF-...",
+    "task_spec": {
+      "task": "Survey reliability patterns in multi-agent systems",
+      "research_question": "What architectural patterns improve MAS reliability?",
+      "mode": "stub"
+    }
+  }'
+```
+
+`mode=stub` is deterministic (no LLM credentials needed). `mode=live` runs the
+real AG2 swarm + Tavily + Daytona regression — requires `OPENROUTER_API_KEY`,
+`TAVILY_API_KEY`, `DAYTONA_API_KEY` on the backend.
 
 ---
 
