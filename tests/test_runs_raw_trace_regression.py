@@ -4,10 +4,15 @@ Locks the existing raw_trace path's CONCORD_DATA shape so any unintended
 change anywhere in the api/Zone B/adapter pipeline is caught immediately.
 
 Sprints 13-20 modify various pieces of this pipeline; this test must remain
-green throughout. The only field normalized is `run.id` (UUID-generated);
-every other field is asserted bit-identical against the committed golden.
+green throughout. Two inherently-dynamic fields are normalized before
+comparison:
+  - `run.id` (UUID-generated per request)
+  - `report.approval.requested_at` (wall-clock timestamp)
+Every other field is asserted bit-identical against the committed golden.
 
-Regenerate the golden when the shape *intentionally* changes:
+Regenerate the golden when the shape *intentionally* changes — gated on
+explicit `UPDATE_GOLDEN=1` so accidental values like `0` or `false` never
+mask a regression:
     UPDATE_GOLDEN=1 pytest tests/test_runs_raw_trace_regression.py
 """
 from __future__ import annotations
@@ -88,7 +93,7 @@ def test_raw_trace_concord_data_matches_golden(tmp_path, clean_trace_raw):
 
     actual = _normalize(fetched.json())
 
-    if os.environ.get("UPDATE_GOLDEN"):
+    if os.environ.get("UPDATE_GOLDEN") == "1":
         GOLDEN_PATH.parent.mkdir(parents=True, exist_ok=True)
         GOLDEN_PATH.write_text(json.dumps(actual, indent=2, sort_keys=True) + "\n")
         pytest.skip(f"Golden regenerated at {GOLDEN_PATH}")
