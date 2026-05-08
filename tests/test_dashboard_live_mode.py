@@ -31,3 +31,17 @@ def test_public_dashboard_uses_dynamic_live_shapes():
     assert "payload.sequence" in html
     assert "reconnectTimer = setTimeout(openLiveRun, 1000)" in html
     assert "if (!playing && step < totalSteps) setStep(totalSteps)" in html
+
+
+def test_public_dashboard_renders_recurring_dag_badges():
+    html = Path("public/index.html").read_text()
+
+    assert "recurrence-badge" in html
+    assert "RECURRING" in html
+    assert "recurrenceTitle(" in html
+    assert "recurrenceForEdge(" in html
+    assert "recurrenceForNode(" in html
+    assert "item.edge.from === edge.from" in html
+    assert "item.edge.to === edge.to" in html
+    assert "CONTRACT_ID_BY_TYPE" not in html
+    assert ".dag-svg { min-width: 1240px; }" in html

@@ -561,6 +561,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .dag-svg .edge-label.skip { fill: var(--orange); }
 .dag-svg .edge-label.miss { fill: var(--brick); }
 .dag-svg .edge-label.prop { fill: var(--gold); }
+.dag-svg .recurrence-badge rect { fill: var(--surface); stroke: var(--border-2); stroke-width: 1; }
+.dag-svg .recurrence-badge text { fill: var(--text-3); font-family: var(--mono); font-size: 8px; letter-spacing: 0.12em; }
+.routes-tbl .recurrence-note { color: var(--text-3); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
 
 .routes-tbl .badge { display: inline-block; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; padding: 1px 6px; border: 1px solid; }
 .routes-tbl .badge.ok   { color: var(--sage); border-color: var(--sage); }
@@ -667,6 +670,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
   .pgraph-foot { grid-template-columns: 1fr; }
   .pgraph-foot .cell { border-right: 0; border-bottom: 1px solid var(--border); }
   .pgraph-foot .cell:last-child { border-bottom: 0; }
+  .dag-wrap { overflow-x: auto; }
+  .dag-svg { min-width: 1240px; }
 }
 
 </style>
@@ -769,6 +774,21 @@ window.CONCORD_DATA = {
       contract: "C-APR", note: "ActionAgent invoked with approval_status=pending" },
     { id: "R-07", from: "HGT", to: "ACT", declared: false, observed: false, status: "unexpected",
       contract: "C-APR", note: "HumanGate not in program — proposed by P-004" }
+  ],
+
+  recurrences: [
+    {
+      recurrence_key: "routing|GroupChatManager|Reporter ran after Verifier without a successful tool event",
+      contract_type: "routing",
+      contract: "C-RTE",
+      failed_agent: "GroupChatManager",
+      rule: "Reporter ran after Verifier without a successful tool event",
+      count: 3,
+      last_seen: "2026-05-03T14:22:18Z",
+      last_seen_run_id: "RUN-041",
+      sample_run_ids: ["RUN-039", "RUN-040", "RUN-041"],
+      edge: { from: "VRF", to: "RPT" }
+    }
   ],
 
   contracts: [
@@ -994,6 +1014,7 @@ function normalizeDashboardData(data, options = {}) {
     agents: Array.isArray(source.agents) ? source.agents : (fixture.agents || []),
     topology: source.topology || fixture.topology || { entry: "", nodes: [], edges: [] },
     routes: Array.isArray(source.routes) ? source.routes : (fixture.routes || []),
+    recurrences: Array.isArray(source.recurrences) ? source.recurrences : (fixture.recurrences || []),
     contracts: Array.isArray(source.contracts) ? source.contracts : (fixture.contracts || []),
     trace: Array.isArray(source.trace) ? source.trace : (fixture.trace || []),
     violations: Array.isArray(source.violations) ? source.violations : (fixture.violations || []),
@@ -1542,6 +1563,33 @@ function routeStatusToCls(s) {
   return ({ ok: "ok", skipped_guard: "skip", missing_approval: "miss", unexpected: "prop" })[s] || "ok";
 }
 
+function recurrenceTitle(recurrence) {
+  if (!recurrence) return "";
+  const runs = Array.isArray(recurrence.sample_run_ids) ? recurrence.sample_run_ids.join(", ") : "";
+  return [
+    `${recurrence.count || 0} recurring violation(s)`,
+    recurrence.rule || recurrence.contract || recurrence.contract_type || "",
+    recurrence.last_seen ? `last seen ${recurrence.last_seen}` : "",
+    runs ? `runs ${runs}` : ""
+  ].filter(Boolean).join(" · ");
+}
+
+function recurrenceForEdge(edge, route, recurrences) {
+  return (recurrences || []).find(item => {
+    if (!item || Number(item.count || 0) < 2) return false;
+    if (item.edge && item.edge.from === edge.from && item.edge.to === edge.to) return true;
+    return false;
+  });
+}
+
+function recurrenceForNode(node, recurrences) {
+  return (recurrences || []).find(item => {
+    if (!item || Number(item.count || 0) < 2) return false;
+    if (item.failed_agent && (item.failed_agent === node.name || item.failed_agent === node.id)) return true;
+    return Array.isArray(node.contracts) && item.contract && node.contracts.includes(item.contract);
+  });
+}
+
 function Topology({ setScreen, setSelectedPatch }) {
   const topology = D.topology || {};
   const topologyNodes = Array.isArray(topology.nodes) && topology.nodes.length
@@ -1549,6 +1597,7 @@ function Topology({ setScreen, setSelectedPatch }) {
     : [{ id: "RUN", name: D.run?.workflow || D.run?.id || "Run", role: "run", kind: "manager", contracts: [] }];
   const topologyEdges = Array.isArray(topology.edges) ? topology.edges : [];
   const routes = Array.isArray(D.routes) ? D.routes : [];
+  const recurrences = Array.isArray(D.recurrences) ? D.recurrences : [];
   const W = Math.max(1240, topologyNodes.length * 150 + 140), H = 360;
   const colW = 150, colX0 = 70;
   const laneY = [40, 160, 280];
@@ -1632,6 +1681,7 @@ function Topology({ setScreen, setSelectedPatch }) {
             const a = pos(e.from), b = pos(e.to);
             const st = edgeStatus(e);
             const r = routeByEdge[`${e.from}->${e.to}`];
+            const recurrence = recurrenceForEdge(e, r, recurrences);
             const mid = { x: (a.x + b.x)/2 + nodeW/2, y: (a.y + b.y)/2 + nodeH/2 };
             const labelText =
               st === "skip" ? "SKIPPED GUARD"
@@ -1649,6 +1699,15 @@ function Topology({ setScreen, setSelectedPatch }) {
                     {r.contract}
                   </text>
                 )}
+                {recurrence && (
+                  <g className="recurrence-badge">
+                    <title>{recurrenceTitle(recurrence)}</title>
+                    <rect x={mid.x - 44} y={mid.y + 20} width="88" height="15" rx="1" />
+                    <text x={mid.x} y={mid.y + 31} textAnchor="middle">
+                      RECURRING x{recurrence.count}
+                    </text>
+                  </g>
+                )}
               </g>
             );
           })}
@@ -1665,6 +1724,7 @@ function Topology({ setScreen, setSelectedPatch }) {
             const p = pos(n.id);
             const cls = nodeStatus(n);
             const failed = D.agents.find(a => a.id === n.id && a.status === "FAIL");
+            const recurrence = recurrenceForNode(n, recurrences);
             return (
               <g key={n.id}
                  style={{cursor: "pointer"}}
@@ -1681,6 +1741,7 @@ function Topology({ setScreen, setSelectedPatch }) {
                    }
                    setScreen("trace");
                  }}>
+                {recurrence && <title>{recurrenceTitle(recurrence)}</title>}
                 <rect x={p.x - nodeW/2} y={p.y} width={nodeW} height={nodeH}
                       className={`node-rect ${n.kind} ${cls}`} rx="2" />
                 <text x={p.x} y={p.y + 14} textAnchor="middle" className="node-id">
@@ -1692,6 +1753,14 @@ function Topology({ setScreen, setSelectedPatch }) {
                 <text x={p.x} y={p.y + 47} textAnchor="middle" className="node-role">
                   {n.role.toUpperCase()}
                 </text>
+                {recurrence && (
+                  <g className="recurrence-badge">
+                    <rect x={p.x - 39} y={p.y + nodeH + 8} width="78" height="15" rx="1" />
+                    <text x={p.x} y={p.y + nodeH + 19} textAnchor="middle">
+                      RECURRING x{recurrence.count}
+                    </text>
+                  </g>
+                )}
               </g>
             );
           })}
@@ -1721,6 +1790,7 @@ function Topology({ setScreen, setSelectedPatch }) {
                 const cls = routeStatusToCls(r.status);
                 const v = r.contract && D.violations.find(v => v.contract === r.contract);
                 const clickable = !!v;
+                const recurrence = recurrenceForEdge({ from: r.from, to: r.to }, r, recurrences);
                 return (
                   <tr key={r.id}
                       className={clickable ? "clickable" : ""}
@@ -1737,6 +1807,11 @@ function Topology({ setScreen, setSelectedPatch }) {
                     <td className="text-2">{r.contract || "—"}</td>
                     <td className={cls === "miss" || cls === "skip" ? "text-orange" : "text-2"}>
                       {r.note || "—"}
+                      {recurrence && (
+                        <div className="recurrence-note" title={recurrenceTitle(recurrence)}>
+                          RECURRING x{recurrence.count}
+                        </div>
+                      )}
                     </td>
                     <td><span className={`badge ${cls}`}>
                       {r.status.replace("_", " ").toUpperCase()}

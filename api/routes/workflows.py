@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas import WorkflowCreate
 from api.routes.deps import get_tenant_id
-from api.store import create_workflow, get_workflow, list_workflows
+from api.store import create_workflow, get_workflow, list_workflow_recurrences, list_workflows
 
 router = APIRouter(prefix="/api/workflows", tags=["workflows"])
 
@@ -37,6 +37,17 @@ def create_workflow_endpoint(
 @router.get("")
 def list_workflows_endpoint(tenant_id: str = Depends(get_tenant_id)) -> dict[str, list[dict]]:
     return {"workflows": list_workflows(tenant_id=tenant_id)}
+
+
+@router.get("/{workflow_id}/recurrences")
+def get_workflow_recurrences_endpoint(
+    workflow_id: str,
+    tenant_id: str = Depends(get_tenant_id),
+) -> dict[str, object]:
+    recurrences = list_workflow_recurrences(workflow_id, tenant_id=tenant_id)
+    if recurrences is None:
+        raise HTTPException(status_code=404, detail=f"workflow {workflow_id} not found")
+    return {"workflow_id": workflow_id, "recurrences": recurrences}
 
 
 @router.get("/{workflow_id}")
