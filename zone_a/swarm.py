@@ -341,34 +341,81 @@ def _chat_history_to_trace_events(
 SWARM_TRACE_PATH = "zone_b/fixtures/swarm_trace.json"
 
 
+FailureMode = Literal[
+    "force_no_evidence",
+    "force_no_tool_call",
+    "force_routing_break",
+    "force_no_approval",
+    "force_malformed_output",
+]
+
+
 def _synthesize_stub_run(
     task: str,
     research_question: str,
+    failure_mode: FailureMode | None = None,
 ) -> tuple[list[TraceEvent], ContextVariables]:
     """Build a deterministic 6-event trace without any LLM or Tavily call.
 
-    Produces a clean trace that passes all Zone B contract checks:
-    - C-EVD: verified_sources_count >= 1
-    - C-TOL: VerifierAgent has tool_call_id
-    - C-APR: approval_status == "approved"
-    - C-RTE: VerifierAgent event carries tool_events with status="success"
-    - C-SCH: final_output has all 5 required keys
+    With ``failure_mode=None`` produces a clean trace that passes all Zone B
+    contract checks. With ``failure_mode="force_*"`` produces a trace that
+    triggers exactly one Zone B contract violation type:
+
+    - force_no_evidence       → evidence violation (verified_sources_count = 0)
+    - force_no_tool_call      → tool violation (verifier missing tool_call_id)
+    - force_routing_break     → routing violation (verifier tool_event not success)
+    - force_no_approval       → approval violation (approval_status != approved)
+    - force_malformed_output  → schema violation (final_output missing keys)
+
+    Each force_* mode keeps the OTHER four contracts passing, so contract
+    checker output is exactly {expected_contract_type}.
     """
     now = 0.0  # fixed timestamp keeps stub mode fully deterministic across runs
-    stub_tool_call_id = "tc_v01"
-    stub_final_output = {
-        "summary": f"Stub summary for: {task}",
-        "claims": ["Stub claim from verified sources."],
-        "citations": ["https://stub.example.com/source-1"],
-        "risks": ["No real risks — this is a stub trace."],
-        "next_steps": ["Replace stub with a live swarm run for production results."],
-    }
+
+    # Per-mode toggles. Each force_* mode flips exactly one knob so Zone B
+    # produces exactly one violation type. Defaults below are the clean path.
+    verified_sources_count = 1
+    verifier_tool_call_id_value: str | None = "tc_v01"
+    verifier_tool_event_status = "success"
+    approval_status_value = "approved"
+    approval_granted_value = True
+    final_output_complete = True
+
+    if failure_mode == "force_no_evidence":
+        verified_sources_count = 0
+    elif failure_mode == "force_no_tool_call":
+        verifier_tool_call_id_value = None
+    elif failure_mode == "force_routing_break":
+        # Tool contract uses the EVENT-level tool_call_id, so keep it set.
+        # Routing contract requires a SUCCESSFUL verifier tool_event preceding
+        # Reporter — flip status to "failure" to break routing without
+        # tripping the tool contract.
+        verifier_tool_event_status = "failure"
+    elif failure_mode == "force_no_approval":
+        approval_status_value = "pending"
+        approval_granted_value = False
+    elif failure_mode == "force_malformed_output":
+        final_output_complete = False
+
+    if final_output_complete:
+        stub_final_output: dict[str, Any] = {
+            "summary": f"Stub summary for: {task}",
+            "claims": ["Stub claim from verified sources."],
+            "citations": ["https://stub.example.com/source-1"],
+            "risks": ["No real risks — this is a stub trace."],
+            "next_steps": ["Replace stub with a live swarm run for production results."],
+        }
+    else:
+        # Drop required keys to trigger the schema contract
+        stub_final_output = {"summary": f"Stub malformed for: {task}"}
 
     verifier_tool_event = ToolEvent(
         tool_name="tavily_search",
         input=research_question,
-        output="stub verified result",
-        status="success",
+        output="stub verified result"
+        if verifier_tool_event_status == "success"
+        else "stub verification failed",
+        status=verifier_tool_event_status,
         evidence_id="ev_stub_01",
         timestamp=now,
     )
@@ -410,10 +457,13 @@ def _synthesize_stub_run(
             step=3,
             agent="VerifierAgent",
             type="agent_turn",
-            content=f"[stub] Verified 1 source. tool_call_id: {stub_tool_call_id}",
-            tool_call_id=stub_tool_call_id,
+            content=(
+                f"[stub] Verified {verified_sources_count} source(s). "
+                f"tool_call_id: {verifier_tool_call_id_value or 'null'}"
+            ),
+            tool_call_id=verifier_tool_call_id_value,
             context_delta={
-                "verified_sources_count": 1,
+                "verified_sources_count": verified_sources_count,
                 "tool_events": [verifier_tool_event],
             },
             handoff_to="ReporterAgent",
@@ -433,9 +483,9 @@ def _synthesize_stub_run(
             step=5,
             agent="HumanGateAgent",
             type="agent_turn",
-            content="[stub] Report approved.",
+            content=f"[stub] Report approval status: {approval_status_value}.",
             tool_call_id=None,
-            context_delta={"approval_status": "approved"},
+            context_delta={"approval_status": approval_status_value},
             handoff_to="ActionAgent",
             timestamp=now,
         ),
@@ -458,14 +508,18 @@ def _synthesize_stub_run(
             "researcher_summary": f"Stub summary for: {task}",
             "critique_notes": ["Stub critique note."],
             "risk_flags": [],
-            "verified_sources_count": 1,
-            "verifier_tool_call_id": stub_tool_call_id,
-            "verifier_narrative": "Stub verification passed.",
-            "sources_verified": True,
+            "verified_sources_count": verified_sources_count,
+            "verifier_tool_call_id": verifier_tool_call_id_value or "",
+            "verifier_narrative": "Stub verification passed."
+            if verified_sources_count > 0
+            else "Stub verification failed: no sources verified.",
+            "sources_verified": verified_sources_count > 0,
             "final_output": stub_final_output,
-            "approval_granted": True,
-            "approval_status": "approved",
-            "approval_comments": "Stub approval granted.",
+            "approval_granted": approval_granted_value,
+            "approval_status": approval_status_value,
+            "approval_comments": "Stub approval granted."
+            if approval_granted_value
+            else "Stub approval denied.",
             "action_taken": "Report saved to disk (stub).",
         }
     )
@@ -480,6 +534,7 @@ async def run_swarm(
     fixture_path: str | Path | None = "zone_a/fixtures/task.json",
     output_path: str | Path = SWARM_TRACE_PATH,
     mode: Literal["live", "stub"] = "live",
+    failure_mode: FailureMode | None = None,
 ) -> dict[str, Any]:
     """Run the Zone A swarm and emit a trace JSON for Zone B to consume.
 
@@ -505,9 +560,13 @@ async def run_swarm(
         run_id = fixture.get("run_id", run_id)
 
     if mode == "stub":
-        events, final_ctx = _synthesize_stub_run(task, research_question)
+        events, final_ctx = _synthesize_stub_run(
+            task, research_question, failure_mode=failure_mode
+        )
         last_agent_name: str | None = "ActionAgent"
     elif mode == "live":
+        if failure_mode is not None:
+            raise ValueError("failure_mode is only supported in stub mode")
         agents, ctx = build_swarm(interactive=interactive)
         initial_message = _build_initial_message(task, research_question)
 
