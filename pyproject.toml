@@ -8,6 +8,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "ag2[openai,daytona]>=0.12",
+    "falkordb>=1.0.10",
     "opentelemetry-sdk>=1.41,<2",
     "opentelemetry-exporter-otlp-proto-http>=1.41,<2",
     "python-dotenv",
@@ -20,7 +21,7 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["api*", "shared*", "zone_a*", "zone_b*"]
+include = ["api*", "graph*", "shared*", "zone_a*", "zone_b*"]
 
 [tool.pytest.ini_options]
 markers = [

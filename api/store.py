@@ -8,13 +8,28 @@ from __future__ import annotations
 
 import json
 import uuid
+from contextlib import suppress
 from copy import deepcopy
 from typing import Any
 
 from sqlmodel import Session, select
 
+from graph.falkor import persist_run_violations, persist_workflow_topology
 from api.db import init_db, session_scope
 from api.models import PatchRecord, RunRecord, TestRecord, ViolationRecord, WorkflowRecord, _utc_now
+from zone_b.memory.violation_memory import (
+    contract_type as violation_contract_type,
+    recurrence_key,
+    rule as violation_rule,
+)
+
+_CONTRACT_ID_BY_TYPE = {
+    "evidence": "C-EVD",
+    "tool": "C-TOL",
+    "routing": "C-RTE",
+    "approval": "C-APR",
+    "schema": "C-SCH",
+}
 
 _FIXTURE_RUN_041: dict[str, Any] = {
     "run": {
@@ -88,6 +103,20 @@ _FIXTURE_RUN_041: dict[str, Any] = {
          "contract": "C-APR", "note": "ActionAgent invoked with approval_status=pending"},
         {"id": "R-07", "from": "HGT", "to": "ACT", "declared": False, "observed": False, "status": "unexpected",
          "contract": "C-APR", "note": "HumanGate not in program — proposed by P-004"},
+    ],
+    "recurrences": [
+        {
+            "recurrence_key": "routing|GroupChatManager|Reporter ran after Verifier without a successful tool event",
+            "contract_type": "routing",
+            "contract": "C-RTE",
+            "failed_agent": "GroupChatManager",
+            "rule": "Reporter ran after Verifier without a successful tool event",
+            "count": 3,
+            "last_seen": "2026-05-03T14:22:18Z",
+            "last_seen_run_id": "RUN-041",
+            "sample_run_ids": ["RUN-039", "RUN-040", "RUN-041"],
+            "edge": {"from": "VRF", "to": "RPT"},
+        }
     ],
     "contracts": [
         {"id": "C-EVD", "type": "EVIDENCE", "rule": "Reporter may write final answer only when verified_sources_count > 0", "status": "FAIL"},
@@ -331,6 +360,8 @@ def _seed_fixture(session: Session, tenant_id: str = "local") -> None:
             existing.daytona_cost_usd = cost["daytona_cost_usd"]
             session.add(existing)
             session.commit()
+        _seed_fixture_recurrence_history(session, tenant_id)
+        session.commit()
         return
 
     workflow = WorkflowRecord(
@@ -353,7 +384,68 @@ def _seed_fixture(session: Session, tenant_id: str = "local") -> None:
         status="completed",
         status_history=["queued", "analyzing", "completed"],
     )
+    _seed_fixture_recurrence_history(session, tenant_id)
     session.commit()
+
+
+def _seed_fixture_recurrence_history(session: Session, tenant_id: str = "local") -> None:
+    existing = session.exec(
+        select(ViolationRecord).where(
+            ViolationRecord.tenant_id == tenant_id,
+            ViolationRecord.workflow_id == "WF-RUN-041",
+            ViolationRecord.recurrence_key
+            == "routing|GroupChatManager|Reporter ran after Verifier without a successful tool event",
+            ViolationRecord.run_id.in_(["RUN-039", "RUN-040"]),
+        )
+    ).all()
+    if len(existing) >= 2:
+        return
+    existing_run_ids = {row.run_id for row in existing}
+    for run_id in ("RUN-039", "RUN-040"):
+        if run_id in existing_run_ids:
+            continue
+        payload = {
+            "contract_type": "routing",
+            "severity": "MED",
+            "rule": "Reporter ran after Verifier without a successful tool event",
+            "failed_agent": "GroupChatManager",
+            "failed_step": 10,
+        }
+        session.add(
+            ViolationRecord(
+                tenant_id=tenant_id,
+                run_id=run_id,
+                workflow_id="WF-RUN-041",
+                recurrence_key=recurrence_key(payload),
+                contract_type=violation_contract_type(payload),
+                severity=payload["severity"],
+                rule=violation_rule(payload),
+                failed_agent=payload["failed_agent"],
+                failed_step=payload["failed_step"],
+                payload_json=_to_json(payload),
+            )
+        )
+
+
+def _safe_persist_workflow_topology(workflow: dict[str, Any], tenant_id: str) -> None:
+    with suppress(Exception):
+        persist_workflow_topology(workflow, tenant_id=tenant_id)
+
+
+def _safe_persist_run_violations(
+    *,
+    workflow_id: str,
+    run_id: str,
+    violations: list[dict[str, Any]],
+    tenant_id: str,
+) -> None:
+    with suppress(Exception):
+        persist_run_violations(
+            workflow_id=workflow_id,
+            run_id=run_id,
+            violations=violations,
+            tenant_id=tenant_id,
+        )
 
 
 def ensure_store() -> None:
@@ -366,7 +458,14 @@ def _ensure_store() -> None:
     ensure_store()
 
 
-def _replace_child_rows(session: Session, run_id: str, tenant_id: str, data: dict[str, Any]) -> None:
+def _replace_child_rows(
+    session: Session,
+    run_id: str,
+    tenant_id: str,
+    data: dict[str, Any],
+    *,
+    workflow_id: str,
+) -> None:
     for model in (ViolationRecord, PatchRecord, TestRecord):
         rows = session.exec(
             select(model).where(model.run_id == run_id, model.tenant_id == tenant_id)
@@ -379,8 +478,11 @@ def _replace_child_rows(session: Session, run_id: str, tenant_id: str, data: dic
             ViolationRecord(
                 tenant_id=tenant_id,
                 run_id=run_id,
-                contract_type=violation.get("type") or violation.get("contract_type", ""),
+                workflow_id=workflow_id,
+                recurrence_key=recurrence_key(violation),
+                contract_type=violation_contract_type(violation),
                 severity=violation.get("severity", ""),
+                rule=violation_rule(violation),
                 failed_agent=violation.get("failed_agent", ""),
                 failed_step=violation.get("failed_step", -1),
                 payload_json=_to_json(violation),
@@ -447,7 +549,13 @@ def _upsert_run_record(
     record.updated_at = _utc_now()
     session.add(record)
     if data is not None:
-        _replace_child_rows(session, run_id, tenant_id, data)
+        _replace_child_rows(
+            session,
+            run_id,
+            tenant_id,
+            data,
+            workflow_id=record.workflow_id,
+        )
     return record
 
 
@@ -458,6 +566,150 @@ def _record_to_run(record: RunRecord) -> dict[str, Any]:
     data["error"] = record.error
     data["status_history"] = _from_json(record.status_history_json, [])
     return deepcopy(data)
+
+
+def _contract_id_for_type(contract_type: str) -> str:
+    if contract_type.startswith("c-"):
+        return contract_type.upper()
+    return _CONTRACT_ID_BY_TYPE.get(contract_type, contract_type.upper())
+
+
+def _workflow_node_by_endpoint(workflow: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    topology = workflow.get("declared_topology") or {}
+    nodes = topology.get("nodes") if isinstance(topology, dict) else []
+    by_endpoint: dict[str, dict[str, Any]] = {}
+    for node in nodes if isinstance(nodes, list) else []:
+        if not isinstance(node, dict):
+            continue
+        for key in (node.get("id"), node.get("name")):
+            if key:
+                by_endpoint[str(key)] = node
+    for collection in ("agents", "tools"):
+        for item in workflow.get(collection) or []:
+            if isinstance(item, dict) and item.get("name"):
+                by_endpoint.setdefault(str(item["name"]), item)
+    return by_endpoint
+
+
+def _workflow_edge_for_recurrence(
+    workflow: dict[str, Any] | None,
+    payload: dict[str, Any],
+    contract_id: str,
+) -> dict[str, str]:
+    edge = payload.get("edge")
+    if isinstance(edge, dict) and edge.get("from") and edge.get("to"):
+        return {"from": str(edge["from"]), "to": str(edge["to"])}
+    if not workflow:
+        return {}
+    topology = workflow.get("declared_topology") or {}
+    edges = topology.get("edges") if isinstance(topology, dict) else []
+    if not isinstance(edges, list):
+        return {}
+    nodes = _workflow_node_by_endpoint(workflow)
+
+    def endpoint_contracts(endpoint: Any) -> set[str]:
+        node = nodes.get(str(endpoint), {})
+        return {str(contract) for contract in node.get("contracts", [])}
+
+    candidates: list[tuple[int, dict[str, Any]]] = []
+    for item in edges:
+        if not isinstance(item, dict) or item.get("returns"):
+            continue
+        score = 0
+        if item.get("contract") == contract_id:
+            score = max(score, 3)
+        if contract_id in endpoint_contracts(item.get("from")) | endpoint_contracts(item.get("to")):
+            score = max(score, 1)
+        condition = str(item.get("condition", "")).lower()
+        if contract_id == "C-RTE" and (
+            item.get("expected_tool_event") or "tool_event" in condition
+        ):
+            score = max(score, 2)
+        if contract_id == "C-APR" and (
+            item.get("kind") == "approval" or "approval" in condition
+        ):
+            score = max(score, 2)
+        if score:
+            candidates.append((score, item))
+    if not candidates:
+        return {}
+    best_score = max(score for score, _ in candidates)
+    best = [item for score, item in candidates if score == best_score]
+    if len(best) != 1:
+        return {}
+    candidate = best[0]
+    return {"from": str(candidate["from"]), "to": str(candidate["to"])}
+
+
+def _build_recurrence_rows(
+    rows: list[ViolationRecord],
+    run_rows: list[RunRecord],
+    workflow: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    run_seen_at = {run.run_id: run.updated_at for run in run_rows}
+    groups: dict[str, dict[str, Any]] = {}
+    run_sets: dict[str, set[str]] = {}
+    for row in rows:
+        payload = _from_json(row.payload_json, {})
+        key = row.recurrence_key or recurrence_key(payload)
+        if not key:
+            continue
+        contract_type = row.contract_type or violation_contract_type(payload)
+        contract_id = _contract_id_for_type(contract_type)
+        group = groups.setdefault(
+            key,
+            {
+                "recurrence_key": key,
+                "contract_type": contract_type,
+                "contract": contract_id,
+                "failed_agent": row.failed_agent,
+                "rule": row.rule or violation_rule(payload),
+                "latest_severity": row.severity,
+                "count": 0,
+                "first_seen_run_id": row.run_id,
+                "last_seen_run_id": row.run_id,
+                "first_seen": run_seen_at.get(row.run_id, ""),
+                "last_seen": run_seen_at.get(row.run_id, ""),
+                "sample_run_ids": [],
+                "edge": _workflow_edge_for_recurrence(workflow, payload, contract_id),
+            },
+        )
+        seen = run_sets.setdefault(key, set())
+        if row.run_id not in seen:
+            seen.add(row.run_id)
+            group["sample_run_ids"].append(row.run_id)
+            group["count"] += 1
+        row_seen_at = run_seen_at.get(row.run_id, "")
+        if row_seen_at and (not group["last_seen"] or row_seen_at >= group["last_seen"]):
+            group["last_seen"] = row_seen_at
+            group["last_seen_run_id"] = row.run_id
+            group["latest_severity"] = row.severity
+        if row_seen_at and (not group["first_seen"] or row_seen_at < group["first_seen"]):
+            group["first_seen"] = row_seen_at
+            group["first_seen_run_id"] = row.run_id
+    return sorted(groups.values(), key=lambda item: (-item["count"], item["recurrence_key"]))
+
+
+def _workflow_recurrences_from_session(
+    session: Session,
+    workflow_id: str,
+    tenant_id: str,
+) -> list[dict[str, Any]]:
+    workflow_record = _get_workflow_record(session, workflow_id, tenant_id)
+    workflow = _workflow_to_dict(workflow_record) if workflow_record is not None else None
+    rows = session.exec(
+        select(ViolationRecord).where(
+            ViolationRecord.tenant_id == tenant_id,
+            ViolationRecord.workflow_id == workflow_id,
+        )
+    ).all()
+    run_rows = session.exec(
+        select(RunRecord).where(
+            RunRecord.tenant_id == tenant_id,
+            RunRecord.workflow_id == workflow_id,
+        )
+    ).all()
+    return _build_recurrence_rows(list(rows), list(run_rows), workflow)
 
 
 def _cost_from_payload(data: dict[str, Any]) -> dict[str, Any]:
@@ -530,7 +782,12 @@ def get_run(run_id: str, tenant_id: str = "local") -> dict[str, Any] | None:
         record = _get_run_record(session, run_id, tenant_id)
         if record is None:
             return None
-        return _record_to_run(record)
+        data = _record_to_run(record)
+        if record.workflow_id:
+            data["recurrences"] = _workflow_recurrences_from_session(
+                session, record.workflow_id, tenant_id
+            )
+        return data
 
 
 def put_run(
@@ -560,6 +817,13 @@ def put_run(
             status_history=status_history or [status],
         )
         session.commit()
+    if workflow_id and data.get("violations"):
+        _safe_persist_run_violations(
+            workflow_id=workflow_id,
+            run_id=run_id,
+            violations=data.get("violations", []),
+            tenant_id=tenant_id,
+        )
 
 
 def list_runs(tenant_id: str = "local") -> list[str]:
@@ -587,7 +851,10 @@ def create_workflow(payload: dict[str, Any], tenant_id: str = "local") -> dict[s
     with session_scope() as session:
         session.add(record)
         session.commit()
-    return get_workflow(workflow_id, tenant_id) or {}
+    workflow = get_workflow(workflow_id, tenant_id) or {}
+    if workflow:
+        _safe_persist_workflow_topology(workflow, tenant_id=tenant_id)
+    return workflow
 
 
 def _workflow_to_dict(record: WorkflowRecord) -> dict[str, Any]:
@@ -626,6 +893,18 @@ def list_workflows(tenant_id: str = "local") -> list[dict[str, Any]]:
 
 def workflow_exists(workflow_id: str, tenant_id: str = "local") -> bool:
     return get_workflow(workflow_id, tenant_id) is not None
+
+
+def list_workflow_recurrences(
+    workflow_id: str,
+    tenant_id: str = "local",
+) -> list[dict[str, Any]] | None:
+    _ensure_store()
+    with session_scope() as session:
+        workflow = _get_workflow_record(session, workflow_id, tenant_id)
+        if workflow is None:
+            return None
+        return _workflow_recurrences_from_session(session, workflow_id, tenant_id)
 
 
 def create_run(
@@ -708,6 +987,13 @@ def set_run_status(
             status_history=history,
         )
         session.commit()
+    if report is not None and workflow_id and report.get("violations"):
+        _safe_persist_run_violations(
+            workflow_id=workflow_id,
+            run_id=run_id,
+            violations=report.get("violations", []),
+            tenant_id=tenant_id,
+        )
     from api.events import publish_run_event, run_event_payload
 
     publish_run_event(

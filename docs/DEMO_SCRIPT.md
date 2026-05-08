@@ -164,7 +164,7 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 55. **"The backend emits four repair entries for the four fixture violations. The Repair screen's visual before/after diffs are still template-driven until the API passthrough work lands."**
 
-56. **"The Workflow DAG topology block is fixture-only today — real implementation parses the operator's AG2 program or a YAML manifest. The dashboard renders what the next-sprint version will produce."**
+56. **"The Workflow DAG topology block is fixture-first for the stage demo, and live mode can now render observed topology plus recurrence badges from persisted run history. Registered workflow declarations are also projected to FalkorDB when graph persistence is enabled."**
 
 57. **"Tavily, Daytona, and Gemini are real live integrations — not stubs. Without `DAYTONA_API_KEY` we return an explicit `(stdout='Daytona credentials missing', sandbox_id='no-sandbox', status='error')` — never a fake PASS."**
 
