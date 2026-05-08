@@ -418,3 +418,59 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .run-progress-warn    { background: #FCEFD8; }
 .run-progress-ok      { background: #E5EDD5; }
 .run-progress-err     { background: #FBE9E6; }
+
+/* ---------- Approval panel (Sprint 16 #79) ---------- */
+.approval .label[data-status^="APPROVED"] { color: var(--sage); }
+.approval .label[data-status^="REJECTED"] { color: var(--brick); }
+.approval .label[data-status^="PENDING"]  { color: var(--orange); }
+.approval-ok    { border-left: 3px solid var(--sage); }
+.approval-err   { border-left: 3px solid var(--brick); }
+.approval-warn  { border-left: 3px solid var(--orange); }
+
+.approval-form { display: grid; gap: 12px; padding-top: 6px; }
+.approval-form .form-input,
+.approval-form .form-textarea {
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  padding: 8px 10px;
+  border-radius: 0;
+}
+.approval-form .form-input:focus,
+.approval-form .form-textarea:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+  border-color: var(--gold);
+}
+.approval-form .form-textarea { resize: vertical; min-height: 50px; font-family: var(--mono); }
+.approval-form .form-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--brick);
+  font-size: 12px;
+  border-left: 3px solid var(--brick);
+  padding: 6px 10px;
+  background: #fbe9e6;
+}
+.approval-form .btn-retry {
+  background: transparent;
+  border: 1px solid var(--brick);
+  color: var(--brick);
+  padding: 4px 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.approval-form .btn-retry:hover { background: var(--brick); color: white; }
+.approval-comments-display .lbl {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.approval-comments-display .val { color: var(--text); font-size: 12px; }

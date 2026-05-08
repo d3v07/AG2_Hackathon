@@ -610,8 +610,167 @@ function Regression() {
 }
 
 /* ---------------- REPORT ---------------- */
-function Report({ setScreen }) {
-  const r = D.report;
+function _approvalKind(status) {
+  const norm = (status || "").toUpperCase();
+  if (norm.startsWith("APPROVED")) return "ok";
+  if (norm.startsWith("REJECTED")) return "err";
+  return "warn"; // PENDING* / unknown
+}
+
+function _isPendingApproval(status) {
+  const norm = (status || "").toUpperCase();
+  return norm.startsWith("PENDING") || norm === "" || norm === "UNKNOWN";
+}
+
+function ApprovalPanel({ runId, approval, onUpdated }) {
+  const [operator, setOperator] = useState(approval?.operator || "j.kowalski");
+  const [comments, setComments] = useState(approval?.comments || "");
+  const [submitState, setSubmitState] = useState("idle"); // idle|submitting|error
+  const [submitError, setSubmitError] = useState("");
+
+  const status = approval?.status || "UNKNOWN";
+  const pending = _isPendingApproval(status);
+  const kind = _approvalKind(status);
+
+  async function decide(decision) {
+    if (!runId) {
+      setSubmitError("No run_id available — submit a run first.");
+      setSubmitState("error");
+      return;
+    }
+    setSubmitState("submitting");
+    setSubmitError("");
+    try {
+      const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/approval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, operator, comments }),
+      });
+      if (res.status === 404) {
+        setSubmitError(`Run ${runId} not found. It may have been deleted.`);
+        setSubmitState("error");
+        return;
+      }
+      if (res.status === 409) {
+        const body = await res.json().catch(() => ({}));
+        setSubmitError(`Run is not approval-ready: ${body.detail || res.statusText}`);
+        setSubmitState("error");
+        return;
+      }
+      if (!res.ok) {
+        setSubmitError(`Server error ${res.status}. Try again.`);
+        setSubmitState("error");
+        return;
+      }
+      const body = await res.json();
+      setSubmitState("idle");
+      if (onUpdated) onUpdated(body.approval);
+    } catch (err) {
+      setSubmitError(`Network error: ${err.message || err}`);
+      setSubmitState("error");
+    }
+  }
+
+  return (
+    <div className={`approval approval-${kind}`}>
+      <div className="big">
+        <span className="sq"></span>
+        <span className="label" data-status={status}>{status.replace(/_/g, " ")}</span>
+      </div>
+      <div className="kv-list">
+        <div className="lbl">Operator</div>
+        <div className="val">{approval?.operator || "—"}</div>
+        <div className="lbl">Requested</div>
+        <div className="val">{approval?.requested_at || "—"}</div>
+        <div className="lbl">SLA</div>
+        <div className="val">{approval?.sla || "—"}</div>
+        <div className="lbl">Channel</div>
+        <div className="val">UserProxyAgent / HumanGate</div>
+      </div>
+
+      {approval?.comments && (
+        <>
+          <hr />
+          <div className="approval-comments-display">
+            <div className="lbl">Comments</div>
+            <div className="val">{approval.comments}</div>
+          </div>
+        </>
+      )}
+
+      <hr />
+
+      {pending && (
+        <form className="approval-form" onSubmit={(e) => e.preventDefault()} aria-label="Approval form">
+          <label className="form-row">
+            <span className="form-label">Operator</span>
+            <input
+              className="form-input"
+              type="text"
+              value={operator}
+              onChange={(e) => setOperator(e.target.value)}
+              aria-required="true"
+            />
+          </label>
+          <label className="form-row">
+            <span className="form-label">Comments (optional)</span>
+            <textarea
+              className="form-textarea"
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              rows={2}
+              maxLength={500}
+              placeholder="Optional context for the audit trail"
+            />
+          </label>
+
+          {submitError && (
+            <div className="form-error" role="alert" aria-live="polite">
+              {submitError}
+              <button
+                type="button"
+                className="btn-retry"
+                onClick={() => { setSubmitState("idle"); setSubmitError(""); }}
+              >
+                dismiss
+              </button>
+            </div>
+          )}
+
+          <div className="btn-row">
+            <button
+              type="button"
+              className="btn"
+              disabled={!operator.trim() || submitState === "submitting"}
+              onClick={() => decide("approved")}
+              aria-busy={submitState === "submitting"}
+            >
+              {submitState === "submitting" ? "SUBMITTING…" : "APPROVE & RERUN"}
+            </button>
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={!operator.trim() || submitState === "submitting"}
+              onClick={() => decide("rejected")}
+              aria-busy={submitState === "submitting"}
+            >
+              REJECT
+            </button>
+          </div>
+        </form>
+      )}
+
+      {!pending && submitError && (
+        <div className="form-error" role="alert" aria-live="polite">{submitError}</div>
+      )}
+    </div>
+  );
+}
+
+function Report({ setScreen, runId }) {
+  const [reportData, setReportData] = useState(D.report);
+  const r = reportData;
+
   return (
     <>
       <div className="section-head">
@@ -626,23 +785,11 @@ function Report({ setScreen }) {
             <p>{r.summary}</p>
           </div>
         </div>
-        <div className="approval">
-          <div className="big">
-            <span className="sq"></span>
-            <span className="label">{r.approval.status.replace("_", " ")}</span>
-          </div>
-          <div className="kv-list">
-            <div className="lbl">Operator</div><div className="val">{r.approval.operator}</div>
-            <div className="lbl">Requested</div><div className="val">{r.approval.requested_at}</div>
-            <div className="lbl">SLA</div><div className="val">{r.approval.sla}</div>
-            <div className="lbl">Channel</div><div className="val">UserProxyAgent / HumanGate</div>
-          </div>
-          <hr />
-          <div className="btn-row">
-            <button className="btn">APPROVE &amp; RERUN</button>
-            <button className="btn ghost">REJECT</button>
-          </div>
-        </div>
+        <ApprovalPanel
+          runId={runId || D.run?.id}
+          approval={r.approval}
+          onUpdated={(updated) => setReportData({ ...reportData, approval: { ...r.approval, ...updated } })}
+        />
       </div>
 
       <div className="row" style={{alignItems: "stretch"}}>
@@ -966,7 +1113,7 @@ function App() {
         {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
         {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} />}
         {screen === "regression" && <Regression />}
-        {screen === "report"     && <Report setScreen={setScreen} />}
+        {screen === "report"     && <Report setScreen={setScreen} runId={currentRunId} />}
         {screen === "submit"     && <SubmitRun setScreen={setScreen} onRunSubmitted={handleRunSubmitted} />}
       </main>
     </div>
@@ -981,6 +1128,7 @@ if (_rootEl) {
 export {
   App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun,
   RunProgress, useRunEventStream, fetchStreamToken,
+  ApprovalPanel,
   TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS,
   SCREENS,
 };
