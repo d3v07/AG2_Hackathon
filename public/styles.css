@@ -1137,3 +1137,78 @@ select:focus-visible,
   outline: 2px solid var(--gold);
   outline-offset: -2px;
 }
+
+/* ---------- Sprint 18 #87 — responsive layouts (375 / 768 / 1440) ---------- */
+/* Tablet: collapse 6-column meta strip + simplify forensic panes */
+@media (max-width: 1024px) {
+  .meta-strip { grid-template-columns: repeat(3, 1fr); }
+  .meta-cell:nth-child(n+4) { border-top: 1px solid var(--border); }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .pipeline { grid-template-columns: repeat(2, 1fr); }
+  .pipeline .agent-box { border-right: 1px solid var(--border); }
+  .workflows-grid { grid-template-columns: 1fr; }
+  .forensic-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(200px, auto) minmax(300px, 1fr) minmax(200px, auto);
+  }
+}
+
+/* Mobile: hamburger nav + single-column everything + larger tap targets */
+@media (max-width: 640px) {
+  .topbar {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+  .brand { border-right: 0; border-bottom: 1px solid var(--border); }
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+  }
+  .tab {
+    min-height: 44px;            /* WCAG 2.5.5 / iOS HIG tap target */
+    padding: 0 14px;
+    flex: 0 0 auto;
+  }
+  .status-cluster {
+    border-left: 0;
+    padding: 8px 18px;
+    justify-content: space-between;
+  }
+  .meta-strip {
+    grid-template-columns: repeat(2, 1fr);
+    font-size: 10.5px;
+  }
+  .meta-cell:nth-child(n+3) { border-top: 1px solid var(--border); }
+  .meta-cell { padding: 6px 10px; }
+  .main { padding: 12px 14px 32px; }
+  .stat-grid { grid-template-columns: 1fr; }
+  .pipeline { grid-template-columns: 1fr; }
+  .pipeline .agent-box {
+    border-right: 1px solid var(--border);
+    min-height: auto;
+  }
+  .row { flex-direction: column; }
+  .row .card[style*="width: 360"] { width: 100% !important; }
+  .submit-run-form { padding: 14px; }
+  .approval .btn-row { flex-direction: column; }
+  .approval .btn-row .btn { width: 100%; min-height: 44px; }
+  .workflows-grid { grid-template-columns: 1fr; }
+  .workflow-row { padding: 14px; min-height: 44px; }
+  /* Forensic stacks vertically on mobile; waterfall scrolls horizontally
+     (designed affordance — too dense for column-only) */
+  .forensic-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    min-height: auto;
+  }
+  .forensic-pane { min-height: 300px; }
+  .forensic-pane-body-waterfall { overflow-x: auto; }
+  /* Section heads stack on mobile so the right-side meta doesn't truncate */
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
