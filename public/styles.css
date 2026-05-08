@@ -1,4 +1,39 @@
-/* Concord Lite — terminal/instruments aesthetic */
+/* Concord Lite — terminal/instruments aesthetic
+ * ============================================================
+ * VISUAL IDENTITY (Sprint 18 #89 — TASTE CHECK)
+ * ============================================================
+ *
+ * Defaults rejected (per global ~/.claude/rules/common/taste.md):
+ *   - Font: not Inter / Roboto / system-ui as design choice.
+ *     Use ui-monospace stack (SF Mono → Menlo → Consolas) — terminal
+ *     aesthetic anchors the forensic / audit-grade product positioning.
+ *   - Icons: not Lucide / Heroicons / Tabler as default. Concord uses
+ *     Unicode glyphs (▣ ● ◆ → ▲ ◉ ★ ✕ ✚ ✓ for span kinds; ▾ ▸ for
+ *     tree disclosure). One glyph per span kind, semantic colors.
+ *   - Palette: not purple→blue gradient. Dark earth-tone terminal:
+ *     #0c0f0a / #13160f bg, #c8b560 gold accent, #b85c4a brick errors,
+ *     #7a9e7e sage success, #c4854a orange warnings.
+ *   - Layout: not the SaaS hero/features/pricing/CTA template. The
+ *     dashboard is a forensic instrument panel — meta-strip, tabs,
+ *     three-pane forensic view, terminal-style log feeds.
+ *
+ * Distinguishing decisions:
+ *   - Monospace EVERYTHING (including chrome, not just code).
+ *   - Solid blocks over gradients; sharp corners over rounded.
+ *   - Warm dark palette anchored on gold accent — not the typical
+ *     blue/cyan SaaS dark mode.
+ *   - Status pills are square-edged outlines, not pills.
+ *   - Span kinds get distinguishable but project-coherent earth tones,
+ *     never the rainbow trap.
+ *
+ * Copy rules:
+ *   - No "Welcome to Concord", "Get started for free", "Revolutionize",
+ *     "Supercharge", "Seamlessly integrate", "blazingly fast".
+ *   - Error messages are specific (per global taste.md): never
+ *     "Something went wrong" — see ErrorState component.
+ *   - Audit-grade language: "contract violation", "repair patch",
+ *     "regression test", "forensic span".
+ */
 :root {
   --bg:        #0c0f0a;
   --surface:   #13160f;
