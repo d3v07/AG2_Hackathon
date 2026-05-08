@@ -574,6 +574,7 @@ def create_run(
 ) -> dict[str, str]:
     _ensure_store()
     run_id = f"RUN-{uuid.uuid4().hex[:8].upper()}"
+    status_history = ["queued"]
     with session_scope() as session:
         _upsert_run_record(
             session,
@@ -584,9 +585,20 @@ def create_run(
             status="queued",
             raw_trace=raw_trace,
             task_spec=task_spec,
-            status_history=["queued"],
+            status_history=status_history,
         )
         session.commit()
+    from api.events import publish_run_event, run_event_payload
+
+    publish_run_event(
+        tenant_id,
+        run_event_payload(
+            run_id=run_id,
+            workflow_id=workflow_id,
+            status="queued",
+            status_history=status_history,
+        ),
+    )
     return {"run_id": run_id, "status": "queued"}
 
 
@@ -621,17 +633,30 @@ def set_run_status(
         history = _from_json(record.status_history_json, [])
         if not history or history[-1] != status:
             history.append(status)
+        workflow_id = record.workflow_id
         _upsert_run_record(
             session,
             run_id,
             report,
             tenant_id=tenant_id,
-            workflow_id=record.workflow_id,
+            workflow_id=workflow_id,
             status=status,
             error=error,
             status_history=history,
         )
         session.commit()
+    from api.events import publish_run_event, run_event_payload
+
+    publish_run_event(
+        tenant_id,
+        run_event_payload(
+            run_id=run_id,
+            workflow_id=workflow_id,
+            status=status,
+            status_history=history,
+            error=error,
+        ),
+    )
 
 
 def get_run_status(run_id: str, tenant_id: str = "local") -> dict[str, Any] | None:

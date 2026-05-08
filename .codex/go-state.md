@@ -3,11 +3,11 @@
 ## Overview
 - Project: Concord Lite / Concord v1.0
 - Mode: safe
-- Phase: Sprint 6 landing
-- Branch: feat/sprint-6-ag2-sdk
-- Current Sprint: Sprint 6
-- Current Task: #21-#23 AG2 OTel verification, trace exporter, and SDK package
-- Last Checkpoint: Sprint 6 local commit `b281e94` created after full verification and reviewer fix loops.
+- Phase: Sprint 7 ready to land
+- Branch: feat/sprint-7-live-dashboard
+- Current Sprint: Sprint 7
+- Current Task: #24-#26 live run events, dashboard LIVE/FIXTURE mode, and SSE badge
+- Last Checkpoint: Sprint 7 reviewer findings were addressed and the current tree passed focused tests, full pytest, fixture pipeline, OTel spike, repo-valid import smoke, local tokenized SSE probe, deployed demo probe, diff check, and browser QA.
 
 ## Sprint Board
 Sprint 3: Foundation
@@ -26,9 +26,14 @@ Sprint 5: API persistence and run APIs
 - #20 P0 API: Implement POST /api/runs with status state machine — closed on `main`
 
 Sprint 6: AG2 tracing and SDK
-- #21 P0 Zone A: Verify AG2 OpenTelemetry import paths and document them — full gate passed locally
-- #22 P0 Zone A: Add OTel span-to-RunTrace exporter — full gate passed locally
-- #23 P0 SDK: Add one-line instrumentation and API client package — full gate passed locally
+- #21 P0 Zone A: Verify AG2 OpenTelemetry import paths and document them — closed on `main`
+- #22 P0 Zone A: Add OTel span-to-RunTrace exporter — closed on `main`
+- #23 P0 SDK: Add one-line instrumentation and API client package — closed on `main`
+
+Sprint 7: Live run events and dashboard mode controls
+- #24 P0 API: Add in-process SSE event bus and `/api/runs/{id}/events`
+- #25 P0 Dashboard: Wire live updates from SSE while keeping fixture mode default
+- #26 P0 Dashboard: Add LIVE/FIXTURE toggle and badge
 
 ## What Worked
 - GitHub issues #12-#15 are closed on `main`.
@@ -131,6 +136,35 @@ Sprint 6: AG2 tracing and SDK
 - Sprint 6 `git diff --check` passed.
 - Sprint 6 AG2/OTel import smoke passed.
 - Sprint 6 local API probe passed: `GET /api/health` returned 200, `GET /api/runs/RUN-041` returned 4 patches with `completed`, and unauthenticated `X-Tenant-ID: tenant-a` was rejected with 401.
+- PR #48 merged Sprint 6 into `production`; PR #49 merged `production` into `main`.
+- GitHub issues #21, #22, and #23 are closed on `main`.
+- Operator steering: use multiple agents for Sprint 7 discovery/review while the main lane owns final implementation and gate execution.
+- Sprint 6 post-main verification passed locally: `pytest -x --tb=short` passed 343 tests, `python3 run_all.py --fixture` passed, `python3 scripts/otel_spike.py` passed, local API probe passed, and issues #21-#23 are closed.
+- Merged Sprint 6 branch `feat/sprint-6-ag2-sdk` was deleted locally and remotely after landing on `main`.
+- Sprint 7 branch `feat/sprint-7-live-dashboard` was created from updated `production`.
+- #24 added `api.events` process-local run event bus and `GET /api/runs/{run_id}/events` using FastAPI `EventSourceResponse`, tenant-scoped by run and tenant.
+- #24 event stream replays persisted `queued -> analyzing -> completed|failed` status history, honors `Last-Event-ID`, closes on terminal runs, and supports short-lived stream tokens for browser EventSource authentication.
+- #25 keeps fixture mode as the dashboard default and adds LIVE mode that fetches `GET /api/runs/{id}`, obtains `/events/token`, and listens to `/events?stream_token=...`.
+- #25 adapter now derives observed `topology` and `routes` from actual run traces for live dashboard payloads so the Workflow DAG does not depend on fixture-only fields.
+- #26 added the topbar FIXTURE/LIVE segmented control plus persistent source badge and source meta cell.
+- Sprint 7 targeted gate passed: `pytest -q tests/test_api_run_events.py tests/test_api_adapter_multi_patch.py tests/test_dashboard_live_mode.py tests/test_api_runs.py tests/test_api_workflows.py tests/test_integration.py` passed 48 tests.
+- Sprint 7 full gate passed: `pytest -x --tb=short` passed 351 tests.
+- Sprint 7 fixture gate passed: `python3 run_all.py --fixture` reported `Regression status : pass` and `Regression tests   : 4 pass / 0 fail / 0 error`.
+- Sprint 7 AG2/FastAPI import smoke passed, including `EventSourceResponse`, `ServerSentEvent`, and `ConcordSpanExporter`.
+- Sprint 7 OTel spike passed: `python3 scripts/otel_spike.py`.
+- Sprint 7 `git diff --check` passed.
+- Sprint 7 local API/SSE probe passed: health 200, `GET /api/runs/RUN-041` returned completed with 4 patches and 7 routes, `/events` returned `text/event-stream`, and unauthenticated non-local tenant events were rejected with 401.
+- Sprint 7 browser QA passed in the in-app browser: fixture default, LIVE toggle, Workflow DAG view, mobile-width fixture/live toggle, and no console errors.
+- Sprint 7 reviewer blockers were addressed: non-local browser SSE auth now uses stream tokens, SSE replay filters by sequence, arbitrary live runs no longer get fixture topology, dynamic agents/topology render without hardcoded fixture maps, and in-progress live runs avoid fixture backfill.
+- Sprint 7 reviewer follow-ups were addressed: LIVE reconnect obtains a fresh stream token after errors and the pipeline graph advances to the new end state when live traces have more steps than the fixture.
+- Sprint 7 final focused gate passed: `pytest -q tests/test_dashboard_live_mode.py tests/test_api_run_events.py tests/test_api_adapter_multi_patch.py` passed 20 tests.
+- Sprint 7 final full gate passed: `pytest -x --tb=short` passed 359 tests.
+- Sprint 7 final fixture gate passed: `python3 run_all.py --fixture` reported `Regression status : pass` and `Regression tests   : 4 pass / 0 fail / 0 error`.
+- Sprint 7 final OTel spike passed: `python3 scripts/otel_spike.py`.
+- Sprint 7 final repo-valid import smoke passed for AG2 agents/patterns, FastAPI SSE response, event bus/token store, Daytona SDK, and Concord span exporter.
+- Sprint 7 final local API probe passed: health 200, `GET /api/runs/RUN-041` returned completed with 4 patches and 7 routes, `/events/token` issued a token, `/events?stream_token=...` replayed through sequence 3, and unauthenticated non-local tenant events returned 401.
+- Sprint 7 deployed demo probe returned HTTP 200.
+- Sprint 7 final browser QA passed with gstack browse: desktop and mobile fixture defaults, LIVE reaches `LIVE COMPLETED`, DAG renders, mobile has no horizontal document overflow, and the only console warning is the existing in-browser Babel warning.
 
 ## What Did Not Work
 - Initial audit: `python3 run_all.py --fixture` exited 0 and printed a report, but the report said `Regression status : fail`.
@@ -149,7 +183,8 @@ Sprint 6: AG2 tracing and SDK
 - No #16/#17 blocker remains.
 - No Sprint 5 blocker remains.
 - No Sprint 6 blocker remains.
+- No Sprint 7 blocker remains; final reviewer medium findings were fixed locally.
 - Remaining toolchain gaps: `ruff` unavailable in the current Python environment; `docs/PLAN_VS_REALITY.md` missing.
 
 ## Exact Next Step
-Push `feat/sprint-6-ag2-sdk`, open the PR to `production`, check review comments and required gates, then merge through `production` and `main` before starting Sprint 7.
+Commit Sprint 7 with `Closes #24`, `Closes #25`, and `Closes #26`, push PR to `production`, merge through `production` and `main`, verify `main`, delete the merged sprint branch, then start Sprint 8 (#27-#29).

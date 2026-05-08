@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=1440">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Concord Lite · Mission Control</title>
 <style>
 /* Concord Lite — terminal/instruments aesthetic */
@@ -40,11 +40,11 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
   border-bottom-width: 0;
   box-shadow: 0 1px 0 #C8CADB;
 }
-.brand { padding: 12px 22px; border-right: 1.5px solid #C8CADB; display: flex; flex-direction: column; gap: 3px; justify-content: center; }
+.brand { padding: 12px 22px; border-right: 1.5px solid #C8CADB; display: flex; flex-direction: column; gap: 3px; justify-content: center; min-width: 0; }
 .brand .mark { color: #F1642E; font-weight: 700; letter-spacing: 0.16em; font-size: 18px; line-height: 1; }
 .brand .sub  { color: #8E8FAC; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; }
 
-.tabs { display: flex; align-items: stretch; padding: 0; }
+.tabs { display: flex; align-items: stretch; padding: 0; min-width: 0; }
 .tab {
   background: transparent; border: 0; padding: 0 18px; height: 100%;
   color: #B8B9D0; letter-spacing: 0.14em; font-size: 11.5px;
@@ -58,7 +58,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .tab .num { color: #6E6F8C; font-size: 10px; }
 .tab.active .num { color: #FCDD9D; }
 
-.status-cluster { display: flex; align-items: center; gap: 14px; padding: 0 18px; border-left: 1.5px solid #C8CADB; color: #B8B9D0; }
+.status-cluster { display: flex; align-items: center; gap: 14px; padding: 0 18px; border-left: 1.5px solid #C8CADB; color: #B8B9D0; min-width: 0; }
 .status-line { display: flex; align-items: center; gap: 8px; }
 .status-dot { width: 8px; height: 8px; display: inline-block; }
 .status-dot.fail { background: #FF6B4A; }
@@ -68,12 +68,44 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .status-text { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; }
 .status-text.fail { color: #FF6B4A; }
 .status-text.ok   { color: #A8C97A; }
+.source-toggle {
+  display: inline-flex;
+  border: 1.5px solid #C8CADB;
+  background: #161628;
+}
+.source-btn {
+  border: 0;
+  border-right: 1.5px solid #C8CADB;
+  background: transparent;
+  color: #B8B9D0;
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  padding: 6px 9px;
+  text-transform: uppercase;
+}
+.source-btn:last-child { border-right: 0; }
+.source-btn.active { background: #F1642E; color: #FFFFFF; }
+.source-badge {
+  border: 1px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  color: var(--orange);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  padding: 2px 7px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.source-badge.live.connected { color: #A8C97A; }
+.source-badge.live.connecting { color: var(--gold); }
+.source-badge.live.error { color: #FF6B4A; }
 .cursor { display: inline-block; width: 7px; height: 13px; background: var(--gold); margin-left: 2px; vertical-align: -2px; animation: blink 1.05s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
 .meta-strip {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   background: var(--surface-2);
   border-bottom: 1.5px solid var(--text-2);
   font-size: 11px;
@@ -588,6 +620,55 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 ::-webkit-scrollbar-thumb { background: var(--border-2); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 
+@media (max-width: 1100px) {
+  .topbar { grid-template-columns: 1fr; }
+  .brand, .status-cluster { border-left: 0; border-right: 0; }
+  .tabs { overflow-x: auto; }
+  .tab { min-height: 48px; white-space: nowrap; }
+  .status-cluster { min-height: 48px; justify-content: space-between; }
+  .meta-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat-grid, .report-grid, .diff { grid-template-columns: 1fr; }
+  .row { flex-direction: column; }
+  .trace-layout { grid-template-columns: 1fr; }
+  .minirail { position: static; }
+  .viol-row { grid-template-columns: 4px 80px 96px minmax(180px, 1fr); overflow-x: auto; }
+  .viol-row > div:nth-child(n+5) { display: none; }
+}
+
+@media (max-width: 640px) {
+  html, body { overflow-x: hidden; }
+  .brand { padding: 12px 18px; }
+  .status-cluster {
+    align-items: center;
+    gap: 10px;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 8px 18px;
+  }
+  .status-line.muted { display: none; }
+  .main { padding: 16px 20px 32px; }
+  .meta-cell { min-width: 0; }
+  .meta-cell .val {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .section-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .pgraph-controls {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pgraph-controls .legend { margin-left: 0; }
+  .pgraph-foot { grid-template-columns: 1fr; }
+  .pgraph-foot .cell { border-right: 0; border-bottom: 1px solid var(--border); }
+  .pgraph-foot .cell:last-child { border-bottom: 0; }
+}
+
 </style>
 </head>
 <body>
@@ -894,7 +975,55 @@ window.CONCORD_DATA = {
 <script type="text/babel">
 /* global React, ReactDOM */
 const { useState, useEffect, useMemo } = React;
-const D = window.CONCORD_DATA;
+const BOOT_DATA = window.CONCORD_DATA;
+
+function normalizeDashboardData(data, options = {}) {
+  const source = data || {};
+  const fallbackFixture = options.fallbackFixture !== false;
+  const fixture = fallbackFixture ? BOOT_DATA : {};
+  const emptyTest = { name: "pending", runner: "", sandbox_id: "", duration_ms: 0, lines: [], assertions: [] };
+  const emptyReport = {
+    summary: "",
+    patches_applied: [],
+    approval: { status: "UNAVAILABLE", operator: "", requested_at: "", sla: "" },
+  };
+  return {
+    ...source,
+    run: { ...(fixture.run || {}), ...(source.run || {}) },
+    stats: { ...(fixture.stats || {}), ...(source.stats || {}) },
+    agents: Array.isArray(source.agents) ? source.agents : (fixture.agents || []),
+    topology: source.topology || fixture.topology || { entry: "", nodes: [], edges: [] },
+    routes: Array.isArray(source.routes) ? source.routes : (fixture.routes || []),
+    contracts: Array.isArray(source.contracts) ? source.contracts : (fixture.contracts || []),
+    trace: Array.isArray(source.trace) ? source.trace : (fixture.trace || []),
+    violations: Array.isArray(source.violations) ? source.violations : (fixture.violations || []),
+    patches: Array.isArray(source.patches) ? source.patches : (fixture.patches || []),
+    test: { ...(fixture.test || emptyTest), ...(source.test || {}) },
+    report: { ...(fixture.report || emptyReport), ...(source.report || {}) },
+    status: source.status || fixture.status || "queued",
+    error: source.error || "",
+  };
+}
+
+function liveHeaders() {
+  const headers = {};
+  if (window.CONCORD_TENANT_ID) headers["X-Tenant-ID"] = window.CONCORD_TENANT_ID;
+  if (window.CONCORD_API_KEY) headers["X-Concord-API-Key"] = window.CONCORD_API_KEY;
+  return headers;
+}
+
+async function openStreamToken(liveRunId, headers) {
+  const response = await fetch(`/api/runs/${liveRunId}/events/token`, {
+    method: "POST",
+    headers,
+  });
+  if (!response.ok) throw new Error(`event token failed: ${response.status}`);
+  const payload = await response.json();
+  return payload.stream_token;
+}
+
+const FIXTURE_DATA = normalizeDashboardData(window.CONCORD_DATA, { fallbackFixture: true });
+let D = FIXTURE_DATA;
 
 const SCREENS = [
   { id: "overview",   num: "01", label: "Overview" },
@@ -911,25 +1040,51 @@ function Pill({ kind, children }) {
   return <span className={`pill ${kind}`}><Sq kind={kind} />{children}</span>;
 }
 
-function StatusCluster({ screen }) {
+function sourceBadgeText(sourceMode, connectionState, liveStatus) {
+  if (sourceMode === "fixture") return "FIXTURE";
+  if (connectionState === "connecting") return "LIVE CONNECTING";
+  if (connectionState === "error") return "LIVE ERROR";
+  return `LIVE ${String(liveStatus || "CONNECTED").toUpperCase()}`;
+}
+
+function StatusCluster({ screen, sourceMode, setSourceMode, connectionState, liveStatus }) {
   const onReport = screen === "report";
-  const text = onReport ? "RERUN READY" : "4 VIOLATIONS DETECTED";
-  const klass = onReport ? "ok" : "fail";
+  const violations = D.stats?.violations || 0;
+  const text = onReport ? "RERUN READY" : `${violations} VIOLATION${violations === 1 ? "" : "S"} DETECTED`;
+  const klass = onReport || violations === 0 ? "ok" : "fail";
+  const dot = sourceMode === "live" && connectionState === "connecting" ? "warn" : klass;
   return (
     <div className="status-cluster">
+      <div className="source-toggle" aria-label="data source">
+        <button
+          className={`source-btn ${sourceMode === "fixture" ? "active" : ""}`}
+          onClick={() => setSourceMode("fixture")}
+        >
+          Fixture
+        </button>
+        <button
+          className={`source-btn ${sourceMode === "live" ? "active" : ""}`}
+          onClick={() => setSourceMode("live")}
+        >
+          Live
+        </button>
+      </div>
       <div className="status-line">
-        <span className={`status-dot ${onReport ? "ok" : "fail"}`}></span>
+        <span className={`status-dot ${dot}`}></span>
         <span className={`status-text ${klass}`}>{text}</span>
         <span className="cursor"></span>
       </div>
+      <div className={`source-badge ${sourceMode} ${connectionState}`}>
+        {sourceBadgeText(sourceMode, connectionState, liveStatus)}
+      </div>
       <div className="status-line muted" style={{fontSize: 11, letterSpacing: "0.14em"}}>
-        14:22:26 UTC
+        {D.run?.started ? D.run.started.replace("T", " ").replace("Z", " UTC") : "time unavailable"}
       </div>
     </div>
   );
 }
 
-function TopBar({ screen, setScreen }) {
+function TopBar({ screen, setScreen, sourceMode, setSourceMode, connectionState, liveStatus }) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -948,12 +1103,18 @@ function TopBar({ screen, setScreen }) {
           </button>
         ))}
       </nav>
-      <StatusCluster screen={screen} />
+      <StatusCluster
+        screen={screen}
+        sourceMode={sourceMode}
+        setSourceMode={setSourceMode}
+        connectionState={connectionState}
+        liveStatus={liveStatus}
+      />
     </header>
   );
 }
 
-function MetaStrip() {
+function MetaStrip({ sourceMode, connectionState }) {
   const r = D.run;
   return (
     <div className="meta-strip">
@@ -963,66 +1124,90 @@ function MetaStrip() {
       <div className="meta-cell"><span className="lbl">Manager</span><span className="val">{r.manager}</span></div>
       <div className="meta-cell"><span className="lbl">Duration</span><span className="val">{(r.duration_ms/1000).toFixed(2)}s</span></div>
       <div className="meta-cell"><span className="lbl">Operator</span><span className="val">{r.operator}</span></div>
+      <div className="meta-cell"><span className="lbl">Source</span><span className="val">{sourceMode.toUpperCase()} · {connectionState.toUpperCase()}</span></div>
     </div>
   );
 }
 
 /* ---------------- PIPELINE GRAPH ---------------- */
-// Map each agent to the steps that belong to them; status resolves from the
-// worst event status seen for that agent up to the current scrub step.
-const AGENT_STEPS = D.agents.map(a => ({
-  id: a.id,
-  name: a.name,
-  steps: D.trace.filter(e => e.agent.startsWith(a.name.replace("Agent",""))).map(e => e.step),
-}));
-// Manually pin step ranges (manager session_start -> RES; everything else by name)
-const AGENT_STEP_MAP = {
-  RES: [2, 3, 4, 5],
-  CRT: [6, 7],
-  VRF: [8, 9, 10],
-  RPT: [11],
-  ACT: [12],
-};
-const TOTAL_STEPS = D.trace.length; // 12
 const FIRST_STEP = 1;
 
-function agentStateAt(agentId, currentStep) {
-  const range = AGENT_STEP_MAP[agentId];
+function eventBelongsToAgent(agent, event) {
+  const eventAgent = String(event?.agent || "");
+  const agentName = String(agent?.name || "");
+  const agentId = String(agent?.id || "");
+  const shortName = agentName.replace(/Agent$/, "");
+  return eventAgent === agentName
+    || eventAgent === agentId
+    || (!!shortName && eventAgent.startsWith(shortName));
+}
+
+function buildAgentStepMap(agents, trace) {
+  const stepMap = {};
+  agents.forEach(agent => {
+    stepMap[agent.id] = trace
+      .filter(event => eventBelongsToAgent(agent, event))
+      .map(event => Number(event.step))
+      .filter(Number.isFinite);
+  });
+  return stepMap;
+}
+
+function agentStateAt(agentId, currentStep, stepMap, trace) {
+  const range = stepMap[agentId] || [];
+  if (!range.length) return "idle";
   const start = range[0], end = range[range.length - 1];
   if (currentStep < start) return "idle";
   if (currentStep >= start && currentStep < end) return "run";
-  // currentStep >= end: collapse all events <= end for this agent
-  const events = D.trace.filter(e => range.includes(e.step) && e.step <= currentStep);
+  const events = trace.filter(e => range.includes(Number(e.step)) && Number(e.step) <= currentStep);
   if (events.some(e => e.status === "FAIL")) return "fail";
   if (events.some(e => e.status === "WARN")) return "warn";
   return "pass";
 }
 
-function edgeStateAt(fromIdx, currentStep) {
-  // Edge fromIdx -> fromIdx+1 lights when 'from' agent has finished AND 'to' has started.
-  const fromId = D.agents[fromIdx].id;
-  const toId = D.agents[fromIdx + 1].id;
-  const fromEnd = AGENT_STEP_MAP[fromId][AGENT_STEP_MAP[fromId].length - 1];
-  const toStart = AGENT_STEP_MAP[toId][0];
+function edgeStateAt(fromIdx, currentStep, agents, stepMap, trace) {
+  const fromId = agents[fromIdx]?.id;
+  const toId = agents[fromIdx + 1]?.id;
+  const fromRange = stepMap[fromId] || [];
+  const toRange = stepMap[toId] || [];
+  if (!fromRange.length || !toRange.length) return "idle";
+  const fromEnd = fromRange[fromRange.length - 1];
+  const toStart = toRange[0];
   if (currentStep < fromEnd) return "idle";
   if (currentStep >= fromEnd && currentStep < toStart) return "active";
-  // After handoff, color edge by the from-agent's resolved state
-  const fs = agentStateAt(fromId, currentStep);
+  const fs = agentStateAt(fromId, currentStep, stepMap, trace);
   return fs;
 }
 
 function PipelineGraph({ setScreen }) {
-  const [step, setStep] = useState(TOTAL_STEPS);
+  const trace = Array.isArray(D.trace) ? D.trace : [];
+  const agents = Array.isArray(D.agents) && D.agents.length
+    ? D.agents
+    : [{
+        id: "RUN",
+        name: D.run?.workflow || "Run",
+        steps: trace.length,
+        status: D.status === "failed" ? "FAIL" : "PASS",
+        note: D.status || "pending",
+      }];
+  const stepMap = useMemo(() => buildAgentStepMap(agents, trace), [agents, trace]);
+  const totalSteps = Math.max(...trace.map(e => Number(e.step) || 0), trace.length, 1);
+  const [step, setStep] = useState(totalSteps);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(380); // demo: faster than the original 520ms
   const [subStep, setSubStep] = useState(1); // 0..1 progress between step-1 and step
 
   useEffect(() => {
+    if (step > totalSteps) setStep(totalSteps);
+    if (!playing && step < totalSteps) setStep(totalSteps);
+  }, [step, totalSteps, playing]);
+
+  useEffect(() => {
     if (!playing) return;
-    if (step >= TOTAL_STEPS) { setPlaying(false); return; }
+    if (step >= totalSteps) { setPlaying(false); return; }
     const t = setTimeout(() => setStep(s => s + 1), speed);
     return () => clearTimeout(t);
-  }, [playing, step, speed]);
+  }, [playing, step, speed, totalSteps]);
 
   // Animate subStep 0 → 1 across each step transition for smooth traveler motion
   useEffect(() => {
@@ -1041,10 +1226,10 @@ function PipelineGraph({ setScreen }) {
 
   const replay = () => { setStep(0); setPlaying(true); };
   const togglePlay = () => {
-    if (step >= TOTAL_STEPS) { setStep(0); setPlaying(true); }
+    if (step >= totalSteps) { setStep(0); setPlaying(true); }
     else setPlaying(p => !p);
   };
-  const reset = () => { setPlaying(false); setStep(TOTAL_STEPS); };
+  const reset = () => { setPlaying(false); setStep(totalSteps); };
 
   // Stage shortcut: R replays. Ignore if user is typing.
   useEffect(() => {
@@ -1061,9 +1246,9 @@ function PipelineGraph({ setScreen }) {
   // Layout
   const W = 1200, H = 260;
   const nodeY = 116;
-  const nodeXs = D.agents.map((_, i) => 90 + i * ((W - 180) / (D.agents.length - 1)));
+  const nodeXs = agents.map((_, i) => 90 + i * ((W - 180) / Math.max(agents.length - 1, 1)));
 
-  const currentEvent = D.trace.find(e => e.step === step);
+  const currentEvent = trace.find(e => Number(e.step) === step);
   const ctxLine = currentEvent
     ? Object.entries(currentEvent.ctx || {}).map(([k,v]) => `${k}=${typeof v === "string" ? `"${v}"` : v}`).join("  ·  ")
     : "";
@@ -1083,7 +1268,7 @@ function PipelineGraph({ setScreen }) {
         <button className="ctl primary" onClick={replay}>▶ REPLAY RUN</button>
         <button className="ctl" onClick={togglePlay}>{playing ? "❚❚ PAUSE" : "▶ PLAY"}</button>
         <button className="ctl" onClick={reset}>■ END STATE</button>
-        <span className="step-readout">STEP {String(step).padStart(2,"0")} / {String(TOTAL_STEPS).padStart(2,"0")}</span>
+        <span className="step-readout">STEP {String(step).padStart(2,"0")} / {String(totalSteps).padStart(2,"0")}</span>
         <span className="muted" style={{fontSize: 10.5}}>
           {currentEvent ? `${currentEvent.ts}  ${currentEvent.agent}.${currentEvent.type}` : "session not started"}
         </span>
@@ -1110,8 +1295,8 @@ function PipelineGraph({ setScreen }) {
         {/* baseline rail */}
         <line x1={nodeXs[0]} y1={nodeY} x2={nodeXs[nodeXs.length-1]} y2={nodeY} className="edge" />
         {/* edges */}
-        {D.agents.slice(0, -1).map((a, i) => {
-          const st = edgeStateAt(i, step);
+        {agents.slice(0, -1).map((a, i) => {
+          const st = edgeStateAt(i, step, agents, stepMap, trace);
           const x1 = nodeXs[i] + 20, x2 = nodeXs[i+1] - 20;
           const cls = `edge ${st}`;
           return (
@@ -1130,9 +1315,10 @@ function PipelineGraph({ setScreen }) {
           );
         })}
         {/* nodes */}
-        {D.agents.map((a, i) => {
-          const st = agentStateAt(a.id, step);
+        {agents.map((a, i) => {
+          const st = agentStateAt(a.id, step, stepMap, trace);
           const cx = nodeXs[i];
+          const ticks = stepMap[a.id] || [];
           return (
             <g key={a.id} style={{cursor: "pointer"}} onClick={() => setScreen("trace")}>
               {/* outer square ring */}
@@ -1157,11 +1343,11 @@ function PipelineGraph({ setScreen }) {
                 {st === "idle" ? "PENDING" : st === "run" ? "RUNNING" : st.toUpperCase()}
               </text>
               {/* per-step ticks under each node */}
-              {AGENT_STEP_MAP[a.id].map((s, j) => (
+              {ticks.map((s, j) => (
                 <line key={s}
-                  x1={cx - (AGENT_STEP_MAP[a.id].length-1)*4 + j*8}
+                  x1={cx - (ticks.length-1)*4 + j*8}
                   y1={nodeY+72}
-                  x2={cx - (AGENT_STEP_MAP[a.id].length-1)*4 + j*8}
+                  x2={cx - (ticks.length-1)*4 + j*8}
                   y2={nodeY+78}
                   className={`step-tick ${s === step ? "now" : ""}`}
                   stroke={s <= step ? (s === step ? "var(--gold)" : stateColor[st]) : "var(--border)"}
@@ -1181,13 +1367,13 @@ function PipelineGraph({ setScreen }) {
             Position is interpolated from the current step's owning agent into
             the next event's owning agent. Color flips to brick if a violation
             fires at this step. */}
-        {step > 0 && step <= TOTAL_STEPS && (() => {
+        {step > 0 && step <= totalSteps && (() => {
           const agentIdxOf = (agentName) => {
-            const i = D.agents.findIndex(a => agentName.startsWith(a.name.replace("Agent","")));
+            const i = agents.findIndex(a => eventBelongsToAgent(a, { agent: agentName }));
             return i;
           };
-          const ev = D.trace.find(e => e.step === step) || D.trace[D.trace.length-1];
-          const prevEv = D.trace.find(e => e.step === step - 1);
+          const ev = trace.find(e => Number(e.step) === step) || trace[trace.length-1] || {};
+          const prevEv = trace.find(e => Number(e.step) === step - 1);
           const fromIdx = prevEv ? agentIdxOf(prevEv.agent) : 0;
           const toIdx = agentIdxOf(ev.agent);
           // If either agent isn't on the rail (e.g. GroupChatManager step_1),
@@ -1200,8 +1386,9 @@ function PipelineGraph({ setScreen }) {
           const y = nodeY - 38; // float just above the nodes
           // Cumulative health: once any prior step has FAILed, traveler stays brick.
           // WARN tints orange; otherwise gold.
-          const priorFailed = D.trace.slice(0, step).some(e => e.status === "FAIL");
-          const priorWarned = D.trace.slice(0, step).some(e => e.status === "WARN");
+          const priorEvents = trace.filter(e => Number(e.step) <= step);
+          const priorFailed = priorEvents.some(e => e.status === "FAIL");
+          const priorWarned = priorEvents.some(e => e.status === "WARN");
           const isFail = priorFailed || ev.status === "FAIL";
           const isWarn = !isFail && (priorWarned || ev.status === "WARN");
           const color = isFail ? "var(--brick)" : isWarn ? "var(--orange)" : "var(--gold)";
@@ -1249,11 +1436,12 @@ function PipelineGraph({ setScreen }) {
       </svg>
 
       <div className="pgraph-foot">
-        {D.agents.map(a => {
-          const st = agentStateAt(a.id, step);
+        {agents.map(a => {
+          const st = agentStateAt(a.id, step, stepMap, trace);
+          const ticks = stepMap[a.id] || [];
           return (
             <div key={a.id} className="cell">
-              <span className="ev">{a.id} · {st === "idle" ? "—" : `${AGENT_STEP_MAP[a.id].filter(s => s <= step).length}/${AGENT_STEP_MAP[a.id].length} STEPS`}</span>
+              <span className="ev">{a.id} · {st === "idle" ? "—" : `${ticks.filter(s => s <= step).length}/${Math.max(ticks.length, 1)} STEPS`}</span>
               <span className="ag">{a.note}</span>
             </div>
           );
@@ -1355,19 +1543,36 @@ function routeStatusToCls(s) {
 }
 
 function Topology({ setScreen, setSelectedPatch }) {
-  const W = 1240, H = 360;
+  const topology = D.topology || {};
+  const topologyNodes = Array.isArray(topology.nodes) && topology.nodes.length
+    ? topology.nodes
+    : [{ id: "RUN", name: D.run?.workflow || D.run?.id || "Run", role: "run", kind: "manager", contracts: [] }];
+  const topologyEdges = Array.isArray(topology.edges) ? topology.edges : [];
+  const routes = Array.isArray(D.routes) ? D.routes : [];
+  const W = Math.max(1240, topologyNodes.length * 150 + 140), H = 360;
   const colW = 150, colX0 = 70;
   const laneY = [40, 160, 280];
   const nodeW = 110, nodeH = 56;
+  const nodeIndexById = {};
+  topologyNodes.forEach((node, index) => { nodeIndexById[node.id] = index; });
+
+  const laneFor = (node) => {
+    if (node.kind === "manager" || node.kind === "tool") return 0;
+    if (node.kind === "gate") return 2;
+    return 1;
+  };
 
   const pos = (id) => {
     const p = DAG_POSITIONS[id];
-    return { x: colX0 + p.col * colW, y: laneY[p.lane] };
+    if (p) return { x: colX0 + p.col * colW, y: laneY[p.lane] };
+    const index = nodeIndexById[id] ?? 0;
+    const node = topologyNodes[index] || {};
+    return { x: colX0 + index * colW, y: laneY[laneFor(node)] };
   };
 
   // map declared edges → routes for status, fall back to declared-only style
   const routeByEdge = {};
-  D.routes.forEach(r => { routeByEdge[`${r.from}->${r.to}`] = r; });
+  routes.forEach(r => { routeByEdge[`${r.from}->${r.to}`] = r; });
 
   const edgeStatus = (e) => {
     const r = routeByEdge[`${e.from}->${e.to}`];
@@ -1398,7 +1603,7 @@ function Topology({ setScreen, setSelectedPatch }) {
     <>
       <div className="section-head">
         <h2>Workflow DAG &nbsp;//&nbsp; declared topology vs observed path</h2>
-        <div className="right">{D.topology.nodes.length} nodes &nbsp;&middot;&nbsp; {D.topology.edges.length} edges &nbsp;&middot;&nbsp; {D.routes.filter(r=>r.status!=="ok").length} divergences</div>
+        <div className="right">{topologyNodes.length} nodes &nbsp;&middot;&nbsp; {topologyEdges.length} edges &nbsp;&middot;&nbsp; {routes.filter(r=>r.status!=="ok").length} divergences</div>
       </div>
 
       <div className="dag-wrap" style={{marginBottom: 14}}>
@@ -1423,7 +1628,7 @@ function Topology({ setScreen, setSelectedPatch }) {
           ))}
 
           {/* edges */}
-          {D.topology.edges.filter(e => !e.returns).map((e, i) => {
+          {topologyEdges.filter(e => !e.returns).map((e, i) => {
             const a = pos(e.from), b = pos(e.to);
             const st = edgeStatus(e);
             const r = routeByEdge[`${e.from}->${e.to}`];
@@ -1456,7 +1661,7 @@ function Topology({ setScreen, setSelectedPatch }) {
           </defs>
 
           {/* nodes */}
-          {D.topology.nodes.map(n => {
+          {topologyNodes.map(n => {
             const p = pos(n.id);
             const cls = nodeStatus(n);
             const failed = D.agents.find(a => a.id === n.id && a.status === "FAIL");
@@ -1496,7 +1701,7 @@ function Topology({ setScreen, setSelectedPatch }) {
       <div className="card">
         <div className="card-head">
           <span>Routes &nbsp;&middot;&nbsp; declared vs observed</span>
-          <span className="right">{D.routes.length} edges &nbsp;&middot;&nbsp; click a divergence row for repair</span>
+          <span className="right">{routes.length} edges &nbsp;&middot;&nbsp; click a divergence row for repair</span>
         </div>
         <div className="card-body" style={{padding: 0}}>
           <table className="tbl routes-tbl">
@@ -1512,7 +1717,7 @@ function Topology({ setScreen, setSelectedPatch }) {
               </tr>
             </thead>
             <tbody>
-              {D.routes.map(r => {
+              {routes.map(r => {
                 const cls = routeStatusToCls(r.status);
                 const v = r.contract && D.violations.find(v => v.contract === r.contract);
                 const clickable = !!v;
@@ -1549,14 +1754,15 @@ function Topology({ setScreen, setSelectedPatch }) {
 
 /* ---------------- TRACE MINI-RAIL ---------------- */
 function TraceMiniRail({ focusedStep, setFocusedStep }) {
-  const lanes = D.agents; // 5 swimlanes
+  const trace = Array.isArray(D.trace) ? D.trace : [];
+  const lanes = Array.isArray(D.agents) ? D.agents : [];
   const RAIL_H = 520;
   const PAD_T = 36, PAD_B = 30;
   const usable = RAIL_H - PAD_T - PAD_B;
-  const stepY = (s) => PAD_T + ((s - 1) / (D.trace.length - 1)) * usable;
+  const stepY = (s) => PAD_T + ((s - 1) / Math.max(trace.length - 1, 1)) * usable;
   const laneX = (idx) => 70 + idx * 28;
   const laneOfAgent = (agentName) => {
-    const ag = lanes.find(a => agentName.startsWith(a.name.replace("Agent","")));
+    const ag = lanes.find(a => eventBelongsToAgent(a, { agent: agentName }));
     return ag ? lanes.indexOf(ag) : -1;
   };
 
@@ -1573,8 +1779,8 @@ function TraceMiniRail({ focusedStep, setFocusedStep }) {
         ))}
 
         {/* connections between consecutive events */}
-        {D.trace.slice(0, -1).map((e, i) => {
-          const next = D.trace[i + 1];
+        {trace.slice(0, -1).map((e, i) => {
+          const next = trace[i + 1];
           const li = laneOfAgent(e.agent), lj = laneOfAgent(next.agent);
           if (li < 0 || lj < 0) return null;
           const cls = next.status === "FAIL" ? "fail" : next.status === "WARN" ? "warn" : "";
@@ -1587,7 +1793,7 @@ function TraceMiniRail({ focusedStep, setFocusedStep }) {
         })}
 
         {/* event squares */}
-        {D.trace.map(e => {
+        {trace.map(e => {
           const li = laneOfAgent(e.agent);
           if (li < 0) return null;
           const x = laneX(li), y = stepY(e.step);
@@ -2230,14 +2436,104 @@ function App() {
   const [screen, setScreen] = useState("overview");
   const [selectedPatch, setSelectedPatch] = useState(null);
   const [appliedPatches, setAppliedPatches] = useState([]);
+  const [data, setData] = useState(FIXTURE_DATA);
+  const [sourceMode, setSourceMode] = useState("fixture");
+  const [connectionState, setConnectionState] = useState("idle");
+  const [liveStatus, setLiveStatus] = useState(FIXTURE_DATA.status || "completed");
+  D = data;
 
   // when leaving repair screen, clear filter
   useEffect(() => { if (screen !== "repair") setSelectedPatch(null); }, [screen]);
 
+  useEffect(() => {
+    if (sourceMode === "fixture") {
+      setConnectionState("idle");
+      setLiveStatus(FIXTURE_DATA.status || "completed");
+      setData(FIXTURE_DATA);
+      return;
+    }
+
+    const liveRunId = new URLSearchParams(window.location.search).get("run") || window.CONCORD_RUN_ID || FIXTURE_DATA.run.id;
+    const headers = liveHeaders();
+    let cancelled = false;
+    let eventSource = null;
+    let terminalSeen = false;
+    let lastSequence = 0;
+    let reconnectTimer = null;
+
+    async function refreshRun() {
+      const response = await fetch(`/api/runs/${liveRunId}`, { headers });
+      if (!response.ok) throw new Error(`run fetch failed: ${response.status}`);
+      const liveData = await response.json();
+      if (cancelled) return;
+      setData(normalizeDashboardData(liveData, { fallbackFixture: false }));
+      setLiveStatus(liveData.status || "loaded");
+    }
+
+    async function openLiveRun() {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      setConnectionState("connecting");
+      try {
+        await refreshRun();
+        if (cancelled) return;
+        const streamToken = await openStreamToken(liveRunId, headers);
+        if (cancelled) return;
+        eventSource = new EventSource(`/api/runs/${liveRunId}/events?stream_token=${encodeURIComponent(streamToken)}`);
+        eventSource.addEventListener("run.status", async (event) => {
+          const payload = JSON.parse(event.data);
+          const sequence = Number(payload.sequence || event.lastEventId || 0);
+          if (sequence && sequence <= lastSequence) return;
+          if (sequence) lastSequence = sequence;
+          if (cancelled) return;
+          setConnectionState("connected");
+          setLiveStatus(payload.status);
+          if (payload.terminal) {
+            terminalSeen = true;
+            eventSource.close();
+            await refreshRun();
+            if (!cancelled) setConnectionState("connected");
+          }
+        });
+        eventSource.onopen = () => {
+          if (!cancelled) setConnectionState("connected");
+        };
+        eventSource.onerror = () => {
+          if (terminalSeen) return;
+          if (!cancelled) {
+            setConnectionState("connecting");
+            reconnectTimer = setTimeout(openLiveRun, 1000);
+          }
+        };
+      } catch (error) {
+        if (!cancelled) {
+          setConnectionState("error");
+          setLiveStatus("unavailable");
+        }
+      }
+    }
+
+    openLiveRun();
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (eventSource) eventSource.close();
+    };
+  }, [sourceMode]);
+
   return (
     <div className="shell" data-screen-label={SCREENS.find(s=>s.id===screen).num + " " + SCREENS.find(s=>s.id===screen).label}>
-      <TopBar screen={screen} setScreen={setScreen} />
-      <MetaStrip />
+      <TopBar
+        screen={screen}
+        setScreen={setScreen}
+        sourceMode={sourceMode}
+        setSourceMode={setSourceMode}
+        connectionState={connectionState}
+        liveStatus={liveStatus}
+      />
+      <MetaStrip sourceMode={sourceMode} connectionState={connectionState} />
       <main className="main">
         {screen === "overview"   && <Overview setScreen={setScreen} />}
         {screen === "topology"   && <Topology setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
