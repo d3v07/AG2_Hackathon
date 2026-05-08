@@ -45,15 +45,11 @@ def submit_run_endpoint(
 ) -> dict[str, str]:
     if not workflow_exists(body.workflow_id, tenant_id=tenant_id):
         raise HTTPException(status_code=404, detail=f"workflow {body.workflow_id} not found")
-    if body.task_spec is not None:
-        raise HTTPException(
-            status_code=400,
-            detail="task_spec submission requires Zone A runtime wiring; submit raw_trace for now",
-        )
+    task_spec_payload = body.task_spec.model_dump() if body.task_spec is not None else None
     run = create_run(
         workflow_id=body.workflow_id,
         raw_trace=body.raw_trace,
-        task_spec=body.task_spec,
+        task_spec=task_spec_payload,
         tenant_id=tenant_id,
     )
     from api.background import process_run

@@ -151,17 +151,28 @@ def test_failed_raw_trace_sets_failed_status_with_error(tmp_path):
     assert status["error"]
 
 
-def test_task_spec_submission_is_rejected_until_zone_a_runtime_is_wired(tmp_path):
+def test_task_spec_submission_is_accepted_now_that_zone_a_runtime_is_wired(tmp_path):
+    """Sprint 13 #67 wires task_spec end-to-end via the AG2 swarm in stub mode.
+    The detailed task_spec coverage lives in tests/test_runs_task_spec.py;
+    this test just asserts the previous 400 rejection is gone."""
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)
 
     response = client.post(
         "/api/runs",
-        json={"workflow_id": workflow_id, "task_spec": {"topic": "multi-agent reliability"}},
+        json={
+            "workflow_id": workflow_id,
+            "task_spec": {
+                "task": "research multi-agent reliability",
+                "research_question": "What makes multi-agent systems reliable?",
+                "mode": "stub",
+            },
+        },
     )
 
-    assert response.status_code == 400
-    assert "task_spec" in response.json()["detail"]
+    assert response.status_code == 202
+    run_id = response.json()["run_id"]
+    assert client.get(f"/api/runs/{run_id}").json()["status"] == "completed"
 
 
 def test_approval_on_queued_run_returns_conflict_not_500(tmp_path, clean_trace_raw):
