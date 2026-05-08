@@ -1063,3 +1063,29 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 }
 .inspector-regression .pill.ok   { color: var(--sage); }
 .inspector-regression .pill.fail { color: var(--brick); }
+
+/* ---------- Cross-screen deep-link button (Sprint 17 #85) ---------- */
+.view-span-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 1px dashed var(--gold-dim);
+  color: var(--gold);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  margin-top: 4px;
+  cursor: pointer;
+}
+.view-span-link:hover {
+  background: var(--gold-dim);
+  color: #1F1F33;
+  border-style: solid;
+}
+.view-span-link:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
