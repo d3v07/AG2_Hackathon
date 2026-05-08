@@ -1,2 +1,5 @@
+api
+graph
 shared
+zone_a
 zone_b
