@@ -474,3 +474,142 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
   margin-bottom: 4px;
 }
 .approval-comments-display .val { color: var(--text); font-size: 12px; }
+
+/* ---------- Workflows screen (Sprint 16 #80) ---------- */
+.workflows-loading,
+.workflows-empty,
+.workflow-detail-empty {
+  padding: 22px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.workflows-empty h3 {
+  margin: 0 0 8px;
+  letter-spacing: 0.16em;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+.workflows-empty p { margin: 0; line-height: 1.6; }
+.workflows-empty code {
+  font-family: var(--mono);
+  background: var(--surface-2);
+  padding: 1px 6px;
+  font-size: 11.5px;
+}
+.workflows-error {
+  padding: 12px 16px;
+  border-left: 3px solid var(--brick);
+  background: #fbe9e6;
+  color: var(--brick);
+  font-size: 12px;
+}
+.btn-link {
+  background: none;
+  border: 0;
+  color: var(--gold);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.workflows-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.workflows-list {
+  display: grid;
+  gap: 6px;
+}
+.workflow-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.workflow-row:hover { border-color: var(--border-2); }
+.workflow-row.selected {
+  border-color: var(--gold);
+  background: #FFF8EC;
+}
+.workflow-row-name { font-weight: 600; font-size: 12.5px; }
+.workflow-row-id {
+  font-family: var(--mono);
+  color: var(--text-3);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+}
+.workflow-row-meta { font-size: 11px; color: var(--text-2); }
+.workflow-row-owner {
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.workflow-detail {
+  padding: 22px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  display: grid;
+  gap: 18px;
+}
+.workflow-detail-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+.workflow-detail-head h3 { margin: 0; letter-spacing: 0.12em; }
+.workflow-detail-head .muted { color: var(--text-3); font-family: var(--mono); font-size: 11px; }
+.workflow-section h4 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.topology-preview {
+  background: var(--surface-2);
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  margin: 0;
+  max-height: 280px;
+  overflow: auto;
+}
+.workflow-agent-list,
+.workflow-contract-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.workflow-agent-list li {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+}
+.workflow-contract-list li {
+  display: grid;
+  grid-template-columns: 80px 100px 1fr;
+  gap: 10px;
+  font-size: 11.5px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+}
+.contract-id { font-family: var(--mono); color: var(--text); font-weight: 600; }
+.contract-type { color: var(--orange); letter-spacing: 0.12em; text-transform: uppercase; font-size: 10.5px; }
+.contract-rule { color: var(--text-2); }
