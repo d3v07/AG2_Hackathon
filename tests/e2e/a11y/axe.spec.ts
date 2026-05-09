@@ -42,7 +42,7 @@ test.use({ viewport: { width: 1600, height: 900 } });
 test.describe("axe-core a11y scan (WCAG 2.2 AA)", () => {
   for (const screen of SCREENS) {
     test(`screen: ${screen.tab}`, async ({ page }) => {
-      await page.goto("/");
+      await page.goto("/?fixture=1");
       const tab = page.getByRole("button", { name: screen.tab });
       // dispatchEvent fires React's onClick even if a higher-z-index
       // element would otherwise intercept pointer events

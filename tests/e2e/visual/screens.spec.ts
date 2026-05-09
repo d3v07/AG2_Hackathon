@@ -48,7 +48,7 @@ const dynamicMasks = (page: Page) => [
 ];
 
 const navigateAndStabilize = async (page: Page, screen: ScreenSpec) => {
-  await page.goto("/");
+  await page.goto("/?fixture=1");
   await expect(page.locator(".topbar")).toBeVisible();
   await tabLocator(page, screen.label).dispatchEvent("click");
   await expect(page.locator("nav.tabs .tab.active")).toContainText(screen.label);

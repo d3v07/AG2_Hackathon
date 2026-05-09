@@ -33,7 +33,7 @@ const attachConsoleErrors = (page: Page): string[] => {
 
 test.describe("fixture-mode dashboard screens", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?fixture=1");
     await expect(page.locator(".topbar")).toBeVisible();
     await expect(page.locator("nav.tabs .tab")).toHaveCount(SCREENS.length);
   });

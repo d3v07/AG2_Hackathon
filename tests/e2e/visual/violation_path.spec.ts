@@ -5,7 +5,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("violation -> repair navigation path", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?fixture=1");
   });
 
   test("clicking a violation row navigates to Repair with that patch selected", async ({ page }) => {
