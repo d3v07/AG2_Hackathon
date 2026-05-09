@@ -194,6 +194,7 @@
     "task": "Concise literature review on whether multi-agent systems improve reliability in research workflows.",
     "workflow": "LITERATUREREVIEWASSISTANT"
   },
+  "spans": [],
   "stats": {
     "agents_run": 6,
     "contracts_passed": 5,
