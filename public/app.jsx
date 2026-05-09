@@ -1,345 +1,171 @@
 /* global React, ReactDOM */
 const { useState, useEffect, useMemo } = React;
-const D = window.CONCORD_DATA;
+const BOOT_DATA = window.CONCORD_DATA;
+
+function normalizeDashboardData(data, options = {}) {
+  const source = data || {};
+  const fallbackFixture = options.fallbackFixture !== false;
+  const fixture = fallbackFixture ? BOOT_DATA : {};
+  const emptyTest = { name: "pending", runner: "", sandbox_id: "", duration_ms: 0, lines: [], assertions: [] };
+  const emptyCost = { daytona_seconds: 0, llm_tokens: 0, llm_cost_usd: 0, daytona_cost_usd: 0 };
+  const sourceReport = source.report || {};
+  const fixtureReport = fixture.report || {};
+  const cost = {
+    ...emptyCost,
+    ...(fixture.cost || fixtureReport.cost_summary || {}),
+    ...(source.cost || sourceReport.cost_summary || {}),
+  };
+  const emptyReport = {
+    summary: "",
+    patches_applied: [],
+    usage_summary: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    cost_summary: emptyCost,
+    approval: { status: "UNAVAILABLE", operator: "", requested_at: "", sla: "" },
+  };
+  const report = {
+    ...emptyReport,
+    ...fixtureReport,
+    ...sourceReport,
+    usage_summary: {
+      ...emptyReport.usage_summary,
+      ...(fixtureReport.usage_summary || {}),
+      ...(sourceReport.usage_summary || {}),
+    },
+    cost_summary: cost,
+  };
+  return {
+    ...source,
+    run: { ...(fixture.run || {}), ...(source.run || {}) },
+    stats: { ...(fixture.stats || {}), ...(source.stats || {}) },
+    cost,
+    agents: Array.isArray(source.agents) ? source.agents : (fixture.agents || []),
+    topology: source.topology || fixture.topology || { entry: "", nodes: [], edges: [] },
+    routes: Array.isArray(source.routes) ? source.routes : (fixture.routes || []),
+    recurrences: Array.isArray(source.recurrences) ? source.recurrences : (fixture.recurrences || []),
+    contracts: Array.isArray(source.contracts) ? source.contracts : (fixture.contracts || []),
+    trace: Array.isArray(source.trace) ? source.trace : (fixture.trace || []),
+    violations: Array.isArray(source.violations) ? source.violations : (fixture.violations || []),
+    patches: Array.isArray(source.patches) ? source.patches : (fixture.patches || []),
+    test: { ...(fixture.test || emptyTest), ...(source.test || {}) },
+    report,
+    status: source.status || fixture.status || "queued",
+    error: source.error || "",
+  };
+}
+
+function liveHeaders() {
+  const headers = {};
+  if (window.CONCORD_TENANT_ID) headers["X-Tenant-ID"] = window.CONCORD_TENANT_ID;
+  if (window.CONCORD_API_KEY) {
+    headers["Authorization"] = `Bearer ${window.CONCORD_API_KEY}`;
+    headers["X-Concord-API-Key"] = window.CONCORD_API_KEY;
+  }
+  return headers;
+}
+
+async function openStreamToken(liveRunId, headers) {
+  const response = await fetch(`/api/runs/${liveRunId}/events/token`, {
+    method: "POST",
+    headers,
+  });
+  if (!response.ok) throw new Error(`event token failed: ${response.status}`);
+  const payload = await response.json();
+  return payload.stream_token;
+}
+
+const FIXTURE_DATA = normalizeDashboardData(window.CONCORD_DATA, { fallbackFixture: true });
+let D = FIXTURE_DATA;
 
 const SCREENS = [
   { id: "overview",   num: "01", label: "Overview" },
-  { id: "trace",      num: "02", label: "Agent Trace" },
-  { id: "forensic",   num: "03", label: "Forensic" },
+  { id: "topology",   num: "02", label: "Workflow DAG" },
+  { id: "trace",      num: "03", label: "Agent Trace" },
   { id: "violations", num: "04", label: "Violations" },
-  { id: "repair",     num: "04", label: "Repair Patch" },
-  { id: "regression", num: "05", label: "Regression" },
-  { id: "report",     num: "06", label: "Final Report" },
-  { id: "submit",     num: "07", label: "Submit Run" },
-  { id: "workflows",  num: "08", label: "Workflows" },
+  { id: "repair",     num: "05", label: "Repair Patch" },
+  { id: "regression", num: "06", label: "Regression" },
+  { id: "report",     num: "07", label: "Final Report" },
 ];
-
-/* ---------- Sprint 18 #88 — reusable state components ---------- */
-function LoadingState({ message = "Loading…", inline = false }) {
-  return (
-    <div
-      className={`state-loading ${inline ? "inline" : ""}`}
-      role="status"
-      aria-live="polite"
-      aria-busy="true"
-    >
-      <span className="state-spinner" aria-hidden="true">◐</span>
-      <span>{message}</span>
-    </div>
-  );
-}
-
-function EmptyState({ title, body, action }) {
-  return (
-    <div className="state-empty" role="status">
-      <h3>{title}</h3>
-      {body && <p>{body}</p>}
-      {action && <div className="state-action">{action}</div>}
-    </div>
-  );
-}
-
-/**
- * Specific error copy per HTTP status (per global taste rules — never
- * "Something went wrong"). The status code informs whether retry is
- * useful: 4xx user-error usually requires intervention, 5xx is retryable.
- */
-function _errorCopy(error) {
-  if (!error) return null;
-  const status = error.status || error.statusCode || 0;
-  if (status === 401 || status === 403) {
-    return { title: "Session expired", body: "Please re-authenticate to continue.", retryable: false };
-  }
-  if (status === 404) {
-    return { title: "Not found", body: error.message || "This resource doesn't exist or was deleted.", retryable: false };
-  }
-  if (status === 409) {
-    return { title: "Conflict", body: error.message || "The current state doesn't allow this operation.", retryable: false };
-  }
-  if (status >= 500 && status < 600) {
-    return { title: `Server error ${status}`, body: "Click retry. If it persists, check the API status.", retryable: true };
-  }
-  if (error.name === "TypeError" || /network|fetch|offline/i.test(error.message || "")) {
-    return { title: "Network error", body: error.message || "Could not reach the API.", retryable: true };
-  }
-  return { title: "Error", body: error.message || String(error), retryable: true };
-}
-
-function ErrorState({ error, onRetry }) {
-  const copy = _errorCopy(error);
-  if (!copy) return null;
-  return (
-    <div className="state-error" role="alert" aria-live="polite">
-      <h3>{copy.title}</h3>
-      {copy.body && <p>{copy.body}</p>}
-      {copy.retryable && onRetry && (
-        <button type="button" className="btn-retry" onClick={onRetry}>
-          Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
-/* Deep-link helper: find the matching forensic span for a violation /
-   patch / regression test. First tries explicit span_id (set in #75 by
-   Zone B's contract checker), then falls back to agent-name match. */
-function _findSpanForAgent(spans, agentName, explicitSpanId) {
-  if (!Array.isArray(spans) || spans.length === 0) return null;
-  if (explicitSpanId) {
-    const exact = spans.find(s => s.span_id === explicitSpanId);
-    if (exact) return exact;
-  }
-  if (!agentName) return null;
-  return spans.find(s => s.agent === agentName) || null;
-}
-
-function ViewSpanLink({ spanId, onClick, label = "View span" }) {
-  if (!spanId) return null;
-  return (
-    <button
-      type="button"
-      className="view-span-link"
-      onClick={(e) => { e.stopPropagation(); onClick(spanId); }}
-      aria-label={`${label} ${spanId} on Forensic screen`}
-    >
-      {label} →
-    </button>
-  );
-}
-
-const FORENSIC_KIND_ICONS = {
-  workflow:       "▣",
-  agent:          "●",
-  tool:           "◆",
-  handoff:        "→",
-  guardrail:      "▲",
-  human_gate:     "◉",
-  action:         "★",
-  contract_check: "✕",
-  repair:         "✚",
-  regression:     "✓",
-};
-
-const TASK_MAX = 1000;
-const RESEARCH_QUESTION_MAX = 500;
-
-const TERMINAL_STATUSES = new Set(["completed", "failed"]);
-const STATUS_KIND = {
-  queued: "neutral",
-  analyzing: "warn",
-  repairing: "warn",
-  testing: "warn",
-  completed: "ok",
-  failed: "err",
-};
-const SSE_MAX_RECONNECTS = 5;
-const SSE_BACKOFF_BASE_MS = 500;
-
-/**
- * Live SSE consumer for /api/runs/{id}/events.
- *
- * Returns { status, lastEvent, connectionState, error, lastEventId }.
- *
- * - Opens EventSource against the SSE endpoint with the stream_token
- * - Tracks the current status from each event payload
- * - Reconnects on disconnect using Last-Event-ID via the URL (browser
- *   EventSource doesn't expose request headers, so we pass it as a query
- *   param the server can read OR rely on its native Last-Event-ID header
- *   on auto-reconnect — we do both)
- * - Exponential backoff up to SSE_MAX_RECONNECTS attempts
- * - Cleans up on unmount or terminal status
- *
- * `eventSourceCtor` is injectable for tests (jsdom has no native EventSource).
- */
-function useRunEventStream(runId, streamToken, options = {}) {
-  const eventSourceCtor = options.eventSourceCtor || (typeof EventSource !== "undefined" ? EventSource : null);
-  const [status, setStatus] = useState(null);
-  const [lastEventId, setLastEventId] = useState(0);
-  const [connectionState, setConnectionState] = useState("idle"); // idle|connecting|open|reconnecting|closed|error
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    if (!runId || !streamToken) return undefined;
-    if (!eventSourceCtor) {
-      setError(new Error("EventSource not available"));
-      setConnectionState("error");
-      return undefined;
-    }
-
-    let attempt = 0;
-    let es = null;
-    let cancelled = false;
-    let reconnectTimer = null;
-    let lastSeenId = 0;
-
-    function open() {
-      const url = `/api/runs/${runId}/events?stream_token=${encodeURIComponent(streamToken)}`
-        + (lastSeenId > 0 ? `&last_event_id=${lastSeenId}` : "");
-      setConnectionState(attempt === 0 ? "connecting" : "reconnecting");
-      es = new eventSourceCtor(url);
-
-      es.onopen = () => {
-        if (cancelled) return;
-        attempt = 0;
-        setConnectionState("open");
-      };
-
-      const handleEvent = (event) => {
-        if (cancelled) return;
-        try {
-          const parsed = JSON.parse(event.data);
-          if (parsed.status) setStatus(parsed.status);
-          if (parsed.sequence) {
-            lastSeenId = Number(parsed.sequence);
-            setLastEventId(lastSeenId);
-          }
-          if (parsed.status && TERMINAL_STATUSES.has(parsed.status)) {
-            es.close();
-            setConnectionState("closed");
-          }
-        } catch (e) {
-          // Malformed event — log via setError but don't tear down
-          setError(e);
-        }
-      };
-      // Listen for both default 'message' and the named events the API emits
-      es.onmessage = handleEvent;
-      ["status", "queued", "analyzing", "repairing", "testing", "completed", "failed"].forEach(name => {
-        es.addEventListener(name, handleEvent);
-      });
-
-      es.onerror = () => {
-        if (cancelled) return;
-        es.close();
-        if (attempt >= SSE_MAX_RECONNECTS) {
-          setConnectionState("error");
-          setError(new Error(`SSE failed after ${SSE_MAX_RECONNECTS} reconnect attempts`));
-          return;
-        }
-        attempt += 1;
-        const delay = SSE_BACKOFF_BASE_MS * Math.pow(2, attempt - 1);
-        setConnectionState("reconnecting");
-        reconnectTimer = setTimeout(open, delay);
-      };
-    }
-
-    open();
-    return () => {
-      cancelled = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (es) es.close();
-    };
-  }, [runId, streamToken, eventSourceCtor]);
-
-  return { status, lastEventId, connectionState, error };
-}
-
-function _formatElapsed(ms) {
-  if (!ms || ms < 0) return "0:00";
-  const total = Math.floor(ms / 1000);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function RunProgress({ runId, streamToken, eventSourceCtor }) {
-  const { status, connectionState, error } = useRunEventStream(runId, streamToken, { eventSourceCtor });
-  const [startedAt] = useState(Date.now());
-  const [, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    if (!status || TERMINAL_STATUSES.has(status)) return undefined;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [status]);
-
-  if (!runId || !streamToken) return null;
-  if (status && TERMINAL_STATUSES.has(status)) {
-    // Auto-hide after a small delay would be nice, but for forensic UX
-    // we keep the terminal state visible so the user sees the outcome.
-    return (
-      <div className={`run-progress run-progress-${STATUS_KIND[status] || "neutral"}`} aria-live="polite">
-        <span className="run-progress-pill" data-status={status}>{status}</span>
-        <span className="run-progress-runid">{runId}</span>
-      </div>
-    );
-  }
-
-  const kind = STATUS_KIND[status || "queued"] || "neutral";
-  const label = status || "queued";
-  return (
-    <div className={`run-progress run-progress-${kind}`} role="status" aria-live="polite">
-      <span className="run-progress-pill" data-status={label}>{label}</span>
-      <span className="run-progress-runid">{runId}</span>
-      <span className="run-progress-elapsed">{_formatElapsed(Date.now() - startedAt)}</span>
-      {connectionState === "reconnecting" && (
-        <span className="run-progress-reconnect">reconnecting…</span>
-      )}
-      {error && (
-        <span className="run-progress-error" role="alert">{error.message}</span>
-      )}
-    </div>
-  );
-}
-
-async function fetchStreamToken(runId) {
-  const res = await fetch(`/api/runs/${runId}/events/token`, { method: "POST" });
-  if (!res.ok) throw new Error(`stream token fetch ${res.status}`);
-  const body = await res.json();
-  return body.stream_token;
-}
 
 function Sq({ kind }) { return <span className={`sq ${kind}`}></span>; }
 function Pill({ kind, children }) {
   return <span className={`pill ${kind}`}><Sq kind={kind} />{children}</span>;
 }
 
-function StatusCluster({ screen }) {
+function sourceBadgeText(sourceMode, connectionState, liveStatus) {
+  if (sourceMode === "fixture") return "FIXTURE";
+  if (connectionState === "connecting") return "LIVE CONNECTING";
+  if (connectionState === "error") return "LIVE ERROR";
+  return `LIVE ${String(liveStatus || "CONNECTED").toUpperCase()}`;
+}
+
+function StatusCluster({ screen, sourceMode, setSourceMode, connectionState, liveStatus }) {
   const onReport = screen === "report";
-  const text = onReport ? "RERUN READY" : "4 VIOLATIONS DETECTED";
-  const klass = onReport ? "ok" : "fail";
+  const violations = D.stats?.violations || 0;
+  const text = onReport ? "RERUN READY" : `${violations} VIOLATION${violations === 1 ? "" : "S"} DETECTED`;
+  const klass = onReport || violations === 0 ? "ok" : "fail";
+  const dot = sourceMode === "live" && connectionState === "connecting" ? "warn" : klass;
   return (
     <div className="status-cluster">
+      <div className="source-toggle" aria-label="data source">
+        <button
+          className={`source-btn ${sourceMode === "fixture" ? "active" : ""}`}
+          onClick={() => setSourceMode("fixture")}
+        >
+          Fixture
+        </button>
+        <button
+          className={`source-btn ${sourceMode === "live" ? "active" : ""}`}
+          onClick={() => setSourceMode("live")}
+        >
+          Live
+        </button>
+      </div>
       <div className="status-line">
-        <span className={`status-dot ${onReport ? "ok" : "fail"}`}></span>
+        <span className={`status-dot ${dot}`}></span>
         <span className={`status-text ${klass}`}>{text}</span>
         <span className="cursor"></span>
       </div>
+      <div className={`source-badge ${sourceMode} ${connectionState}`}>
+        {sourceBadgeText(sourceMode, connectionState, liveStatus)}
+      </div>
       <div className="status-line muted" style={{fontSize: 11, letterSpacing: "0.14em"}}>
-        14:22:26 UTC
+        {D.run?.started ? D.run.started.replace("T", " ").replace("Z", " UTC") : "time unavailable"}
       </div>
     </div>
   );
 }
 
-function TopBar({ screen, setScreen }) {
+function TopBar({ screen, setScreen, sourceMode, setSourceMode, connectionState, liveStatus }) {
   return (
     <header className="topbar">
       <div className="brand">
         <div className="mark">CONCORD · LITE</div>
         <div className="sub">CONTRACT &nbsp;&middot;&nbsp; REPAIR &nbsp;&middot;&nbsp; REGRESSION</div>
       </div>
-      <nav className="tabs" aria-label="Primary screens">
+      <nav className="tabs">
         {SCREENS.map(s => (
           <button
             key={s.id}
             className={`tab ${screen === s.id ? "active" : ""}`}
             onClick={() => setScreen(s.id)}
-            aria-current={screen === s.id ? "page" : undefined}
-            aria-label={`${s.label} (screen ${s.num})`}
           >
-            <span className="num" aria-hidden="true">{s.num}</span>
+            <span className="num">{s.num}</span>
             <span>{s.label}</span>
           </button>
         ))}
       </nav>
-      <StatusCluster screen={screen} />
+      <StatusCluster
+        screen={screen}
+        sourceMode={sourceMode}
+        setSourceMode={setSourceMode}
+        connectionState={connectionState}
+        liveStatus={liveStatus}
+      />
     </header>
   );
 }
 
-function MetaStrip() {
+function MetaStrip({ sourceMode, connectionState }) {
   const r = D.run;
   return (
     <div className="meta-strip">
@@ -349,12 +175,388 @@ function MetaStrip() {
       <div className="meta-cell"><span className="lbl">Manager</span><span className="val">{r.manager}</span></div>
       <div className="meta-cell"><span className="lbl">Duration</span><span className="val">{(r.duration_ms/1000).toFixed(2)}s</span></div>
       <div className="meta-cell"><span className="lbl">Operator</span><span className="val">{r.operator}</span></div>
+      <div className="meta-cell"><span className="lbl">Source</span><span className="val">{sourceMode.toUpperCase()} · {connectionState.toUpperCase()}</span></div>
+    </div>
+  );
+}
+
+/* ---------------- PIPELINE GRAPH ---------------- */
+const FIRST_STEP = 1;
+
+function eventBelongsToAgent(agent, event) {
+  const eventAgent = String(event?.agent || "");
+  const agentName = String(agent?.name || "");
+  const agentId = String(agent?.id || "");
+  const shortName = agentName.replace(/Agent$/, "");
+  return eventAgent === agentName
+    || eventAgent === agentId
+    || (!!shortName && eventAgent.startsWith(shortName));
+}
+
+function buildAgentStepMap(agents, trace) {
+  const stepMap = {};
+  agents.forEach(agent => {
+    stepMap[agent.id] = trace
+      .filter(event => eventBelongsToAgent(agent, event))
+      .map(event => Number(event.step))
+      .filter(Number.isFinite);
+  });
+  return stepMap;
+}
+
+function agentStateAt(agentId, currentStep, stepMap, trace) {
+  const range = stepMap[agentId] || [];
+  if (!range.length) return "idle";
+  const start = range[0], end = range[range.length - 1];
+  if (currentStep < start) return "idle";
+  if (currentStep >= start && currentStep < end) return "run";
+  const events = trace.filter(e => range.includes(Number(e.step)) && Number(e.step) <= currentStep);
+  if (events.some(e => e.status === "FAIL")) return "fail";
+  if (events.some(e => e.status === "WARN")) return "warn";
+  return "pass";
+}
+
+function edgeStateAt(fromIdx, currentStep, agents, stepMap, trace) {
+  const fromId = agents[fromIdx]?.id;
+  const toId = agents[fromIdx + 1]?.id;
+  const fromRange = stepMap[fromId] || [];
+  const toRange = stepMap[toId] || [];
+  if (!fromRange.length || !toRange.length) return "idle";
+  const fromEnd = fromRange[fromRange.length - 1];
+  const toStart = toRange[0];
+  if (currentStep < fromEnd) return "idle";
+  if (currentStep >= fromEnd && currentStep < toStart) return "active";
+  const fs = agentStateAt(fromId, currentStep, stepMap, trace);
+  return fs;
+}
+
+function PipelineGraph({ setScreen }) {
+  const trace = Array.isArray(D.trace) ? D.trace : [];
+  const agents = Array.isArray(D.agents) && D.agents.length
+    ? D.agents
+    : [{
+        id: "RUN",
+        name: D.run?.workflow || "Run",
+        steps: trace.length,
+        status: D.status === "failed" ? "FAIL" : "PASS",
+        note: D.status || "pending",
+      }];
+  const stepMap = useMemo(() => buildAgentStepMap(agents, trace), [agents, trace]);
+  const totalSteps = Math.max(...trace.map(e => Number(e.step) || 0), trace.length, 1);
+  const [step, setStep] = useState(totalSteps);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(380); // demo: faster than the original 520ms
+  const [subStep, setSubStep] = useState(1); // 0..1 progress between step-1 and step
+
+  useEffect(() => {
+    if (step > totalSteps) setStep(totalSteps);
+    if (!playing && step < totalSteps) setStep(totalSteps);
+  }, [step, totalSteps, playing]);
+
+  useEffect(() => {
+    if (!playing) return;
+    if (step >= totalSteps) { setPlaying(false); return; }
+    const t = setTimeout(() => setStep(s => s + 1), speed);
+    return () => clearTimeout(t);
+  }, [playing, step, speed, totalSteps]);
+
+  // Animate subStep 0 → 1 across each step transition for smooth traveler motion
+  useEffect(() => {
+    setSubStep(0);
+    let raf;
+    const start = performance.now();
+    const dur = playing ? speed : 320;
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / dur);
+      setSubStep(t);
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [step]);
+
+  const replay = () => { setStep(0); setPlaying(true); };
+  const togglePlay = () => {
+    if (step >= totalSteps) { setStep(0); setPlaying(true); }
+    else setPlaying(p => !p);
+  };
+  const reset = () => { setPlaying(false); setStep(totalSteps); };
+
+  // Stage shortcut: R replays. Ignore if user is typing.
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = (e.target.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea") return;
+      if (e.key === "r" || e.key === "R") { replay(); }
+      if (e.key === " ") { e.preventDefault(); togglePlay(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [step, playing]);
+
+  // Layout
+  const W = 1200, H = 260;
+  const nodeY = 116;
+  const nodeXs = agents.map((_, i) => 90 + i * ((W - 180) / Math.max(agents.length - 1, 1)));
+
+  const currentEvent = trace.find(e => Number(e.step) === step);
+  const ctxLine = currentEvent
+    ? Object.entries(currentEvent.ctx || {}).map(([k,v]) => `${k}=${typeof v === "string" ? `"${v}"` : v}`).join("  ·  ")
+    : "";
+
+  const stateColor = {
+    idle: "var(--text-3)",
+    run:  "var(--gold)",
+    pass: "var(--sage)",
+    fail: "var(--brick)",
+    warn: "var(--orange)",
+    active: "var(--gold)",
+  };
+
+  return (
+    <div className="pgraph-wrap" style={{marginBottom: 22}}>
+      <div className="pgraph-controls">
+        <button className="ctl primary" onClick={replay}>▶ REPLAY RUN</button>
+        <button className="ctl" onClick={togglePlay}>{playing ? "❚❚ PAUSE" : "▶ PLAY"}</button>
+        <button className="ctl" onClick={reset}>■ END STATE</button>
+        <span className="step-readout">STEP {String(step).padStart(2,"0")} / {String(totalSteps).padStart(2,"0")}</span>
+        <span className="muted" style={{fontSize: 10.5}}>
+          {currentEvent ? `${currentEvent.ts}  ${currentEvent.agent}.${currentEvent.type}` : "session not started"}
+        </span>
+        <span className="kbd-hint" style={{marginLeft: 14}}>
+          <kbd>R</kbd> REPLAY <kbd>SPACE</kbd> PLAY
+        </span>
+        <span style={{marginLeft: 10, display: "flex", gap: 4}}>
+          {[{l:"1×",v:520},{l:"2×",v:260},{l:"4×",v:130}].map(s => (
+            <button key={s.l} className="ctl" style={{padding: "3px 8px",
+              borderColor: speed === s.v ? "var(--gold)" : "var(--border-2)",
+              color: speed === s.v ? "var(--gold)" : "var(--text)"}}
+              onClick={() => setSpeed(s.v)}>{s.l}</button>
+          ))}
+        </span>
+        <span className="legend">
+          <span className="lg"><span className="sq idle"></span><span>IDLE</span></span>
+          <span className="lg"><span className="sq run"></span><span>RUN</span></span>
+          <span className="lg"><span className="sq pass"></span><span>PASS</span></span>
+          <span className="lg"><span className="sq fail"></span><span>FAIL</span></span>
+        </span>
+      </div>
+
+      <svg className="pgraph-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        {/* baseline rail */}
+        <line x1={nodeXs[0]} y1={nodeY} x2={nodeXs[nodeXs.length-1]} y2={nodeY} className="edge" />
+        {/* edges */}
+        {agents.slice(0, -1).map((a, i) => {
+          const st = edgeStateAt(i, step, agents, stepMap, trace);
+          const x1 = nodeXs[i] + 20, x2 = nodeXs[i+1] - 20;
+          const cls = `edge ${st}`;
+          return (
+            <g key={`e-${i}`}>
+              <line x1={x1} y1={nodeY} x2={x2} y2={nodeY} className={cls} />
+              {/* arrow head */}
+              <polyline
+                points={`${x2-6},${nodeY-4} ${x2},${nodeY} ${x2-6},${nodeY+4}`}
+                fill="none" stroke={stateColor[st] || "var(--text-3)"} strokeWidth="1"
+              />
+              {/* handoff tick label */}
+              <text x={(x1+x2)/2} y={nodeY - 12} textAnchor="middle" className="sublabel">
+                handoff
+              </text>
+            </g>
+          );
+        })}
+        {/* nodes */}
+        {agents.map((a, i) => {
+          const st = agentStateAt(a.id, step, stepMap, trace);
+          const cx = nodeXs[i];
+          const ticks = stepMap[a.id] || [];
+          return (
+            <g key={a.id} style={{cursor: "pointer"}} onClick={() => setScreen("trace")}>
+              {/* outer square ring */}
+              <rect
+                x={cx-20} y={nodeY-20} width="40" height="40"
+                className={`node-ring ${st}`}
+              />
+              {/* inner fill (smaller square) — solid status fill, no gradients */}
+              <rect
+                x={cx-12} y={nodeY-12} width="24" height="24"
+                className={`node-fill ${st} ${st === "run" ? "run-pulse" : ""}`}
+              />
+              {/* step badge */}
+              <text x={cx} y={nodeY-30} textAnchor="middle" className="sublabel">
+                {String(i+1).padStart(2,"0")} · {a.id}
+              </text>
+              {/* agent name */}
+              <text x={cx} y={nodeY+42} textAnchor="middle" className="label">
+                {a.name.replace("Agent","")}
+              </text>
+              <text x={cx} y={nodeY+56} textAnchor="middle" className="sublabel">
+                {st === "idle" ? "PENDING" : st === "run" ? "RUNNING" : st.toUpperCase()}
+              </text>
+              {/* per-step ticks under each node */}
+              {ticks.map((s, j) => (
+                <line key={s}
+                  x1={cx - (ticks.length-1)*4 + j*8}
+                  y1={nodeY+72}
+                  x2={cx - (ticks.length-1)*4 + j*8}
+                  y2={nodeY+78}
+                  className={`step-tick ${s === step ? "now" : ""}`}
+                  stroke={s <= step ? (s === step ? "var(--gold)" : stateColor[st]) : "var(--border)"}
+                />
+              ))}
+            </g>
+          );
+        })}
+        {/* current-event ctx readout */}
+        {currentEvent && (
+          <text x={W/2} y={H-14} textAnchor="middle" className={`ctx-line ${currentEvent.status === "FAIL" ? "bad" : ""}`}>
+            {ctxLine.length > 130 ? ctxLine.slice(0,128) + "…" : ctxLine}
+          </text>
+        )}
+
+        {/* TRAVELER — context envelope flying from MGR → ACT during replay.
+            Position is interpolated from the current step's owning agent into
+            the next event's owning agent. Color flips to brick if a violation
+            fires at this step. */}
+        {step > 0 && step <= totalSteps && (() => {
+          const agentIdxOf = (agentName) => {
+            const i = agents.findIndex(a => eventBelongsToAgent(a, { agent: agentName }));
+            return i;
+          };
+          const ev = trace.find(e => Number(e.step) === step) || trace[trace.length-1] || {};
+          const prevEv = trace.find(e => Number(e.step) === step - 1);
+          const fromIdx = prevEv ? agentIdxOf(prevEv.agent) : 0;
+          const toIdx = agentIdxOf(ev.agent);
+          // If either agent isn't on the rail (e.g. GroupChatManager step_1),
+          // anchor to first node.
+          const a = fromIdx < 0 ? 0 : fromIdx;
+          const b = toIdx < 0 ? a : toIdx;
+          // Ease-in-out
+          const t = subStep < 0.5 ? 2*subStep*subStep : 1 - Math.pow(-2*subStep+2, 2)/2;
+          const x = nodeXs[a] + (nodeXs[b] - nodeXs[a]) * t;
+          const y = nodeY - 38; // float just above the nodes
+          // Cumulative health: once any prior step has FAILed, traveler stays brick.
+          // WARN tints orange; otherwise gold.
+          const priorEvents = trace.filter(e => Number(e.step) <= step);
+          const priorFailed = priorEvents.some(e => e.status === "FAIL");
+          const priorWarned = priorEvents.some(e => e.status === "WARN");
+          const isFail = priorFailed || ev.status === "FAIL";
+          const isWarn = !isFail && (priorWarned || ev.status === "WARN");
+          const color = isFail ? "var(--brick)" : isWarn ? "var(--orange)" : "var(--gold)";
+          // Short label of what's traveling
+          const labelMap = {
+            session_start: "INIT",
+            agent_turn:    "TURN",
+            tool_call:     "TOOL",
+            context_write: "WRITE",
+            handoff:       "HANDOFF",
+            side_effect:   "EFFECT",
+          };
+          const flowLabel = labelMap[ev.type] || "CTX";
+          // Tail dots — three faint trailing markers, fading
+          const tailOffsets = [16, 32, 48];
+          return (
+            <g>
+              {/* leader line down to the rail */}
+              <line x1={x} y1={y+10} x2={x} y2={nodeY-22}
+                stroke={color} strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
+              {/* trailing dots */}
+              {tailOffsets.map((dx, i) => {
+                const dir = b >= a ? -1 : 1;
+                const tx = x + dir * dx;
+                if (tx < nodeXs[0] - 20 || tx > nodeXs[nodeXs.length-1] + 20) return null;
+                return (
+                  <rect key={i} x={tx-2} y={y-2} width="4" height="4"
+                    fill={color} opacity={0.35 - i*0.1} />
+                );
+              })}
+              {/* glow square + envelope */}
+              <rect x={x-32} y={y-14} width="64" height="28" className="traveler-glow"
+                style={{fill: color, opacity: 0.18}} />
+              <rect x={x-28} y={y-11} width="56" height="22" className="traveler-rect"
+                style={{stroke: color, fill: "var(--surface)"}} />
+              <text x={x} y={y+4} textAnchor="middle" className="traveler-label"
+                style={{fill: color}}>
+                {flowLabel}
+              </text>
+              {/* subtle pulse */}
+              <circle cx={x} cy={y} className="traveler-pulse" style={{stroke: color}} />
+            </g>
+          );
+        })()}
+      </svg>
+
+      <div className="pgraph-foot">
+        {agents.map(a => {
+          const st = agentStateAt(a.id, step, stepMap, trace);
+          const ticks = stepMap[a.id] || [];
+          return (
+            <div key={a.id} className="cell">
+              <span className="ev">{a.id} · {st === "idle" ? "—" : `${ticks.filter(s => s <= step).length}/${Math.max(ticks.length, 1)} STEPS`}</span>
+              <span className="ag">{a.note}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function costMetric(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function formatUsd(value) {
+  const amount = costMetric(value);
+  if (amount === 0) return "$0.00";
+  if (amount < 0.01) return `$${amount.toFixed(5)}`;
+  return `$${amount.toFixed(2)}`;
+}
+
+function formatSeconds(value) {
+  return `${costMetric(value).toFixed(2)}s`;
+}
+
+function CostPanel({ usage }) {
+  const runCost = D.cost || D.report?.cost_summary || {};
+  const tenantUsage = usage || {};
+  const llmCost = costMetric(runCost.llm_cost_usd);
+  const daytonaCost = costMetric(runCost.daytona_cost_usd);
+  const totalCost = costMetric(runCost.total_cost_usd, llmCost + daytonaCost);
+  const runCount = tenantUsage.run_count ?? 1;
+  return (
+    <div className="card" style={{width: 360}}>
+      <div className="card-head">
+        <span>Run Cost</span>
+        <span className="right">tenant total: {runCount} run{runCount === 1 ? "" : "s"}</span>
+      </div>
+      <div className="card-body">
+        <div className="cost-grid">
+          <div className="cost-metric total">
+            <div className="lbl">Total Cost</div>
+            <div className="val">{formatUsd(totalCost)}</div>
+          </div>
+          <div className="cost-metric">
+            <div className="lbl">LLM Tokens</div>
+            <div className="val">{Number(runCost.llm_tokens ?? 0).toLocaleString()}</div>
+          </div>
+          <div className="cost-metric">
+            <div className="lbl">Daytona Time</div>
+            <div className="val">{formatSeconds(runCost.daytona_seconds)}</div>
+          </div>
+          <div className="cost-metric">
+            <div className="lbl">Daytona Cost</div>
+            <div className="val">{formatUsd(daytonaCost)}</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ---------------- OVERVIEW ---------------- */
-function Overview({ setScreen }) {
+function Overview({ setScreen, tenantUsage }) {
   return (
     <>
       <div className="section-head">
@@ -384,32 +586,10 @@ function Overview({ setScreen }) {
       </div>
 
       <div className="section-head">
-        <h2>Agent Pipeline</h2>
-        <div className="right">click an agent to inspect trace</div>
+        <h2>Agent Pipeline &nbsp;//&nbsp; live execution graph</h2>
+        <div className="right">replay run · click any node to inspect trace</div>
       </div>
-      <div className="pipeline" style={{marginBottom: 22}}>
-        {D.agents.map((a, i) => (
-          <button
-            key={a.id}
-            className={`agent-box ${a.status === "FAIL" ? "fail" : "pass"}`}
-            onClick={() => setScreen("trace")}
-            title={`Open trace · ${a.name}`}
-          >
-            <div>
-              <div className="head">
-                <span className="id">{String(i+1).padStart(2,"0")} · {a.id}</span>
-                <span className="muted" style={{fontSize: 10.5}}>{a.steps} step{a.steps!==1?"s":""}</span>
-              </div>
-              <div className="name">{a.name}</div>
-              <div className="note">{a.note}</div>
-            </div>
-            <div className="stat-line">
-              <Sq kind={a.status === "FAIL" ? "fail" : "pass"} />
-              <span className={a.status === "FAIL" ? "text-brick" : "text-sage"}>{a.status}</span>
-            </div>
-          </button>
-        ))}
-      </div>
+      <PipelineGraph setScreen={setScreen} />
 
       <div className="row" style={{alignItems: "stretch"}}>
         <div className="card grow">
@@ -428,6 +608,7 @@ function Overview({ setScreen }) {
             ))}
           </div>
         </div>
+        <CostPanel usage={tenantUsage} />
         <div className="card" style={{width: 360}}>
           <div className="card-head"><span>Run Task</span><span className="right">user input</span></div>
           <div className="card-body">
@@ -447,8 +628,356 @@ function Overview({ setScreen }) {
   );
 }
 
-/* ---------------- TRACE ---------------- */
+/* ---------------- WORKFLOW DAG ---------------- */
+// Layered layout: place each node in a lane (Y axis) and a column (X axis).
+// Lanes group nodes by role so the topology reads top-to-bottom by stage.
+const DAG_POSITIONS = {
+  MGR: { col: 0, lane: 0 },
+  RES: { col: 1, lane: 1 },
+  TVL: { col: 2, lane: 0 },
+  CRT: { col: 3, lane: 1 },
+  VRF: { col: 4, lane: 1 },
+  RPT: { col: 5, lane: 1 },
+  HGT: { col: 6, lane: 2 },
+  ACT: { col: 6, lane: 1 },
+};
+const LANE_LABELS = ["TOOLS / MANAGER", "AGENT FLOW", "GATES / APPROVALS"];
+
+function routeStatusToCls(s) {
+  return ({ ok: "ok", skipped_guard: "skip", missing_approval: "miss", unexpected: "prop" })[s] || "ok";
+}
+
+function recurrenceTitle(recurrence) {
+  if (!recurrence) return "";
+  const runs = Array.isArray(recurrence.sample_run_ids) ? recurrence.sample_run_ids.join(", ") : "";
+  return [
+    `${recurrence.count || 0} recurring violation(s)`,
+    recurrence.rule || recurrence.contract || recurrence.contract_type || "",
+    recurrence.last_seen ? `last seen ${recurrence.last_seen}` : "",
+    runs ? `runs ${runs}` : ""
+  ].filter(Boolean).join(" · ");
+}
+
+function recurrenceForEdge(edge, route, recurrences) {
+  return (recurrences || []).find(item => {
+    if (!item || Number(item.count || 0) < 2) return false;
+    if (item.edge && item.edge.from === edge.from && item.edge.to === edge.to) return true;
+    return false;
+  });
+}
+
+function recurrenceForNode(node, recurrences) {
+  return (recurrences || []).find(item => {
+    if (!item || Number(item.count || 0) < 2) return false;
+    if (item.failed_agent && (item.failed_agent === node.name || item.failed_agent === node.id)) return true;
+    return Array.isArray(node.contracts) && item.contract && node.contracts.includes(item.contract);
+  });
+}
+
+function Topology({ setScreen, setSelectedPatch }) {
+  const topology = D.topology || {};
+  const topologyNodes = Array.isArray(topology.nodes) && topology.nodes.length
+    ? topology.nodes
+    : [{ id: "RUN", name: D.run?.workflow || D.run?.id || "Run", role: "run", kind: "manager", contracts: [] }];
+  const topologyEdges = Array.isArray(topology.edges) ? topology.edges : [];
+  const routes = Array.isArray(D.routes) ? D.routes : [];
+  const recurrences = Array.isArray(D.recurrences) ? D.recurrences : [];
+  const W = Math.max(1240, topologyNodes.length * 150 + 140), H = 360;
+  const colW = 150, colX0 = 70;
+  const laneY = [40, 160, 280];
+  const nodeW = 110, nodeH = 56;
+  const nodeIndexById = {};
+  topologyNodes.forEach((node, index) => { nodeIndexById[node.id] = index; });
+
+  const laneFor = (node) => {
+    if (node.kind === "manager" || node.kind === "tool") return 0;
+    if (node.kind === "gate") return 2;
+    return 1;
+  };
+
+  const pos = (id) => {
+    const p = DAG_POSITIONS[id];
+    if (p) return { x: colX0 + p.col * colW, y: laneY[p.lane] };
+    const index = nodeIndexById[id] ?? 0;
+    const node = topologyNodes[index] || {};
+    return { x: colX0 + index * colW, y: laneY[laneFor(node)] };
+  };
+
+  // map declared edges → routes for status, fall back to declared-only style
+  const routeByEdge = {};
+  routes.forEach(r => { routeByEdge[`${r.from}->${r.to}`] = r; });
+
+  const edgeStatus = (e) => {
+    const r = routeByEdge[`${e.from}->${e.to}`];
+    if (!e.declared && e.proposed) return "prop";
+    if (!r) return "idle";
+    return routeStatusToCls(r.status);
+  };
+
+  const nodeStatus = (n) => {
+    if (n.proposed) return "gate";
+    const ag = D.agents.find(a => a.id === n.id);
+    if (ag) return ag.status === "FAIL" ? "fail" : "pass";
+    return n.kind;
+  };
+
+  // Curved orthogonal-ish path; gentle S-curve
+  const pathFor = (a, b) => {
+    const ax = a.x + nodeW / 2, ay = a.y + nodeH / 2;
+    const bx = b.x - nodeW / 2, by = b.y + nodeH / 2;
+    if (Math.abs(ay - by) < 4) {
+      return `M ${ax} ${ay} L ${bx} ${by}`;
+    }
+    const mx = (ax + bx) / 2;
+    return `M ${ax} ${ay} C ${mx} ${ay}, ${mx} ${by}, ${bx} ${by}`;
+  };
+
+  return (
+    <>
+      <div className="section-head">
+        <h2>Workflow DAG &nbsp;//&nbsp; declared topology vs observed path</h2>
+        <div className="right">{topologyNodes.length} nodes &nbsp;&middot;&nbsp; {topologyEdges.length} edges &nbsp;&middot;&nbsp; {routes.filter(r=>r.status!=="ok").length} divergences</div>
+      </div>
+
+      <div className="dag-wrap" style={{marginBottom: 14}}>
+        <div className="dag-head">
+          <span>concord.topology.v1</span>
+          <span className="muted" style={{textTransform: "none", letterSpacing: 0}}>workflow ← {D.run.workflow}</span>
+          <div className="legend">
+            <span className="lg"><span className="sq ok"></span>OK</span>
+            <span className="lg"><span className="sq skip"></span>SKIPPED GUARD</span>
+            <span className="lg"><span className="sq miss"></span>MISSING APPROVAL</span>
+            <span className="lg"><span className="sq prop"></span>PROPOSED (P-004)</span>
+          </div>
+        </div>
+
+        <svg className="dag-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
+          {/* lane backgrounds */}
+          {laneY.map((y, i) => (
+            <g key={i}>
+              <line x1={40} y1={y + nodeH/2} x2={W - 40} y2={y + nodeH/2} className="lane" />
+              <text x={40} y={y - 8} className="node-id">{LANE_LABELS[i]}</text>
+            </g>
+          ))}
+
+          {/* edges */}
+          {topologyEdges.filter(e => !e.returns).map((e, i) => {
+            const a = pos(e.from), b = pos(e.to);
+            const st = edgeStatus(e);
+            const r = routeByEdge[`${e.from}->${e.to}`];
+            const recurrence = recurrenceForEdge(e, r, recurrences);
+            const mid = { x: (a.x + b.x)/2 + nodeW/2, y: (a.y + b.y)/2 + nodeH/2 };
+            const labelText =
+              st === "skip" ? "SKIPPED GUARD"
+              : st === "miss" ? "NO APPROVAL"
+              : st === "prop" ? "PROPOSED"
+              : e.kind.toUpperCase();
+            return (
+              <g key={`e-${i}`}>
+                <path d={pathFor(a, b)} className={`edge ${st}`} markerEnd="url(#arr)" />
+                <text x={mid.x} y={mid.y - 8} textAnchor="middle" className={`edge-label ${st}`}>
+                  {labelText}
+                </text>
+                {r && r.contract && (
+                  <text x={mid.x} y={mid.y + 12} textAnchor="middle" className="edge-label">
+                    {r.contract}
+                  </text>
+                )}
+                {recurrence && (
+                  <g className="recurrence-badge">
+                    <title>{recurrenceTitle(recurrence)}</title>
+                    <rect x={mid.x - 44} y={mid.y + 20} width="88" height="15" rx="1" />
+                    <text x={mid.x} y={mid.y + 31} textAnchor="middle">
+                      RECURRING x{recurrence.count}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+
+          {/* arrowhead defs — one per color (no gradients, plain strokes) */}
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          {/* nodes */}
+          {topologyNodes.map(n => {
+            const p = pos(n.id);
+            const cls = nodeStatus(n);
+            const failed = D.agents.find(a => a.id === n.id && a.status === "FAIL");
+            const recurrence = recurrenceForNode(n, recurrences);
+            return (
+              <g key={n.id}
+                 style={{cursor: "pointer"}}
+                 onClick={() => {
+                   if (n.contracts && n.contracts.length) {
+                     // jump to the matching violation/patch when relevant
+                     const v = D.violations.find(v => n.contracts.includes(v.contract));
+                     if (v) {
+                       const patch = D.patches.find(p => p.violation === v.id);
+                       if (patch) setSelectedPatch(patch.id);
+                       setScreen("repair");
+                       return;
+                     }
+                   }
+                   setScreen("trace");
+                 }}>
+                {recurrence && <title>{recurrenceTitle(recurrence)}</title>}
+                <rect x={p.x - nodeW/2} y={p.y} width={nodeW} height={nodeH}
+                      className={`node-rect ${n.kind} ${cls}`} rx="2" />
+                <text x={p.x} y={p.y + 14} textAnchor="middle" className="node-id">
+                  {n.id} · {n.kind.toUpperCase()}
+                </text>
+                <text x={p.x} y={p.y + 32} textAnchor="middle" className={`node-name ${failed ? "fail" : (cls === "pass" ? "pass" : "")}`}>
+                  {n.name.replace("Agent","")}
+                </text>
+                <text x={p.x} y={p.y + 47} textAnchor="middle" className="node-role">
+                  {n.role.toUpperCase()}
+                </text>
+                {recurrence && (
+                  <g className="recurrence-badge">
+                    <rect x={p.x - 39} y={p.y + nodeH + 8} width="78" height="15" rx="1" />
+                    <text x={p.x} y={p.y + nodeH + 19} textAnchor="middle">
+                      RECURRING x{recurrence.count}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <span>Routes &nbsp;&middot;&nbsp; declared vs observed</span>
+          <span className="right">{routes.length} edges &nbsp;&middot;&nbsp; click a divergence row for repair</span>
+        </div>
+        <div className="card-body" style={{padding: 0}}>
+          <table className="tbl routes-tbl">
+            <thead>
+              <tr>
+                <th style={{width: 60}}>ID</th>
+                <th style={{width: 220}}>Edge</th>
+                <th style={{width: 100}}>Declared</th>
+                <th style={{width: 100}}>Observed</th>
+                <th style={{width: 100}}>Contract</th>
+                <th>Note</th>
+                <th style={{width: 160}}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {routes.map(r => {
+                const cls = routeStatusToCls(r.status);
+                const v = r.contract && D.violations.find(v => v.contract === r.contract);
+                const clickable = !!v;
+                const recurrence = recurrenceForEdge({ from: r.from, to: r.to }, r, recurrences);
+                return (
+                  <tr key={r.id}
+                      className={clickable ? "clickable" : ""}
+                      onClick={() => {
+                        if (!v) return;
+                        const p = D.patches.find(p => p.violation === v.id);
+                        if (p) setSelectedPatch(p.id);
+                        setScreen("repair");
+                      }}>
+                    <td className="text-2">{r.id}</td>
+                    <td><span className="text-gold">{r.from}</span> → <span className="text-gold">{r.to}</span></td>
+                    <td>{r.declared ? "yes" : <span className="text-3">no</span>}</td>
+                    <td>{r.observed ? "yes" : <span className="text-3">no</span>}</td>
+                    <td className="text-2">{r.contract || "—"}</td>
+                    <td className={cls === "miss" || cls === "skip" ? "text-orange" : "text-2"}>
+                      {r.note || "—"}
+                      {recurrence && (
+                        <div className="recurrence-note" title={recurrenceTitle(recurrence)}>
+                          RECURRING x{recurrence.count}
+                        </div>
+                      )}
+                    </td>
+                    <td><span className={`badge ${cls}`}>
+                      {r.status.replace("_", " ").toUpperCase()}
+                    </span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ---------------- TRACE MINI-RAIL ---------------- */
+function TraceMiniRail({ focusedStep, setFocusedStep }) {
+  const trace = Array.isArray(D.trace) ? D.trace : [];
+  const lanes = Array.isArray(D.agents) ? D.agents : [];
+  const RAIL_H = 520;
+  const PAD_T = 36, PAD_B = 30;
+  const usable = RAIL_H - PAD_T - PAD_B;
+  const stepY = (s) => PAD_T + ((s - 1) / Math.max(trace.length - 1, 1)) * usable;
+  const laneX = (idx) => 70 + idx * 28;
+  const laneOfAgent = (agentName) => {
+    const ag = lanes.find(a => eventBelongsToAgent(a, { agent: agentName }));
+    return ag ? lanes.indexOf(ag) : -1;
+  };
+
+  return (
+    <div className="minirail">
+      <div className="mh">Trace Rail</div>
+      <svg viewBox={`0 0 200 ${RAIL_H}`} preserveAspectRatio="none">
+        {/* lane verticals */}
+        {lanes.map((a, i) => (
+          <g key={a.id}>
+            <line x1={laneX(i)} y1={PAD_T - 10} x2={laneX(i)} y2={RAIL_H - PAD_B + 10} className="lane-line" />
+            <text x={laneX(i)} y={PAD_T - 16} textAnchor="middle" className="lane-label">{a.id}</text>
+          </g>
+        ))}
+
+        {/* connections between consecutive events */}
+        {trace.slice(0, -1).map((e, i) => {
+          const next = trace[i + 1];
+          const li = laneOfAgent(e.agent), lj = laneOfAgent(next.agent);
+          if (li < 0 || lj < 0) return null;
+          const cls = next.status === "FAIL" ? "fail" : next.status === "WARN" ? "warn" : "";
+          return (
+            <line key={`c-${i}`}
+              x1={laneX(li)} y1={stepY(e.step)}
+              x2={laneX(lj)} y2={stepY(next.step)}
+              className={`conn ${cls}`} />
+          );
+        })}
+
+        {/* event squares */}
+        {trace.map(e => {
+          const li = laneOfAgent(e.agent);
+          if (li < 0) return null;
+          const x = laneX(li), y = stepY(e.step);
+          const cls =
+            e.status === "FAIL" ? "fail" :
+            e.status === "WARN" ? "warn" :
+            e.status === "OK"   ? "ok" : "idle";
+          const focused = focusedStep === e.step;
+          return (
+            <g key={e.step}
+               className={`step ${cls} ${focused ? "active" : ""}`}
+               onClick={() => setFocusedStep(e.step)}>
+              <rect x={x - 5} y={y - 5} width={10} height={10} />
+              <text x={20} y={y + 3} className="step-num">{String(e.step).padStart(2,"0")}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+
 function Trace() {
+  const [focusedStep, setFocusedStep] = useState(null);
   const renderCtx = (e) => {
     const entries = Object.entries(e.ctx || {});
     return entries.map(([k, v], i) => {
@@ -467,55 +996,61 @@ function Trace() {
         <h2>Agent Trace &nbsp;//&nbsp; ordered timeline</h2>
         <div className="right">{D.trace.length} events &nbsp;&middot;&nbsp; 1 tool event &nbsp;&middot;&nbsp; 4 violations</div>
       </div>
-      <div className="card">
-        <div className="card-head">
-          <span>events</span>
-          <span className="right">step &nbsp;&middot;&nbsp; ts &nbsp;&middot;&nbsp; agent &nbsp;&middot;&nbsp; type &nbsp;&middot;&nbsp; ctx &nbsp;&middot;&nbsp; status</span>
-        </div>
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th style={{width: 36}}>#</th>
-              <th style={{width: 110}}>Timestamp</th>
-              <th style={{width: 180}}>Agent</th>
-              <th style={{width: 140}}>Event</th>
-              <th>Context</th>
-              <th style={{width: 130}}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {D.trace.map(e => (
-              <tr key={e.step} className={`trace-row ${e.status === "FAIL" ? "fail" : e.status === "WARN" ? "warn" : ""}`}>
-                <td>{String(e.step).padStart(2, "0")}</td>
-                <td className="ts">{e.ts}</td>
-                <td><span className="agent">{e.agent}</span></td>
-                <td><span className="type">{e.type}</span></td>
-                <td className="ctx">{renderCtx(e)}</td>
-                <td>
-                  {e.status === "OK"   && <Pill kind="pass">PASS</Pill>}
-                  {e.status === "FAIL" && <Pill kind="fail">FAIL · {e.flag}</Pill>}
-                  {e.status === "WARN" && <Pill kind="warn">WARN · {e.flag}</Pill>}
-                </td>
+      <div className="trace-layout">
+        <TraceMiniRail focusedStep={focusedStep} setFocusedStep={setFocusedStep} />
+        <div className="card">
+          <div className="card-head">
+            <span>events</span>
+            <span className="right">step &nbsp;&middot;&nbsp; ts &nbsp;&middot;&nbsp; agent &nbsp;&middot;&nbsp; type &nbsp;&middot;&nbsp; ctx &nbsp;&middot;&nbsp; status</span>
+          </div>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th style={{width: 36}}>#</th>
+                <th style={{width: 110}}>Timestamp</th>
+                <th style={{width: 180}}>Agent</th>
+                <th style={{width: 140}}>Event</th>
+                <th>Context</th>
+                <th style={{width: 130}}>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {D.trace.map(e => (
+                <tr key={e.step}
+                    onClick={() => setFocusedStep(e.step)}
+                    className={`trace-row ${e.status === "FAIL" ? "fail" : e.status === "WARN" ? "warn" : ""} ${focusedStep === e.step ? "focused" : ""}`}
+                    style={{cursor: "pointer"}}>
+                  <td>{String(e.step).padStart(2, "0")}</td>
+                  <td className="ts">{e.ts}</td>
+                  <td><span className="agent">{e.agent}</span></td>
+                  <td><span className="type">{e.type}</span></td>
+                  <td className="ctx">{renderCtx(e)}</td>
+                  <td>
+                    {e.status === "OK"   && <Pill kind="pass">PASS</Pill>}
+                    {e.status === "FAIL" && <Pill kind="fail">FAIL · {e.flag}</Pill>}
+                    {e.status === "WARN" && <Pill kind="warn">WARN · {e.flag}</Pill>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div style={{marginTop: 12, color: "var(--text-3)", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase"}}>
-        end of trace &nbsp;&middot;&nbsp; final_output emitted at step 11 &nbsp;&middot;&nbsp; side_effect attempted at step 12
+      <div style={{marginTop: 12, color: "var(--text-3)", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", display: "flex", justifyContent: "space-between"}}>
+        <span>end of trace &nbsp;&middot;&nbsp; final_output emitted at step 11 &nbsp;&middot;&nbsp; side_effect attempted at step 12</span>
+        <span className="kbd-hint">CLICK <kbd>RAIL</kbd> OR <kbd>ROW</kbd> TO FOCUS</span>
       </div>
     </>
   );
 }
 
 /* ---------------- VIOLATIONS ---------------- */
-function Violations({ setScreen, setSelectedPatch, goToForensicSpan }) {
+function Violations({ setScreen, setSelectedPatch }) {
   const onClick = (v) => {
     const p = D.patches.find(p => p.violation === v.id);
     if (p) setSelectedPatch(p.id);
     setScreen("repair");
   };
-  const spans = D.spans || [];
   return (
     <>
       <div className="section-head">
@@ -556,12 +1091,6 @@ function Violations({ setScreen, setSelectedPatch, goToForensicSpan }) {
               <div className="where">
                 <div className="agent">{v.failed_agent}</div>
                 <div className="muted" style={{fontSize: 11, marginTop: 4}}>step <span className="step">{String(v.failed_step).padStart(2,"0")}</span></div>
-                {(() => {
-                  const span = _findSpanForAgent(spans, v.failed_agent, v.span_id);
-                  return span && goToForensicSpan ? (
-                    <ViewSpanLink spanId={span.span_id} onClick={goToForensicSpan} />
-                  ) : null;
-                })()}
               </div>
               <div>
                 <div className="text-gold" style={{letterSpacing: "0.16em", fontSize: 11}}>{patch ? patch.id : "—"}</div>
@@ -600,14 +1129,261 @@ function Violations({ setScreen, setSelectedPatch, goToForensicSpan }) {
 }
 
 /* ---------------- REPAIR ---------------- */
-function Repair({ selectedPatch, setSelectedPatch, goToForensicSpan }) {
-  const spans = D.spans || [];
+
+// Per-patch DAG specs — declarative so the SVG renderer is data-driven
+const REPAIR_DAG_SPECS = {
+  "P-001": {
+    left:  { label: "VerifierAgent", sub: "verified=0",   status: "fail" },
+    right: { label: "ReporterAgent", sub: "ran anyway",   status: "fail" },
+    fix:   { label: "Guardrail",     sub: "verified > 0" },
+    edges: { broken: "handoff · verified=0", a: "handoff", b: "if pass → else route_back" },
+  },
+  "P-002": {
+    left:  { label: "TavilySearch",  sub: "tool_event",   status: "pass" },
+    right: { label: "VerifierAgent", sub: "no gate",      status: "fail" },
+    fix:   { label: "ToolGate",      sub: "last_event=ok" },
+    edges: { broken: "no gate · skipped", a: "tool_event", b: "gated" },
+  },
+  "P-003": {
+    left:  { label: "VerifierAgent", sub: "tool_events=0", status: "fail" },
+    right: { label: "ReporterAgent", sub: "bypassed",      status: "fail" },
+    fix:   { label: "OnContextCondition", sub: "tool_ok check" },
+    edges: { broken: "unconditional handoff", a: "handoff", b: "condition=true" },
+  },
+  "P-004": {
+    left:  { label: "ReporterAgent", sub: "emits output", status: "pass" },
+    right: { label: "ActionAgent",   sub: "approval=pending", status: "fail" },
+    fix:   { label: "HumanGate",     sub: "UserProxyAgent" },
+    edges: { broken: "direct · no gate", a: "output", b: "approved" },
+  },
+};
+
+function RepairMiniDAG({ patchId, state }) {
+  // state: "idle" | "applying" | "applied"
+  const spec = REPAIR_DAG_SPECS[patchId];
+  if (!spec) return null;
+
+  const showFix = state === "applying" || state === "applied";
+  const leftCx = 80, rightCx = 520, fixCx = 300;
+  const agentW = 116, agentH = 44;
+  const fixW = 134, fixH = 36;
+  const rowY = 50; // top of agent rect
+  const fixY = 54; // top of fix rect (slightly inset)
+
+  // left/right node colors depend on state — agents go sage when applied
+  const leftStatus = state === "applied" ? "pass" : spec.left.status;
+  const rightStatus = state === "applied" ? "pass" : spec.right.status;
+  const leftSub  = state === "applied" ? "fixed" : spec.left.sub;
+  const rightSub = state === "applied" ? "fixed" : spec.right.sub;
+
+  // edge classes
+  const edgeBroken = state === "idle";
+  const edgeApplying = state === "applying";
+  const edgeApplied = state === "applied";
+  const edgeClass = edgeBroken ? "broken" : edgeApplying ? "applying" : "applied";
+
+  // arrowhead defs use unique ids per state
+  const arrowId = `rdag-arrow-${patchId}-${state}`;
+  const arrowColor = edgeBroken ? "#C73A1F" : edgeApplied ? "#6B8A3F" : "#F1642E";
+
+  // node rect helper
+  const nodeRect = (cx, status, label, sub) => {
+    const x = cx - agentW / 2;
+    return (
+      <g>
+        <rect className={`n-rect ${status}`} x={x} y={rowY} width={agentW} height={agentH} rx={0} ry={0} />
+        <rect className={`n-status ${status}`} x={x + 6} y={rowY + 6} width={7} height={7} />
+        <text className={`n-label ${status}`} x={cx} y={rowY + 22} textAnchor="middle">{label}</text>
+        <text className={`n-sub ${status}`}   x={cx} y={rowY + 35} textAnchor="middle">{sub}</text>
+      </g>
+    );
+  };
+
+  // edge midpoint y
+  const edgeY = rowY + agentH / 2;
+
+  return (
+    <svg className="rdag-svg" viewBox="0 0 600 130" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <marker id={arrowId} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L5,3 L0,6 z" fill={arrowColor} />
+        </marker>
+      </defs>
+
+      {/* Edges */}
+      {!showFix && (
+        <g>
+          {/* single broken edge straight across */}
+          <line className={`e-line ${edgeClass}`}
+                x1={leftCx + agentW/2} y1={edgeY}
+                x2={rightCx - agentW/2 - 4} y2={edgeY}
+                markerEnd={`url(#${arrowId})`} />
+          {(() => {
+            const lbl = spec.edges.broken;
+            const cx = (leftCx + rightCx) / 2;
+            // Wrap on " · " separator if present and long
+            if (lbl.length > 18 && lbl.includes(" · ")) {
+              const parts = lbl.split(" · ");
+              return (
+                <text className={`e-label ${edgeClass}`} x={cx} y={edgeY - 14} textAnchor="middle">
+                  <tspan x={cx} dy="0">{parts[0]}</tspan>
+                  <tspan x={cx} dy="10">· {parts.slice(1).join(" · ")}</tspan>
+                </text>
+              );
+            }
+            return (
+              <text className={`e-label ${edgeClass}`} x={cx} y={edgeY - 8} textAnchor="middle">{lbl}</text>
+            );
+          })()}
+        </g>
+      )}
+      {showFix && (
+        <g>
+          {/* left → fix */}
+          <line className={`e-line ${edgeClass}`}
+                x1={leftCx + agentW/2} y1={edgeY}
+                x2={fixCx - fixW/2 - 4} y2={edgeY}
+                markerEnd={`url(#${arrowId})`} />
+          <text className={`e-label ${edgeClass}`}
+                x={(leftCx + agentW/2 + fixCx - fixW/2) / 2}
+                y={edgeY - 8} textAnchor="middle">
+            {spec.edges.a}
+          </text>
+          {/* fix → right */}
+          <line className={`e-line ${edgeClass}`}
+                x1={fixCx + fixW/2} y1={edgeY}
+                x2={rightCx - agentW/2 - 4} y2={edgeY}
+                markerEnd={`url(#${arrowId})`} />
+          {(() => {
+            const lbl = spec.edges.b;
+            const cx = (fixCx + fixW/2 + rightCx - agentW/2) / 2;
+            // Long labels split onto two lines
+            if (lbl.length > 14) {
+              const parts = lbl.split(" → ");
+              if (parts.length === 2) {
+                return (
+                  <text className={`e-label ${edgeClass}`} x={cx} y={edgeY - 14} textAnchor="middle" style={{fontSize: 8.5}}>
+                    <tspan x={cx} dy="0">{parts[0]} →</tspan>
+                    <tspan x={cx} dy="10">{parts[1]}</tspan>
+                  </text>
+                );
+              }
+            }
+            return (
+              <text className={`e-label ${edgeClass}`} x={cx} y={edgeY - 8} textAnchor="middle">{lbl}</text>
+            );
+          })()}
+        </g>
+      )}
+
+      {/* Agents */}
+      {nodeRect(leftCx, leftStatus, spec.left.label, leftSub)}
+      {nodeRect(rightCx, rightStatus, spec.right.label, rightSub)}
+
+      {/* Fix node — only when applying or applied */}
+      {showFix && (
+        <g className={state === "applying" ? "fix-pulse" : ""}>
+          <rect className="n-rect fix"
+                x={fixCx - fixW/2} y={fixY}
+                width={fixW} height={fixH} rx={0} ry={0} />
+          <text className="n-label fix" x={fixCx} y={fixY + 16} textAnchor="middle">{spec.fix.label}</text>
+          <text className="n-sub fix"   x={fixCx} y={fixY + 28} textAnchor="middle">{spec.fix.sub}</text>
+        </g>
+      )}
+    </svg>
+  );
+}
+
+function RepairDAG({ patches, appliedPatches, setAppliedPatches, setScreen }) {
+  const [applying, setApplying] = useState(null); // patchId currently in applying transition
+
+  const stateOf = (id) => {
+    if (applying === id) return "applying";
+    if (appliedPatches.includes(id)) return "applied";
+    return "idle";
+  };
+
+  const onApply = (id) => {
+    if (stateOf(id) !== "idle") return;
+    setApplying(id);
+    setTimeout(() => {
+      setAppliedPatches(prev => prev.includes(id) ? prev : [...prev, id]);
+      setApplying(null);
+    }, 1600);
+  };
+
+  const allApplied = patches.length > 0 && patches.every(p => appliedPatches.includes(p.id));
+
+  return (
+    <>
+      {allApplied && (
+        <div className="rdag-banner">
+          <div>
+            <div className="head">All patches applied — workflow corrected</div>
+            <div className="sub">4 AG2 primitives inserted · ready for regression</div>
+          </div>
+          <button className="go" onClick={() => setScreen("regression")}>Run regression →</button>
+        </div>
+      )}
+      <div className="rdag-stack">
+        {patches.map(p => {
+          const st = stateOf(p.id);
+          const statusText =
+            st === "applying" ? "Zone B patching..." :
+            st === "applied"  ? "Patch applied" :
+                                "Ready to apply";
+          const btnText =
+            st === "applying" ? "Applying..." :
+            st === "applied"  ? "Applied" :
+                                "Apply patch";
+          return (
+            <div key={p.id} className="rdag-card">
+              <div className="rdag-head">
+                <div className="id">{p.id}</div>
+                <div className="ctitle">{p.title}</div>
+                <div><span className="prim">{p.primitive}</span></div>
+                <div>
+                  <Pill kind={st === "applied" ? "pass" : "ok"}>
+                    {st === "applied" ? "APPLIED" : st === "applying" ? "PATCHING" : "READY"}
+                  </Pill>
+                </div>
+              </div>
+              <div className="rdag-body">
+                <RepairMiniDAG patchId={p.id} state={st} />
+              </div>
+              <div className="rdag-controls">
+                <div className={`status ${st === "applied" ? "applied" : ""}`}>{statusText}</div>
+                <button
+                  className={`rdag-btn ${st}`}
+                  disabled={st !== "idle"}
+                  onClick={() => onApply(p.id)}
+                >{btnText}</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+/* ---------------- REPAIR ---------------- */
+function Repair({ selectedPatch, setSelectedPatch, appliedPatches, setAppliedPatches, setScreen }) {
+  const visiblePatches = D.patches.filter(p => selectedPatch === null || selectedPatch === p.id);
   return (
     <>
       <div className="section-head">
         <h2>Repair Patch &nbsp;//&nbsp; AG2-native primitives</h2>
-        <div className="right">{D.patches.length} patches &nbsp;&middot;&nbsp; mapped from {D.violations.length} violations</div>
+        <div className="right">{D.patches.length} patches &nbsp;&middot;&nbsp; mapped from {D.violations.length} violations &nbsp;&middot;&nbsp; <span style={{color: appliedPatches.length === D.patches.length ? "var(--sage)" : "var(--gold)"}}>{appliedPatches.length}/{D.patches.length} applied</span></div>
       </div>
+
+      <RepairDAG
+        patches={visiblePatches}
+        appliedPatches={appliedPatches}
+        setAppliedPatches={setAppliedPatches}
+        setScreen={setScreen}
+      />
+
       <div style={{display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap"}}>
         <button
           className={`btn ${selectedPatch === null ? "" : "ghost"}`}
@@ -622,10 +1398,9 @@ function Repair({ selectedPatch, setSelectedPatch, goToForensicSpan }) {
         ))}
       </div>
 
-      {D.patches
-        .filter(p => selectedPatch === null || selectedPatch === p.id)
-        .map(p => {
+      {visiblePatches.map(p => {
         const v = D.violations.find(v => v.id === p.violation);
+        const isApplied = appliedPatches.includes(p.id);
         return (
           <div key={p.id} className="patch-block">
             <div className="patch-head">
@@ -633,17 +1408,9 @@ function Repair({ selectedPatch, setSelectedPatch, goToForensicSpan }) {
               <div>
                 <div className="ctitle">{p.title}</div>
                 <div className="muted" style={{fontSize: 11, marginTop: 4}}>fixes <span className="text-brick">{v.id}</span> &nbsp;&middot;&nbsp; {v.type} CONTRACT &nbsp;&middot;&nbsp; failed at step {v.failed_step}</div>
-                {(() => {
-                  const span = _findSpanForAgent(spans, v.failed_agent, v.span_id);
-                  return span && goToForensicSpan ? (
-                    <div style={{marginTop: 6}}>
-                      <ViewSpanLink spanId={span.span_id} onClick={goToForensicSpan} />
-                    </div>
-                  ) : null;
-                })()}
               </div>
               <div className="prim">{p.primitive}</div>
-              <div><Pill kind="ok">READY</Pill></div>
+              <div><Pill kind={isApplied ? "pass" : "ok"}>{isApplied ? "APPLIED" : "READY"}</Pill></div>
             </div>
             <div className="diff">
               <div className="pane rem">
@@ -667,28 +1434,13 @@ function Repair({ selectedPatch, setSelectedPatch, goToForensicSpan }) {
 }
 
 /* ---------------- REGRESSION ---------------- */
-function Regression({ goToForensicSpan }) {
+function Regression() {
   const t = D.test;
-  // The regression test corresponds to the regression span (last in the chain)
-  const spans = D.spans || [];
-  const regressionSpan = spans.find(s => s.kind === "regression") || null;
   return (
     <>
       <div className="section-head">
         <h2>Regression Test &nbsp;//&nbsp; {t.runner}</h2>
-        <div className="right">
-          sandbox {t.sandbox_id} &nbsp;&middot;&nbsp; {t.image} &nbsp;&middot;&nbsp; {(t.duration_ms/1000).toFixed(2)}s
-          {regressionSpan && goToForensicSpan && (
-            <>
-              &nbsp;&middot;&nbsp;
-              <ViewSpanLink
-                spanId={regressionSpan.span_id}
-                onClick={goToForensicSpan}
-                label="Forensic span"
-              />
-            </>
-          )}
-        </div>
+        <div className="right">sandbox {t.sandbox_id} &nbsp;&middot;&nbsp; {t.image} &nbsp;&middot;&nbsp; {(t.duration_ms/1000).toFixed(2)}s</div>
       </div>
 
       <div className="row" style={{alignItems: "stretch", marginBottom: 14}}>
@@ -752,167 +1504,8 @@ function Regression({ goToForensicSpan }) {
 }
 
 /* ---------------- REPORT ---------------- */
-function _approvalKind(status) {
-  const norm = (status || "").toUpperCase();
-  if (norm.startsWith("APPROVED")) return "ok";
-  if (norm.startsWith("REJECTED")) return "err";
-  return "warn"; // PENDING* / unknown
-}
-
-function _isPendingApproval(status) {
-  const norm = (status || "").toUpperCase();
-  return norm.startsWith("PENDING") || norm === "" || norm === "UNKNOWN";
-}
-
-function ApprovalPanel({ runId, approval, onUpdated }) {
-  const [operator, setOperator] = useState(approval?.operator || "j.kowalski");
-  const [comments, setComments] = useState(approval?.comments || "");
-  const [submitState, setSubmitState] = useState("idle"); // idle|submitting|error
-  const [submitError, setSubmitError] = useState("");
-
-  const status = approval?.status || "UNKNOWN";
-  const pending = _isPendingApproval(status);
-  const kind = _approvalKind(status);
-
-  async function decide(decision) {
-    if (!runId) {
-      setSubmitError("No run_id available — submit a run first.");
-      setSubmitState("error");
-      return;
-    }
-    setSubmitState("submitting");
-    setSubmitError("");
-    try {
-      const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/approval`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision, operator, comments }),
-      });
-      if (res.status === 404) {
-        setSubmitError(`Run ${runId} not found. It may have been deleted.`);
-        setSubmitState("error");
-        return;
-      }
-      if (res.status === 409) {
-        const body = await res.json().catch(() => ({}));
-        setSubmitError(`Run is not approval-ready: ${body.detail || res.statusText}`);
-        setSubmitState("error");
-        return;
-      }
-      if (!res.ok) {
-        setSubmitError(`Server error ${res.status}. Try again.`);
-        setSubmitState("error");
-        return;
-      }
-      const body = await res.json();
-      setSubmitState("idle");
-      if (onUpdated) onUpdated(body.approval);
-    } catch (err) {
-      setSubmitError(`Network error: ${err.message || err}`);
-      setSubmitState("error");
-    }
-  }
-
-  return (
-    <div className={`approval approval-${kind}`}>
-      <div className="big">
-        <span className="sq"></span>
-        <span className="label" data-status={status}>{status.replace(/_/g, " ")}</span>
-      </div>
-      <div className="kv-list">
-        <div className="lbl">Operator</div>
-        <div className="val">{approval?.operator || "—"}</div>
-        <div className="lbl">Requested</div>
-        <div className="val">{approval?.requested_at || "—"}</div>
-        <div className="lbl">SLA</div>
-        <div className="val">{approval?.sla || "—"}</div>
-        <div className="lbl">Channel</div>
-        <div className="val">UserProxyAgent / HumanGate</div>
-      </div>
-
-      {approval?.comments && (
-        <>
-          <hr />
-          <div className="approval-comments-display">
-            <div className="lbl">Comments</div>
-            <div className="val">{approval.comments}</div>
-          </div>
-        </>
-      )}
-
-      <hr />
-
-      {pending && (
-        <form className="approval-form" onSubmit={(e) => e.preventDefault()} aria-label="Approval form">
-          <label className="form-row">
-            <span className="form-label">Operator</span>
-            <input
-              className="form-input"
-              type="text"
-              value={operator}
-              onChange={(e) => setOperator(e.target.value)}
-              aria-required="true"
-            />
-          </label>
-          <label className="form-row">
-            <span className="form-label">Comments (optional)</span>
-            <textarea
-              className="form-textarea"
-              value={comments}
-              onChange={(e) => setComments(e.target.value)}
-              rows={2}
-              maxLength={500}
-              placeholder="Optional context for the audit trail"
-            />
-          </label>
-
-          {submitError && (
-            <div className="form-error" role="alert" aria-live="polite">
-              {submitError}
-              <button
-                type="button"
-                className="btn-retry"
-                onClick={() => { setSubmitState("idle"); setSubmitError(""); }}
-              >
-                dismiss
-              </button>
-            </div>
-          )}
-
-          <div className="btn-row">
-            <button
-              type="button"
-              className="btn"
-              disabled={!operator.trim() || submitState === "submitting"}
-              onClick={() => decide("approved")}
-              aria-busy={submitState === "submitting"}
-            >
-              {submitState === "submitting" ? "SUBMITTING…" : "APPROVE & RERUN"}
-            </button>
-            <button
-              type="button"
-              className="btn ghost"
-              disabled={!operator.trim() || submitState === "submitting"}
-              onClick={() => decide("rejected")}
-              aria-busy={submitState === "submitting"}
-            >
-              REJECT
-            </button>
-          </div>
-        </form>
-      )}
-
-      {!pending && submitError && (
-        <div className="form-error" role="alert" aria-live="polite">{submitError}</div>
-      )}
-    </div>
-  );
-}
-
-function Report({ setScreen, runId }) {
-  const [reportData, setReportData] = useState(D.report);
-  const r = reportData;
-
+function Report({ setScreen }) {
+  const r = D.report;
   return (
     <>
       <div className="section-head">
@@ -927,11 +1520,23 @@ function Report({ setScreen, runId }) {
             <p>{r.summary}</p>
           </div>
         </div>
-        <ApprovalPanel
-          runId={runId || D.run?.id}
-          approval={r.approval}
-          onUpdated={(updated) => setReportData({ ...reportData, approval: { ...r.approval, ...updated } })}
-        />
+        <div className="approval">
+          <div className="big">
+            <span className="sq"></span>
+            <span className="label">{r.approval.status.replace("_", " ")}</span>
+          </div>
+          <div className="kv-list">
+            <div className="lbl">Operator</div><div className="val">{r.approval.operator}</div>
+            <div className="lbl">Requested</div><div className="val">{r.approval.requested_at}</div>
+            <div className="lbl">SLA</div><div className="val">{r.approval.sla}</div>
+            <div className="lbl">Channel</div><div className="val">UserProxyAgent / HumanGate</div>
+          </div>
+          <hr />
+          <div className="btn-row">
+            <button className="btn">APPROVE &amp; RERUN</button>
+            <button className="btn ghost">REJECT</button>
+          </div>
+        </div>
       </div>
 
       <div className="row" style={{alignItems: "stretch"}}>
@@ -985,1021 +1590,129 @@ function Report({ setScreen, runId }) {
   );
 }
 
-/* ---------------- FORENSIC: span tree ---------------- */
-function _buildSpanTree(spans) {
-  const byId = Object.fromEntries(spans.map(s => [s.span_id, { ...s, children: [] }]));
-  const roots = [];
-  for (const span of spans) {
-    const node = byId[span.span_id];
-    if (span.parent_span_id == null) {
-      roots.push(node);
-    } else {
-      const parent = byId[span.parent_span_id];
-      if (parent) parent.children.push(node);
-      else roots.push(node);
-    }
-  }
-  return { roots, byId };
-}
-
-function _flattenVisible(roots, expandedSet) {
-  const out = [];
-  function walk(node, depth, path) {
-    out.push({ ...node, depth, path });
-    if (expandedSet.has(node.span_id)) {
-      for (const child of node.children) {
-        walk(child, depth + 1, [...path, node.span_id]);
-      }
-    }
-  }
-  for (const root of roots) walk(root, 0, []);
-  return out;
-}
-
-function SpanTreeRow({ node, isExpanded, isSelected, onSelect, onToggle }) {
-  const icon = FORENSIC_KIND_ICONS[node.kind] || "·";
-  const violationCount = (node.contract_refs || []).length;
-  const hasChildren = node.children && node.children.length > 0;
-  const isError = node.status === "error";
-
-  return (
-    <div
-      role="treeitem"
-      aria-expanded={hasChildren ? isExpanded : undefined}
-      aria-selected={isSelected}
-      aria-level={node.depth + 1}
-      tabIndex={isSelected ? 0 : -1}
-      data-span-id={node.span_id}
-      className={`span-tree-row ${isSelected ? "selected" : ""} ${isError ? "err" : ""}`}
-      style={{ paddingLeft: 8 + node.depth * 14 }}
-      onClick={(e) => { e.stopPropagation(); onSelect(node.span_id); }}
-    >
-      {hasChildren ? (
-        <button
-          type="button"
-          className="span-tree-chevron"
-          onClick={(e) => { e.stopPropagation(); onToggle(node.span_id); }}
-          aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
-        >
-          {isExpanded ? "▾" : "▸"}
-        </button>
-      ) : (
-        <span className="span-tree-chevron-spacer" aria-hidden="true">·</span>
-      )}
-      <span className={`span-tree-icon kind-${node.kind}`} aria-hidden="true">{icon}</span>
-      <span className="span-tree-label">
-        <span className="span-tree-name">{node.name.replace(/^concord\./, "")}</span>
-        {node.agent && <span className="span-tree-agent">{node.agent}</span>}
-        {node.tool && <span className="span-tree-tool">{node.tool}</span>}
-      </span>
-      <span className="span-tree-duration">{(node.duration_ms / 1000).toFixed(2)}s</span>
-      {violationCount > 0 && (
-        <span
-          className="span-tree-badge"
-          aria-label={`${violationCount} violation${violationCount === 1 ? "" : "s"}`}
-        >
-          {violationCount}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function SpanTree({ spans, selectedSpanId, setSelectedSpanId }) {
-  const { roots, byId } = useMemo(() => _buildSpanTree(spans), [spans]);
-  const [expanded, setExpanded] = useState(() => new Set(spans.map(s => s.span_id)));
-
-  const toggle = (id) => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const visible = useMemo(() => _flattenVisible(roots, expanded), [roots, expanded]);
-
-  const handleKeyDown = (e) => {
-    const idx = visible.findIndex(n => n.span_id === selectedSpanId);
-    const current = idx >= 0 ? visible[idx] : null;
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      const next = visible[Math.min(idx + 1, visible.length - 1)] || visible[0];
-      if (next) setSelectedSpanId(next.span_id);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      const prev = visible[Math.max(idx - 1, 0)] || visible[0];
-      if (prev) setSelectedSpanId(prev.span_id);
-    } else if (e.key === "ArrowRight" && current && current.children.length > 0) {
-      e.preventDefault();
-      if (!expanded.has(current.span_id)) toggle(current.span_id);
-    } else if (e.key === "ArrowLeft" && current && expanded.has(current.span_id) && current.children.length > 0) {
-      e.preventDefault();
-      toggle(current.span_id);
-    } else if (e.key === "Enter" && current && current.children.length > 0) {
-      e.preventDefault();
-      toggle(current.span_id);
-    } else if (e.key === " " && current) {
-      e.preventDefault();
-      setSelectedSpanId(current.span_id);
-    }
-  };
-
-  if (visible.length === 0) {
-    return <div className="forensic-pane-placeholder">No spans to render</div>;
-  }
-
-  return (
-    <div
-      role="tree"
-      aria-label="Span hierarchy"
-      className="span-tree"
-      onKeyDown={handleKeyDown}
-      tabIndex={0}
-    >
-      {visible.map(node => (
-        <SpanTreeRow
-          key={node.span_id}
-          node={node}
-          isExpanded={expanded.has(node.span_id)}
-          isSelected={node.span_id === selectedSpanId}
-          onSelect={setSelectedSpanId}
-          onToggle={toggle}
-        />
-      ))}
-    </div>
-  );
-}
-
-/* ---------------- FORENSIC: span inspector ---------------- */
-function _patchesForSpan(span, allPatches) {
-  if (!span || !Array.isArray(allPatches)) return [];
-  const violationIds = new Set((span.contract_refs || []).map(r => r.violation_id));
-  if (violationIds.size === 0) return [];
-  return allPatches.filter(p => p.violation && violationIds.has(p.violation));
-}
-
-function _regressionForSpan(span, regressionRoot) {
-  // Two link strategies:
-  //   1. span.kind === "regression" → it IS the regression
-  //   2. span.kind === "repair" → its child regression carries the result
-  // Otherwise fall back to the workflow-level regression summary.
-  if (!span) return null;
-  if (span.kind === "regression") {
-    return {
-      name: span.attributes?.test_name || span.name,
-      status: span.attributes?.test_status || (span.status === "ok" ? "passed" : "failed"),
-      sandbox_id: span.attributes?.sandbox_id,
-      duration_ms: span.duration_ms,
-    };
-  }
-  if (regressionRoot) {
-    return {
-      name: regressionRoot.name,
-      status: regressionRoot.duration_ms ? (regressionRoot.test_status || "passed") : "unknown",
-      sandbox_id: regressionRoot.sandbox_id,
-      duration_ms: regressionRoot.duration_ms,
-    };
-  }
-  return null;
-}
-
-function _prettyJson(value) {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function CollapsibleBlock({ title, children, initialOpen = false }) {
-  const [open, setOpen] = useState(initialOpen);
-  return (
-    <div className={`inspector-block ${open ? "open" : "closed"}`}>
-      <button
-        type="button"
-        className="inspector-block-toggle"
-        onClick={() => setOpen(o => !o)}
-        aria-expanded={open}
-      >
-        <span className="inspector-block-arrow" aria-hidden="true">{open ? "▾" : "▸"}</span>
-        <span>{title}</span>
-      </button>
-      {open && <div className="inspector-block-body">{children}</div>}
-    </div>
-  );
-}
-
-function SpanInspector({ span, allPatches, regressionRoot, onJumpToScreen }) {
-  if (!span) {
-    return (
-      <div className="forensic-pane-placeholder">
-        Select a span from the tree or waterfall to inspect
-      </div>
-    );
-  }
-
-  const patches = _patchesForSpan(span, allPatches);
-  const regression = _regressionForSpan(span, regressionRoot);
-  const violations = span.contract_refs || [];
-  const hasError = span.error && (span.error.type || span.error.message);
-
-  return (
-    <div className="span-inspector" aria-label={`Inspector for ${span.span_id}`}>
-      <header className="inspector-head">
-        <div className="inspector-kind-row">
-          <span className={`inspector-kind kind-${span.kind}`} aria-hidden="true">
-            {FORENSIC_KIND_ICONS[span.kind] || "·"}
-          </span>
-          <span className="inspector-kind-label">{span.kind}</span>
-          <span className={`inspector-status status-${span.status}`}>{span.status}</span>
-        </div>
-        <h3 className="inspector-name">{span.name.replace(/^concord\./, "")}</h3>
-      </header>
-
-      <section className="inspector-section">
-        <h4>Identity</h4>
-        <dl className="inspector-kv">
-          <dt>span_id</dt><dd className="mono">{span.span_id}</dd>
-          <dt>parent_span_id</dt><dd className="mono">{span.parent_span_id || "(root)"}</dd>
-          <dt>trace_id</dt><dd className="mono">{span.trace_id}</dd>
-          {span.agent && (<><dt>agent</dt><dd>{span.agent}</dd></>)}
-          {span.tool && (<><dt>tool</dt><dd>{span.tool}</dd></>)}
-        </dl>
-      </section>
-
-      <section className="inspector-section">
-        <h4>Timing</h4>
-        <dl className="inspector-kv">
-          <dt>start_time</dt><dd className="mono">{span.start_time.toFixed(3)}s</dd>
-          <dt>end_time</dt><dd className="mono">{span.end_time.toFixed(3)}s</dd>
-          <dt>duration</dt><dd className="mono">{span.duration_ms}ms</dd>
-        </dl>
-      </section>
-
-      {hasError && (
-        <section className="inspector-section inspector-error">
-          <h4>Error</h4>
-          <dl className="inspector-kv">
-            {span.error.type && (<><dt>type</dt><dd className="mono">{span.error.type}</dd></>)}
-            {span.error.message && (<><dt>message</dt><dd>{span.error.message}</dd></>)}
-          </dl>
-        </section>
-      )}
-
-      <CollapsibleBlock title={`Input ${typeof span.input === "object" && Object.keys(span.input).length === 0 ? "(empty)" : ""}`}>
-        <pre className="inspector-json">{_prettyJson(span.input)}</pre>
-      </CollapsibleBlock>
-
-      <CollapsibleBlock title={`Output ${typeof span.output === "object" && Object.keys(span.output).length === 0 ? "(empty)" : ""}`}>
-        <pre className="inspector-json">{_prettyJson(span.output)}</pre>
-      </CollapsibleBlock>
-
-      <CollapsibleBlock title={`Attributes (${Object.keys(span.attributes || {}).length})`}>
-        <dl className="inspector-kv">
-          {Object.keys(span.attributes || {}).sort().map(k => (
-            <React.Fragment key={k}>
-              <dt className="mono">{k}</dt>
-              <dd className="mono">{typeof span.attributes[k] === "object" ? _prettyJson(span.attributes[k]) : String(span.attributes[k])}</dd>
-            </React.Fragment>
-          ))}
-        </dl>
-      </CollapsibleBlock>
-
-      {violations.length > 0 && (
-        <section className="inspector-section inspector-violations">
-          <h4>Contract violations ({violations.length})</h4>
-          <ul className="inspector-violation-list">
-            {violations.map((v, i) => (
-              <li key={i}>
-                <button
-                  type="button"
-                  className="inspector-violation-link"
-                  onClick={() => onJumpToScreen && onJumpToScreen("violations")}
-                  aria-label={`View violation ${v.violation_id} on Violations screen`}
-                >
-                  <span className="violation-contract">{v.contract_id}</span>
-                  <span className="violation-severity">{v.severity}</span>
-                  <span className="violation-rule">{v.rule}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {patches.length > 0 && (
-        <section className="inspector-section inspector-repair">
-          <h4>Repair ({patches.length})</h4>
-          <ul className="inspector-repair-list">
-            {patches.map(p => (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  className="inspector-repair-link"
-                  onClick={() => onJumpToScreen && onJumpToScreen("repair")}
-                  aria-label={`Open patch ${p.id} on Repair screen`}
-                >
-                  <span className="patch-id">{p.id}</span>
-                  <span className="patch-primitive">{p.primitive}</span>
-                  <span className="patch-title">{p.title}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {regression && (
-        <section className="inspector-section inspector-regression">
-          <h4>Regression</h4>
-          <dl className="inspector-kv">
-            <dt>name</dt><dd>{regression.name}</dd>
-            <dt>status</dt>
-            <dd>
-              <span className={`pill ${regression.status === "passed" ? "ok" : "fail"}`}>{regression.status}</span>
-            </dd>
-            {regression.sandbox_id && (<><dt>sandbox</dt><dd className="mono">{regression.sandbox_id}</dd></>)}
-            {regression.duration_ms && (<><dt>duration</dt><dd className="mono">{regression.duration_ms}ms</dd></>)}
-          </dl>
-          {onJumpToScreen && (
-            <button
-              type="button"
-              className="btn-link"
-              onClick={() => onJumpToScreen("regression")}
-            >
-              Open on Regression screen →
-            </button>
-          )}
-        </section>
-      )}
-    </div>
-  );
-}
-
-/* ---------------- FORENSIC: timeline waterfall ---------------- */
-function _formatTimeAxis(seconds) {
-  const total = Math.max(0, Math.floor(seconds * 1000));
-  const m = Math.floor(total / 60000);
-  const s = Math.floor((total % 60000) / 1000);
-  const ms = total % 1000;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}.${ms.toString().padStart(3, "0")}`;
-}
-
-function _waterfallBounds(spans) {
-  if (!spans || spans.length === 0) return { t0: 0, total: 1 };
-  const t0 = Math.min(...spans.map(s => s.start_time));
-  const tEnd = Math.max(...spans.map(s => s.end_time));
-  const total = Math.max(tEnd - t0, 0.001); // avoid /0
-  return { t0, total };
-}
-
-function TimelineWaterfall({ spans, selectedSpanId, setSelectedSpanId }) {
-  const ordered = useMemo(
-    () => [...(spans || [])].sort((a, b) => a.start_time - b.start_time),
-    [spans],
-  );
-  const { t0, total } = useMemo(() => _waterfallBounds(ordered), [ordered]);
-
-  const tickCount = 5;
-  const ticks = Array.from({ length: tickCount + 1 }, (_, i) => {
-    const fraction = i / tickCount;
-    return { fraction, label: _formatTimeAxis(t0 + fraction * total) };
-  });
-
-  if (ordered.length === 0) {
-    return <div className="forensic-pane-placeholder">No spans to plot</div>;
-  }
-
-  return (
-    <div className="waterfall" role="figure" aria-label="Span timing plot">
-      <div className="waterfall-axis" aria-hidden="true">
-        {ticks.map((t, i) => (
-          <span key={i} className="waterfall-tick" style={{ left: `${t.fraction * 100}%` }}>
-            {t.label}
-          </span>
-        ))}
-      </div>
-      <div className="waterfall-rows" role="list">
-        {ordered.map((span) => {
-          const offset = ((span.start_time - t0) / total) * 100;
-          const width = Math.max(((span.end_time - span.start_time) / total) * 100, 0.3);
-          const isSelected = span.span_id === selectedSpanId;
-          const isError = span.status === "error";
-          const violations = (span.contract_refs || []).length;
-          return (
-            <button
-              type="button"
-              key={span.span_id}
-              role="listitem"
-              data-span-id={span.span_id}
-              className={`waterfall-row ${isSelected ? "selected" : ""} ${isError ? "err" : ""}`}
-              onClick={() => setSelectedSpanId(span.span_id)}
-              aria-label={
-                `${span.name} ${span.agent || ""} ${(span.duration_ms / 1000).toFixed(2)}s `
-                + `${isError ? "(error)" : ""} ${violations > 0 ? `${violations} violations` : ""}`
-              }
-              aria-pressed={isSelected}
-              title={`${span.name}\n${(span.duration_ms / 1000).toFixed(2)}s · ${span.status}`}
-            >
-              <span className="waterfall-row-label">
-                <span className={`waterfall-row-icon kind-${span.kind}`} aria-hidden="true">
-                  {FORENSIC_KIND_ICONS[span.kind] || "·"}
-                </span>
-                <span className="waterfall-row-name">{span.name.replace(/^concord\./, "")}</span>
-              </span>
-              <span className="waterfall-bar-track" aria-hidden="true">
-                <span
-                  className={`waterfall-bar kind-${span.kind} ${isError ? "err" : ""}`}
-                  style={{ left: `${offset}%`, width: `${width}%` }}
-                />
-              </span>
-              <span className="waterfall-row-duration">{(span.duration_ms / 1000).toFixed(2)}s</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- FORENSIC ---------------- */
-function Forensic({ selectedSpanId, setSelectedSpanId, onJumpToScreen }) {
-  const spans = D.spans || [];
-  const hasSpans = spans.length > 0;
-
-  return (
-    <>
-      <div className="section-head">
-        <h2>Forensic Trace &nbsp;//&nbsp; span tree · timeline · inspector</h2>
-        <div className="right">
-          {hasSpans
-            ? `${spans.length} span${spans.length === 1 ? "" : "s"}`
-            : "no span data"}
-        </div>
-      </div>
-
-      {!hasSpans && (
-        <div className="forensic-empty" role="status">
-          <h3>No span data yet</h3>
-          <p>
-            Spans appear when a run is executed via the Submit Run screen against an
-            AG2 swarm. Submit a <code>task_spec</code> in stub or live mode to populate
-            this view.
-          </p>
-        </div>
-      )}
-
-      {hasSpans && (
-        <div className="forensic-grid" role="region" aria-label="Forensic span explorer">
-          <aside className="forensic-pane forensic-tree" aria-label="Span tree">
-            <div className="forensic-pane-head">Span tree</div>
-            <div className="forensic-pane-body forensic-pane-body-tree">
-              <SpanTree
-                spans={spans}
-                selectedSpanId={selectedSpanId}
-                setSelectedSpanId={setSelectedSpanId}
-              />
-            </div>
-          </aside>
-
-          <section className="forensic-pane forensic-waterfall" aria-label="Timeline waterfall pane">
-            <div className="forensic-pane-head">Timeline waterfall</div>
-            <div className="forensic-pane-body forensic-pane-body-waterfall">
-              <TimelineWaterfall
-                spans={spans}
-                selectedSpanId={selectedSpanId}
-                setSelectedSpanId={setSelectedSpanId}
-              />
-            </div>
-          </section>
-
-          <aside className="forensic-pane forensic-inspector" aria-label="Span inspector pane">
-            <div className="forensic-pane-head">Span inspector</div>
-            <div className="forensic-pane-body forensic-pane-body-inspector">
-              <SpanInspector
-                span={selectedSpanId ? spans.find(s => s.span_id === selectedSpanId) : null}
-                allPatches={D.patches || []}
-                regressionRoot={D.test || null}
-                onJumpToScreen={onJumpToScreen}
-              />
-            </div>
-          </aside>
-        </div>
-      )}
-    </>
-  );
-}
-
-/* ---------------- WORKFLOWS ---------------- */
-function WorkflowsScreen({ setScreen, onPickWorkflow }) {
-  const [workflows, setWorkflows] = useState([]);
-  const [state, setState] = useState("loading"); // loading|loaded|error
-  const [error, setError] = useState("");
-  const [selectedId, setSelectedId] = useState(null);
-  const [detail, setDetail] = useState(null);
-  const [detailState, setDetailState] = useState("idle");
-  const [detailError, setDetailError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const res = await fetch("/api/workflows");
-        if (!res.ok) throw new Error(`workflows fetch ${res.status}`);
-        const body = await res.json();
-        const list = Array.isArray(body) ? body : (body.workflows || []);
-        if (!cancelled) {
-          setWorkflows(list);
-          setState("loaded");
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(String(err.message || err));
-          setState("error");
-        }
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, []);
-
-  async function loadDetail(workflowId) {
-    setSelectedId(workflowId);
-    setDetail(null);
-    setDetailState("loading");
-    setDetailError("");
-    try {
-      const res = await fetch(`/api/workflows/${encodeURIComponent(workflowId)}`);
-      if (res.status === 404) {
-        setDetailError(`Workflow ${workflowId} doesn't exist or was deleted.`);
-        setDetailState("error");
-        return;
-      }
-      if (!res.ok) {
-        setDetailError(`Server error ${res.status} loading workflow detail.`);
-        setDetailState("error");
-        return;
-      }
-      const body = await res.json();
-      setDetail(body);
-      setDetailState("loaded");
-    } catch (err) {
-      setDetailError(`Network error: ${err.message || err}`);
-      setDetailState("error");
-    }
-  }
-
-  function _id(wf) { return wf.workflow_id || wf.id; }
-  function _name(wf) { return wf.name || _id(wf); }
-  function _agentCount(wf) { return (wf.agents || []).length; }
-  function _contractCount(wf) { return (wf.contracts || []).length; }
-
-  return (
-    <>
-      <div className="section-head">
-        <h2>Workflows &nbsp;//&nbsp; registered topology</h2>
-        <div className="right">
-          {state === "loaded" ? `${workflows.length} workflow${workflows.length === 1 ? "" : "s"}` : ""}
-        </div>
-      </div>
-
-      {state === "loading" && (
-        <div className="workflows-loading" role="status" aria-live="polite">Loading workflows…</div>
-      )}
-
-      {state === "error" && (
-        <div className="workflows-error" role="alert">
-          Could not load workflows: {error}
-        </div>
-      )}
-
-      {state === "loaded" && workflows.length === 0 && (
-        <div className="workflows-empty">
-          <h3>No workflows registered yet</h3>
-          <p>
-            Register a workflow via <code>POST /api/workflows</code> first, then submit a
-            run against it from the <button className="btn-link" onClick={() => setScreen("submit")}>Submit Run</button> screen.
-          </p>
-        </div>
-      )}
-
-      {state === "loaded" && workflows.length > 0 && (
-        <div className="workflows-grid">
-          <div className="workflows-list" role="list" aria-label="Registered workflows">
-            {workflows.map(wf => (
-              <button
-                key={_id(wf)}
-                role="listitem"
-                className={`workflow-row ${selectedId === _id(wf) ? "selected" : ""}`}
-                onClick={() => loadDetail(_id(wf))}
-              >
-                <div className="workflow-row-name">{_name(wf)}</div>
-                <div className="workflow-row-id">{_id(wf)}</div>
-                <div className="workflow-row-meta">
-                  {_agentCount(wf)} agent{_agentCount(wf) === 1 ? "" : "s"}
-                  &nbsp;·&nbsp; {_contractCount(wf)} contract{_contractCount(wf) === 1 ? "" : "s"}
-                </div>
-                {wf.owner && <div className="workflow-row-owner">{wf.owner}</div>}
-              </button>
-            ))}
-          </div>
-
-          <div className="workflow-detail" aria-live="polite">
-            {!selectedId && (
-              <div className="workflow-detail-empty">Pick a workflow on the left.</div>
-            )}
-            {selectedId && detailState === "loading" && (
-              <div role="status">Loading workflow detail…</div>
-            )}
-            {selectedId && detailState === "error" && (
-              <div role="alert" className="workflows-error">{detailError}</div>
-            )}
-            {selectedId && detailState === "loaded" && detail && (
-              <>
-                <div className="workflow-detail-head">
-                  <h3>{detail.name || detail.workflow_id}</h3>
-                  <span className="muted">{detail.workflow_id}</span>
-                </div>
-
-                <section className="workflow-section">
-                  <h4>Topology</h4>
-                  <pre className="topology-preview">{JSON.stringify(detail.declared_topology || {}, null, 2)}</pre>
-                </section>
-
-                <section className="workflow-section">
-                  <h4>Agents ({(detail.agents || []).length})</h4>
-                  <ul className="workflow-agent-list">
-                    {(detail.agents || []).map((a, i) => (
-                      <li key={a.name || i}>{a.name || JSON.stringify(a)}</li>
-                    ))}
-                  </ul>
-                </section>
-
-                <section className="workflow-section">
-                  <h4>Contracts ({(detail.contracts || []).length})</h4>
-                  <ul className="workflow-contract-list">
-                    {(detail.contracts || []).map((c, i) => (
-                      <li key={c.id || i}>
-                        <span className="contract-id">{c.id || `C-${i + 1}`}</span>
-                        <span className="contract-type">{c.type || "—"}</span>
-                        <span className="contract-rule">{c.rule || ""}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-
-                <div className="btn-row">
-                  <button
-                    className="btn"
-                    onClick={() => {
-                      if (onPickWorkflow) onPickWorkflow(detail);
-                      setScreen("submit");
-                    }}
-                  >
-                    SUBMIT RUN AGAINST THIS WORKFLOW
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-/* ---------------- SUBMIT RUN ---------------- */
-function SubmitRun({ setScreen, onRunSubmitted }) {
-  const [workflows, setWorkflows] = useState([]);
-  const [workflowsState, setWorkflowsState] = useState("loading"); // loading|loaded|error
-  const [workflowsError, setWorkflowsError] = useState("");
-  const [workflowId, setWorkflowId] = useState("");
-  const [task, setTask] = useState("");
-  const [researchQuestion, setResearchQuestion] = useState("");
-  const [mode, setMode] = useState("stub");
-  const [submitState, setSubmitState] = useState("idle"); // idle|submitting|error
-  const [submitError, setSubmitError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState({});
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const res = await fetch("/api/workflows");
-        if (!res.ok) throw new Error(`workflows fetch ${res.status}`);
-        const body = await res.json();
-        const list = Array.isArray(body) ? body : (body.workflows || []);
-        if (!cancelled) {
-          setWorkflows(list);
-          setWorkflowId(list[0]?.workflow_id || list[0]?.id || "");
-          setWorkflowsState("loaded");
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setWorkflowsError(String(err.message || err));
-          setWorkflowsState("error");
-        }
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, []);
-
-  const validate = () => {
-    const errs = {};
-    if (!workflowId) errs.workflow = "Pick a workflow";
-    if (!task.trim()) errs.task = "Task is required";
-    else if (task.length > TASK_MAX) errs.task = `Task must be ≤ ${TASK_MAX} chars`;
-    if (!researchQuestion.trim()) errs.research_question = "Research question is required";
-    else if (researchQuestion.length > RESEARCH_QUESTION_MAX) errs.research_question = `Question must be ≤ ${RESEARCH_QUESTION_MAX} chars`;
-    return errs;
-  };
-
-  const errors = validate();
-  const canSubmit = Object.keys(errors).length === 0 && submitState !== "submitting";
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    const errs = validate();
-    setFieldErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-
-    setSubmitState("submitting");
-    setSubmitError("");
-    try {
-      const res = await fetch("/api/runs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workflow_id: workflowId,
-          task_spec: { task: task.trim(), research_question: researchQuestion.trim(), mode },
-        }),
-      });
-      if (res.status === 422 || res.status === 400) {
-        const body = await res.json().catch(() => ({}));
-        setSubmitError(`Validation error: ${body.detail || res.statusText}`);
-        setSubmitState("error");
-        return;
-      }
-      if (res.status === 404) {
-        setSubmitError(`Workflow ${workflowId} not found. Refresh the workflow list.`);
-        setSubmitState("error");
-        return;
-      }
-      if (!res.ok) {
-        setSubmitError(`Server error ${res.status}. Try again or check the API.`);
-        setSubmitState("error");
-        return;
-      }
-      const body = await res.json();
-      const runId = body.run_id;
-      setSubmitState("idle");
-      if (onRunSubmitted) onRunSubmitted(runId);
-      if (setScreen) setScreen("trace");
-    } catch (err) {
-      setSubmitError(`Network error: ${err.message || err}`);
-      setSubmitState("error");
-    }
-  }
-
-  return (
-    <>
-      <div className="section-head">
-        <h2>Submit Run &nbsp;//&nbsp; new task_spec</h2>
-        <div className="right">stub mode runs locally · live mode hits the AG2 swarm</div>
-      </div>
-
-      <form className="submit-run-form" onSubmit={handleSubmit} aria-label="Submit run form">
-        <div className="form-row">
-          <label htmlFor="workflow-picker" className="form-label">Workflow</label>
-          {workflowsState === "loading" && <div className="form-loading" role="status">Loading workflows…</div>}
-          {workflowsState === "error" && (
-            <div className="form-error" role="alert">
-              Could not load workflows: {workflowsError}
-            </div>
-          )}
-          {workflowsState === "loaded" && workflows.length === 0 && (
-            <div className="form-empty">No workflows registered yet. Register one first.</div>
-          )}
-          {workflowsState === "loaded" && workflows.length > 0 && (
-            <select
-              id="workflow-picker"
-              className="form-select"
-              value={workflowId}
-              onChange={(e) => setWorkflowId(e.target.value)}
-              aria-required="true"
-              aria-invalid={Boolean(fieldErrors.workflow)}
-            >
-              {workflows.map(wf => (
-                <option key={wf.workflow_id || wf.id} value={wf.workflow_id || wf.id}>
-                  {wf.name || wf.workflow_id || wf.id}
-                </option>
-              ))}
-            </select>
-          )}
-          {fieldErrors.workflow && <div className="form-field-error">{fieldErrors.workflow}</div>}
-        </div>
-
-        <div className="form-row">
-          <label htmlFor="task-input" className="form-label">Task</label>
-          <textarea
-            id="task-input"
-            className="form-textarea"
-            value={task}
-            onChange={(e) => setTask(e.target.value)}
-            maxLength={TASK_MAX}
-            rows={3}
-            aria-required="true"
-            aria-invalid={Boolean(fieldErrors.task)}
-            aria-describedby="task-counter task-error"
-            placeholder="What is the agent supposed to do?"
-          />
-          <div id="task-counter" className="form-counter">{task.length} / {TASK_MAX}</div>
-          {fieldErrors.task && <div id="task-error" className="form-field-error">{fieldErrors.task}</div>}
-        </div>
-
-        <div className="form-row">
-          <label htmlFor="research-question-input" className="form-label">Research Question</label>
-          <textarea
-            id="research-question-input"
-            className="form-textarea"
-            value={researchQuestion}
-            onChange={(e) => setResearchQuestion(e.target.value)}
-            maxLength={RESEARCH_QUESTION_MAX}
-            rows={2}
-            aria-required="true"
-            aria-invalid={Boolean(fieldErrors.research_question)}
-            aria-describedby="rq-counter rq-error"
-            placeholder="What concrete question should the swarm answer?"
-          />
-          <div id="rq-counter" className="form-counter">{researchQuestion.length} / {RESEARCH_QUESTION_MAX}</div>
-          {fieldErrors.research_question && <div id="rq-error" className="form-field-error">{fieldErrors.research_question}</div>}
-        </div>
-
-        <fieldset className="form-row form-mode" aria-required="true">
-          <legend className="form-label">Mode</legend>
-          <label className="form-radio">
-            <input
-              type="radio"
-              name="mode"
-              value="stub"
-              checked={mode === "stub"}
-              onChange={(e) => setMode(e.target.value)}
-            />
-            <span><strong>stub</strong> — deterministic, no LLM</span>
-          </label>
-          <label className="form-radio">
-            <input
-              type="radio"
-              name="mode"
-              value="live"
-              checked={mode === "live"}
-              onChange={(e) => setMode(e.target.value)}
-            />
-            <span><strong>live</strong> — real AG2 swarm + Tavily + LLM</span>
-          </label>
-        </fieldset>
-
-        {submitError && (
-          <div className="form-error" role="alert" aria-live="polite">
-            {submitError}
-          </div>
-        )}
-
-        <div className="form-actions">
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={!canSubmit}
-            aria-busy={submitState === "submitting"}
-          >
-            {submitState === "submitting" ? "Submitting…" : "Submit run"}
-          </button>
-        </div>
-      </form>
-    </>
-  );
-}
-
 /* ---------------- APP ---------------- */
 function App() {
   const [screen, setScreen] = useState("overview");
   const [selectedPatch, setSelectedPatch] = useState(null);
-  const [currentRunId, setCurrentRunId] = useState(null);
-  const [streamToken, setStreamToken] = useState(null);
-  const [streamTokenError, setStreamTokenError] = useState(null);
-  const [selectedSpanId, setSelectedSpanId] = useState(null);
+  const [appliedPatches, setAppliedPatches] = useState([]);
+  const [data, setData] = useState(FIXTURE_DATA);
+  const [sourceMode, setSourceMode] = useState("fixture");
+  const [connectionState, setConnectionState] = useState("idle");
+  const [liveStatus, setLiveStatus] = useState(FIXTURE_DATA.status || "completed");
+  const [tenantUsage, setTenantUsage] = useState(null);
+  D = data;
 
   // when leaving repair screen, clear filter
   useEffect(() => { if (screen !== "repair") setSelectedPatch(null); }, [screen]);
 
-  // Fetch a stream token whenever a fresh run is submitted so the SSE
-  // consumer can authenticate without leaking the API key into a URL.
   useEffect(() => {
-    if (!currentRunId) {
-      setStreamToken(null);
-      return undefined;
+    if (sourceMode === "fixture") {
+      setConnectionState("idle");
+      setLiveStatus(FIXTURE_DATA.status || "completed");
+      setData(FIXTURE_DATA);
+      setTenantUsage(null);
+      return;
     }
+
+    const liveRunId = new URLSearchParams(window.location.search).get("run") || window.CONCORD_RUN_ID || FIXTURE_DATA.run.id;
+    const headers = liveHeaders();
     let cancelled = false;
-    fetchStreamToken(currentRunId)
-      .then((token) => {
-        if (!cancelled) {
-          setStreamToken(token);
-          setStreamTokenError(null);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setStreamTokenError(err);
-          setStreamToken(null);
-        }
-      });
-    return () => { cancelled = true; };
-  }, [currentRunId]);
+    let eventSource = null;
+    let terminalSeen = false;
+    let lastSequence = 0;
+    let reconnectTimer = null;
 
-  const handleRunSubmitted = (runId) => {
-    setCurrentRunId(runId);
-  };
-
-  const goToForensicSpan = (spanId) => {
-    setSelectedSpanId(spanId);
-    setScreen("forensic");
-  };
-
-  // Hash routing — read on mount and when hash changes; write when screen/span changes
-  useEffect(() => {
-    const applyHash = () => {
-      const hash = window.location.hash.slice(1);
-      if (!hash) return;
-      const params = new URLSearchParams(hash);
-      const s = params.get("screen");
-      const span = params.get("span");
-      if (s && SCREENS.find(x => x.id === s)) setScreen(s);
-      if (span) setSelectedSpanId(span);
-    };
-    applyHash();
-    window.addEventListener("hashchange", applyHash);
-    return () => window.removeEventListener("hashchange", applyHash);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (screen) params.set("screen", screen);
-    if (selectedSpanId) params.set("span", selectedSpanId);
-    const newHash = params.toString();
-    if (window.location.hash.slice(1) !== newHash) {
-      // replaceState to avoid polluting history on every nav click
-      history.replaceState(null, "", `#${newHash}`);
+    async function refreshRun() {
+      const response = await fetch(`/api/runs/${liveRunId}`, { headers });
+      if (!response.ok) throw new Error(`run fetch failed: ${response.status}`);
+      const liveData = await response.json();
+      if (cancelled) return;
+      setData(normalizeDashboardData(liveData, { fallbackFixture: false }));
+      setLiveStatus(liveData.status || "loaded");
+      try {
+        const usageResponse = await fetch("/api/tenant/usage", { headers });
+        if (usageResponse.ok && !cancelled) setTenantUsage(await usageResponse.json());
+      } catch (_error) {
+        if (!cancelled) setTenantUsage(null);
+      }
     }
-  }, [screen, selectedSpanId]);
+
+    async function openLiveRun() {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      setConnectionState("connecting");
+      try {
+        await refreshRun();
+        if (cancelled) return;
+        const streamToken = await openStreamToken(liveRunId, headers);
+        if (cancelled) return;
+        eventSource = new EventSource(`/api/runs/${liveRunId}/events?stream_token=${encodeURIComponent(streamToken)}`);
+        eventSource.addEventListener("run.status", async (event) => {
+          const payload = JSON.parse(event.data);
+          const sequence = Number(payload.sequence || event.lastEventId || 0);
+          if (sequence && sequence <= lastSequence) return;
+          if (sequence) lastSequence = sequence;
+          if (cancelled) return;
+          setConnectionState("connected");
+          setLiveStatus(payload.status);
+          if (payload.terminal) {
+            terminalSeen = true;
+            eventSource.close();
+            await refreshRun();
+            if (!cancelled) setConnectionState("connected");
+          }
+        });
+        eventSource.onopen = () => {
+          if (!cancelled) setConnectionState("connected");
+        };
+        eventSource.onerror = () => {
+          if (terminalSeen) return;
+          if (!cancelled) {
+            setConnectionState("connecting");
+            reconnectTimer = setTimeout(openLiveRun, 1000);
+          }
+        };
+      } catch (error) {
+        if (!cancelled) {
+          setConnectionState("error");
+          setLiveStatus("unavailable");
+        }
+      }
+    }
+
+    openLiveRun();
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (eventSource) eventSource.close();
+    };
+  }, [sourceMode]);
 
   return (
     <div className="shell" data-screen-label={SCREENS.find(s=>s.id===screen).num + " " + SCREENS.find(s=>s.id===screen).label}>
-      <a href="#main-content" className="skip-link">Skip to main content</a>
-      <TopBar screen={screen} setScreen={setScreen} />
-      <MetaStrip />
-      {currentRunId && (
-        <RunProgress runId={currentRunId} streamToken={streamToken} />
-      )}
-      {streamTokenError && (
-        <div className="run-progress run-progress-err" role="alert">
-          stream token failed: {streamTokenError.message}
-        </div>
-      )}
-      <main className="main" id="main-content" tabIndex={-1} aria-label={`${SCREENS.find(s=>s.id===screen).label} screen`}>
-        <h1 className="visually-hidden">
-          {SCREENS.find(s=>s.id===screen).label} — Concord Lite
-        </h1>
-        {screen === "overview"   && <Overview setScreen={setScreen} />}
+      <TopBar
+        screen={screen}
+        setScreen={setScreen}
+        sourceMode={sourceMode}
+        setSourceMode={setSourceMode}
+        connectionState={connectionState}
+        liveStatus={liveStatus}
+      />
+      <MetaStrip sourceMode={sourceMode} connectionState={connectionState} />
+      <main className="main">
+        {screen === "overview"   && <Overview setScreen={setScreen} tenantUsage={tenantUsage} />}
+        {screen === "topology"   && <Topology setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
         {screen === "trace"      && <Trace />}
-        {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} goToForensicSpan={goToForensicSpan} />}
-        {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} goToForensicSpan={goToForensicSpan} />}
-        {screen === "regression" && <Regression goToForensicSpan={goToForensicSpan} />}
-        {screen === "report"     && <Report setScreen={setScreen} runId={currentRunId} />}
-        {screen === "submit"     && <SubmitRun setScreen={setScreen} onRunSubmitted={handleRunSubmitted} />}
-        {screen === "workflows"  && <WorkflowsScreen setScreen={setScreen} />}
-        {screen === "forensic"   && <Forensic selectedSpanId={selectedSpanId} setSelectedSpanId={setSelectedSpanId} onJumpToScreen={setScreen} />}
+        {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
+        {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} appliedPatches={appliedPatches} setAppliedPatches={setAppliedPatches} setScreen={setScreen} />}
+        {screen === "regression" && <Regression />}
+        {screen === "report"     && <Report setScreen={setScreen} />}
       </main>
     </div>
   );
 }
 
-const _rootEl = typeof document !== "undefined" ? document.getElementById("root") : null;
-if (_rootEl) {
-  ReactDOM.createRoot(_rootEl).render(<App />);
-}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 
-export {
-  App, Overview, Trace, Violations, Repair, Regression, Report, SubmitRun,
-  WorkflowsScreen, Forensic, SpanTree, TimelineWaterfall, SpanInspector,
-  ViewSpanLink,
-  LoadingState, EmptyState, ErrorState,
-  RunProgress, useRunEventStream, fetchStreamToken,
-  ApprovalPanel,
-  TERMINAL_STATUSES, STATUS_KIND, SSE_MAX_RECONNECTS, FORENSIC_KIND_ICONS,
-  SCREENS,
-};
