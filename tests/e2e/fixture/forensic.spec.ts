@@ -8,7 +8,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("forensic / agent-trace UI", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?fixture=1");
     await page.locator("nav.tabs .tab", { hasText: "Agent Trace" }).dispatchEvent("click");
     await expect(page.locator("nav.tabs .tab.active")).toContainText("Agent Trace");
   });

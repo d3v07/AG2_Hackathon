@@ -1591,12 +1591,349 @@ function Report({ setScreen }) {
 }
 
 /* ---------------- APP ---------------- */
+/* ---------------- SubmitForm (Phase 2) ----------------
+   Landing page for the new product flow. Live runs are submitted from
+   here; fixture mode is reachable via the legacy "?fixture=1" param or
+   the sidebar control. */
+const TASK_MAX = 1000;
+const RESEARCH_QUESTION_MAX = 500;
+
+function SubmitForm({ onSubmitted, onSwitchToFixture }) {
+  const [workflows, setWorkflows] = useState([]);
+  const [workflowsState, setWorkflowsState] = useState("loading");
+  const [workflowsError, setWorkflowsError] = useState("");
+  const [workflowId, setWorkflowId] = useState("");
+  const [task, setTask] = useState("");
+  const [researchQuestion, setResearchQuestion] = useState("");
+  const [mode, setMode] = useState("stub");
+  const [submitState, setSubmitState] = useState("idle");
+  const [submitError, setSubmitError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/workflows", { headers: liveHeaders() });
+        if (!res.ok) throw new Error(`workflows fetch ${res.status}`);
+        const body = await res.json();
+        const list = Array.isArray(body) ? body : (body.workflows || []);
+        if (!cancelled) {
+          setWorkflows(list);
+          setWorkflowId(list[0]?.workflow_id || list[0]?.id || "");
+          setWorkflowsState("loaded");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setWorkflowsError(String(err.message || err));
+          setWorkflowsState("error");
+        }
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const canSubmit =
+    workflowId &&
+    task.trim() &&
+    researchQuestion.trim() &&
+    task.length <= TASK_MAX &&
+    researchQuestion.length <= RESEARCH_QUESTION_MAX &&
+    submitState !== "submitting";
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setSubmitState("submitting");
+    setSubmitError("");
+    try {
+      const res = await fetch("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...liveHeaders() },
+        body: JSON.stringify({
+          workflow_id: workflowId,
+          task_spec: { task: task.trim(), research_question: researchQuestion.trim(), mode },
+        }),
+      });
+      if (res.status === 422 || res.status === 400) {
+        const body = await res.json().catch(() => ({}));
+        setSubmitError(`Validation error: ${body.detail || res.statusText}`);
+        setSubmitState("error");
+        return;
+      }
+      if (res.status === 404) {
+        setSubmitError(`Workflow ${workflowId} not found.`);
+        setSubmitState("error");
+        return;
+      }
+      if (!res.ok) {
+        setSubmitError(`Server error ${res.status}.`);
+        setSubmitState("error");
+        return;
+      }
+      const body = await res.json();
+      setSubmitState("idle");
+      if (onSubmitted) onSubmitted(body.run_id);
+    } catch (err) {
+      setSubmitError(`Network error: ${err.message || err}`);
+      setSubmitState("error");
+    }
+  }
+
+  return (
+    <div className="landing">
+      <div className="landing-card">
+        <header className="landing-head">
+          <h1 className="landing-mark">CONCORD · LITE</h1>
+          <p className="landing-sub">
+            Submit a research task. Watch the AG2 swarm work it. Concord catches contract violations and proposes repairs in real time.
+          </p>
+        </header>
+
+        <form className="submit-form" onSubmit={handleSubmit} aria-label="Submit run">
+          <div className="form-row">
+            <label htmlFor="workflow-picker" className="form-label">Workflow</label>
+            {workflowsState === "loading" && <div className="form-loading" role="status">Loading workflows…</div>}
+            {workflowsState === "error" && (
+              <div className="form-error" role="alert">Could not load workflows: {workflowsError}</div>
+            )}
+            {workflowsState === "loaded" && workflows.length === 0 && (
+              <div className="form-empty">
+                No workflows registered yet. Register one via{" "}
+                <code>POST /api/workflows</code> first.
+              </div>
+            )}
+            {workflowsState === "loaded" && workflows.length > 0 && (
+              <select
+                id="workflow-picker"
+                className="form-select"
+                value={workflowId}
+                onChange={(e) => setWorkflowId(e.target.value)}
+                aria-required="true"
+              >
+                {workflows.map((wf) => (
+                  <option key={wf.workflow_id || wf.id} value={wf.workflow_id || wf.id}>
+                    {wf.name || wf.workflow_id || wf.id}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="form-row">
+            <label htmlFor="task-input" className="form-label">Task</label>
+            <textarea
+              id="task-input"
+              className="form-textarea"
+              value={task}
+              onChange={(e) => setTask(e.target.value)}
+              maxLength={TASK_MAX}
+              rows={3}
+              aria-required="true"
+              placeholder="What is the agent supposed to do?"
+            />
+            <div className="form-counter">{task.length} / {TASK_MAX}</div>
+          </div>
+
+          <div className="form-row">
+            <label htmlFor="research-question-input" className="form-label">Research Question</label>
+            <textarea
+              id="research-question-input"
+              className="form-textarea"
+              value={researchQuestion}
+              onChange={(e) => setResearchQuestion(e.target.value)}
+              maxLength={RESEARCH_QUESTION_MAX}
+              rows={2}
+              aria-required="true"
+              placeholder="What concrete question should the swarm answer?"
+            />
+            <div className="form-counter">{researchQuestion.length} / {RESEARCH_QUESTION_MAX}</div>
+          </div>
+
+          <fieldset className="form-mode" aria-required="true">
+            <legend className="form-label">Mode</legend>
+            <label className="form-radio">
+              <input type="radio" name="mode" value="stub" checked={mode === "stub"} onChange={(e) => setMode(e.target.value)} />
+              <span><strong>stub</strong> — deterministic, no LLM credentials needed</span>
+            </label>
+            <label className="form-radio">
+              <input type="radio" name="mode" value="live" checked={mode === "live"} onChange={(e) => setMode(e.target.value)} />
+              <span><strong>live</strong> — real AG2 swarm + Tavily + LLM</span>
+            </label>
+          </fieldset>
+
+          {submitError && (
+            <div className="form-error" role="alert" aria-live="polite">{submitError}</div>
+          )}
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn-link"
+              onClick={onSwitchToFixture}
+            >
+              View demo fixture run →
+            </button>
+            <button type="submit" className="btn-primary" disabled={!canSubmit} aria-busy={submitState === "submitting"}>
+              {submitState === "submitting" ? "Submitting…" : "Run task"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Sidebar (Phase 2) ----------------
+   Run history fetched from /api/runs. Click to open ?run=ID.
+   "Submit new" button returns to landing. */
+function Sidebar({ currentRunId, onPickRun, onSubmitNew, onPickFixture, expanded, setExpanded }) {
+  const [runs, setRuns] = useState([]);
+  const [state, setState] = useState("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/runs", { headers: liveHeaders() });
+        if (!res.ok) throw new Error(`runs ${res.status}`);
+        const body = await res.json();
+        const ids = Array.isArray(body) ? body : (body.run_ids || body.runs || []);
+        if (!cancelled) {
+          setRuns(ids.slice(0, 20));
+          setState("loaded");
+        }
+      } catch {
+        if (!cancelled) setState("error");
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [currentRunId]);
+
+  return (
+    <aside className={`sidebar ${expanded ? "expanded" : "collapsed"}`} aria-label="Run history">
+      <button
+        type="button"
+        className="sidebar-toggle"
+        onClick={() => setExpanded((e) => !e)}
+        aria-expanded={expanded}
+        aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+      >
+        {expanded ? "◀" : "▶"}
+      </button>
+      {expanded && (
+        <div className="sidebar-body">
+          <div className="sidebar-section">
+            <button type="button" className="btn-primary sidebar-cta" onClick={onSubmitNew}>+ New run</button>
+          </div>
+          <div className="sidebar-section">
+            <h3 className="sidebar-heading">Recent runs</h3>
+            {state === "loading" && <div className="sidebar-empty">Loading…</div>}
+            {state === "error" && <div className="sidebar-empty">Could not load runs</div>}
+            {state === "loaded" && runs.length === 0 && <div className="sidebar-empty">No runs yet</div>}
+            {state === "loaded" && runs.length > 0 && (
+              <ul className="sidebar-runs">
+                {runs.map((id) => (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      className={`sidebar-run ${currentRunId === id ? "selected" : ""}`}
+                      onClick={() => onPickRun(id)}
+                    >
+                      {id}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="sidebar-section">
+            <button type="button" className="btn-link" onClick={onPickFixture}>Open fixture demo</button>
+          </div>
+        </div>
+      )}
+    </aside>
+  );
+}
+
 function App() {
+  // View state: "landing" (SubmitForm) | "dashboard" (legacy multi-screen view)
+  // ?run=<id> or ?fixture=1 lands directly in dashboard mode; otherwise landing.
+  const initialView = (() => {
+    if (typeof window === "undefined") return "landing";
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("run") || params.get("fixture") === "1") return "dashboard";
+    return "landing";
+  })();
+  const [view, setView] = useState(initialView);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [currentRunId, setCurrentRunId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("run") || null;
+  });
+
+  function navigateToRun(runId) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("run", runId);
+    url.searchParams.delete("fixture");
+    window.history.pushState({}, "", url);
+    setCurrentRunId(runId);
+    setView("dashboard");
+  }
+  function navigateToFixture() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("fixture", "1");
+    url.searchParams.delete("run");
+    window.history.pushState({}, "", url);
+    setCurrentRunId(null);
+    setView("dashboard");
+  }
+  function navigateToLanding() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("run");
+    url.searchParams.delete("fixture");
+    window.history.pushState({}, "", url);
+    setCurrentRunId(null);
+    setView("landing");
+  }
+
+  if (view === "landing") {
+    return (
+      <div className="shell shell-landing">
+        <Sidebar
+          currentRunId={null}
+          onPickRun={navigateToRun}
+          onSubmitNew={navigateToLanding}
+          onPickFixture={navigateToFixture}
+          expanded={sidebarExpanded}
+          setExpanded={setSidebarExpanded}
+        />
+        <SubmitForm
+          onSubmitted={navigateToRun}
+          onSwitchToFixture={navigateToFixture}
+        />
+      </div>
+    );
+  }
+
+  return <Dashboard
+    onSubmitNew={navigateToLanding}
+    onPickRun={navigateToRun}
+    onPickFixture={navigateToFixture}
+    sidebarExpanded={sidebarExpanded}
+    setSidebarExpanded={setSidebarExpanded}
+    currentRunIdFromUrl={currentRunId}
+  />;
+}
+
+function Dashboard({ onSubmitNew, onPickRun, onPickFixture, sidebarExpanded, setSidebarExpanded, currentRunIdFromUrl }) {
   const [screen, setScreen] = useState("overview");
   const [selectedPatch, setSelectedPatch] = useState(null);
   const [appliedPatches, setAppliedPatches] = useState([]);
+  const initialMode = currentRunIdFromUrl ? "live" : "fixture";
   const [data, setData] = useState(FIXTURE_DATA);
-  const [sourceMode, setSourceMode] = useState("fixture");
+  const [sourceMode, setSourceMode] = useState(initialMode);
   const [connectionState, setConnectionState] = useState("idle");
   const [liveStatus, setLiveStatus] = useState(FIXTURE_DATA.status || "completed");
   const [tenantUsage, setTenantUsage] = useState(null);
@@ -1691,25 +2028,35 @@ function App() {
   }, [sourceMode]);
 
   return (
-    <div className="shell" data-screen-label={SCREENS.find(s=>s.id===screen).num + " " + SCREENS.find(s=>s.id===screen).label}>
-      <TopBar
-        screen={screen}
-        setScreen={setScreen}
-        sourceMode={sourceMode}
-        setSourceMode={setSourceMode}
-        connectionState={connectionState}
-        liveStatus={liveStatus}
+    <div className="shell shell-with-sidebar" data-screen-label={SCREENS.find(s=>s.id===screen).num + " " + SCREENS.find(s=>s.id===screen).label}>
+      <Sidebar
+        currentRunId={currentRunIdFromUrl}
+        onPickRun={onPickRun}
+        onSubmitNew={onSubmitNew}
+        onPickFixture={onPickFixture}
+        expanded={sidebarExpanded}
+        setExpanded={setSidebarExpanded}
       />
-      <MetaStrip sourceMode={sourceMode} connectionState={connectionState} />
-      <main className="main">
-        {screen === "overview"   && <Overview setScreen={setScreen} tenantUsage={tenantUsage} />}
-        {screen === "topology"   && <Topology setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
-        {screen === "trace"      && <Trace />}
-        {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
-        {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} appliedPatches={appliedPatches} setAppliedPatches={setAppliedPatches} setScreen={setScreen} />}
-        {screen === "regression" && <Regression />}
-        {screen === "report"     && <Report setScreen={setScreen} />}
-      </main>
+      <div className="shell-main">
+        <TopBar
+          screen={screen}
+          setScreen={setScreen}
+          sourceMode={sourceMode}
+          setSourceMode={setSourceMode}
+          connectionState={connectionState}
+          liveStatus={liveStatus}
+        />
+        <MetaStrip sourceMode={sourceMode} connectionState={connectionState} />
+        <main className="main">
+          {screen === "overview"   && <Overview setScreen={setScreen} tenantUsage={tenantUsage} />}
+          {screen === "topology"   && <Topology setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
+          {screen === "trace"      && <Trace />}
+          {screen === "violations" && <Violations setScreen={setScreen} setSelectedPatch={setSelectedPatch} />}
+          {screen === "repair"     && <Repair selectedPatch={selectedPatch} setSelectedPatch={setSelectedPatch} appliedPatches={appliedPatches} setAppliedPatches={setAppliedPatches} setScreen={setScreen} />}
+          {screen === "regression" && <Regression />}
+          {screen === "report"     && <Report setScreen={setScreen} />}
+        </main>
+      </div>
     </div>
   );
 }
