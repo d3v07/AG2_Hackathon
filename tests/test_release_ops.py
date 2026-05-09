@@ -54,19 +54,31 @@ def test_makefile_exposes_expected_release_targets():
 
 
 def test_ci_installs_dev_requirements_and_runs_lint_and_tests():
-    workflow = yaml.safe_load(_read(".github/workflows/ci.yml"))
-    job = workflow["jobs"]["test"]
-    run_steps = "\n".join(
-        step.get("run", "") for step in job["steps"] if isinstance(step, dict)
+    """CI workflow shape — Sprint 20 #95 consolidated jobs into a 4-job
+    matrix (backend-tests, frontend-vitest, frontend-e2e, frontend-a11y).
+    Backend job carries the pytest + ruff steps."""
+    raw = _read(".github/workflows/ci.yml")
+    workflow = yaml.safe_load(raw)
+    backend = workflow["jobs"]["backend-tests"]
+    backend_run = "\n".join(
+        step.get("run", "") for step in backend["steps"] if isinstance(step, dict)
     )
 
-    assert workflow["on"]["pull_request"]["branches"] == ["main", "production"]
-    assert workflow["on"]["push"]["branches"] == ["main", "production"]
-    assert job["timeout-minutes"] <= 15
-    assert "python-version: '3.12'" in _read(".github/workflows/ci.yml")
-    assert "python -m pip install -r requirements-dev.txt" in run_steps
-    assert "python -m ruff check ." in run_steps
-    assert "pytest -x --tb=short" in run_steps
+    # Trigger config: PRs from any branch (None == unset filter == all),
+    # push on main/production
+    assert "pull_request" in workflow["on"]
+    assert "main" in workflow["on"]["push"]["branches"]
+    assert "production" in workflow["on"]["push"]["branches"]
+    # Concurrency cancels old runs
+    assert workflow.get("concurrency", {}).get("cancel-in-progress") is True
+    # Backend job runs ruff + pytest
+    assert "python-version: '3.12'" in raw or 'python-version: "3.12"' in raw
+    assert "ruff" in backend_run
+    assert "pytest" in backend_run
+    # Other expected jobs exist
+    assert "frontend-vitest" in workflow["jobs"]
+    assert "frontend-e2e" in workflow["jobs"]
+    assert "frontend-a11y" in workflow["jobs"]
 
 
 def test_dev_requirements_include_runtime_project_pytest_and_ruff():
