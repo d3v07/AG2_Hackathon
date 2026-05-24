@@ -1,0 +1,457 @@
+{
+  "agents": [
+    {
+      "id": "RES",
+      "name": "ResearcherAgent",
+      "note": "1 step(s)",
+      "status": "PASS",
+      "steps": 1
+    },
+    {
+      "id": "CRT",
+      "name": "CriticAgent",
+      "note": "1 step(s)",
+      "status": "PASS",
+      "steps": 1
+    },
+    {
+      "id": "VRF",
+      "name": "VerifierAgent",
+      "note": "1 step(s)",
+      "status": "PASS",
+      "steps": 1
+    },
+    {
+      "id": "RPT",
+      "name": "ReporterAgent",
+      "note": "1 step(s)",
+      "status": "PASS",
+      "steps": 1
+    },
+    {
+      "id": "HUM",
+      "name": "HumanGateAgent",
+      "note": "1 step(s)",
+      "status": "PASS",
+      "steps": 1
+    },
+    {
+      "id": "ACT",
+      "name": "ActionAgent",
+      "note": "1 step(s)",
+      "status": "PASS",
+      "steps": 1
+    }
+  ],
+  "contracts": [
+    {
+      "id": "C-EVD",
+      "rule": "Reporter may write final answer only when verified_sources_count > 0",
+      "status": "PASS",
+      "type": "EVIDENCE"
+    },
+    {
+      "id": "C-TOL",
+      "rule": "Claims of 'verified' / 'searched' / 'checked' require a matching tool_event",
+      "status": "PASS",
+      "type": "TOOL"
+    },
+    {
+      "id": "C-RTE",
+      "rule": "Reporter must run after Verifier with a successful tool event",
+      "status": "PASS",
+      "type": "ROUTING"
+    },
+    {
+      "id": "C-APR",
+      "rule": "ActionAgent requires approval_status == approved",
+      "status": "PASS",
+      "type": "APPROVAL"
+    },
+    {
+      "id": "C-SCH",
+      "rule": "Final output must include summary, claims[], citations[], risks[], next_steps[]",
+      "status": "PASS",
+      "type": "SCHEMA"
+    }
+  ],
+  "cost": {
+    "daytona_cost_usd": 0.0,
+    "daytona_seconds": 0.0,
+    "llm_cost_usd": 0.0,
+    "llm_tokens": 0
+  },
+  "error": "",
+  "patches": [],
+  "recurrences": [],
+  "report": {
+    "approval": {
+      "operator": "j.kowalski",
+      "requested_at": "2026-01-01T00:00:00Z",
+      "sla": "4h",
+      "status": "APPROVED"
+    },
+    "cost_summary": {
+      "daytona_cost_usd": 0.0,
+      "daytona_seconds": 0.0,
+      "llm_cost_usd": 0.0,
+      "llm_tokens": 0
+    },
+    "patches_applied": [],
+    "regression_summary": {
+      "error": 0,
+      "fail": 0,
+      "pass": 0
+    },
+    "regression_tests": [],
+    "summary": "No contract violations were detected for this run.",
+    "usage_summary": {
+      "completion_tokens": 0,
+      "prompt_tokens": 0,
+      "total_tokens": 0
+    }
+  },
+  "routes": [
+    {
+      "contract": "",
+      "declared": true,
+      "from": "RES",
+      "id": "R-01",
+      "note": "",
+      "observed": true,
+      "status": "ok",
+      "to": "TAV"
+    },
+    {
+      "contract": "",
+      "declared": true,
+      "from": "RES",
+      "id": "R-02",
+      "note": "",
+      "observed": true,
+      "status": "ok",
+      "to": "CRT"
+    },
+    {
+      "contract": "",
+      "declared": true,
+      "from": "CRT",
+      "id": "R-03",
+      "note": "",
+      "observed": true,
+      "status": "ok",
+      "to": "VRF"
+    },
+    {
+      "contract": "",
+      "declared": true,
+      "from": "VRF",
+      "id": "R-04",
+      "note": "",
+      "observed": true,
+      "status": "ok",
+      "to": "TAV"
+    },
+    {
+      "contract": "",
+      "declared": true,
+      "from": "VRF",
+      "id": "R-05",
+      "note": "",
+      "observed": true,
+      "status": "ok",
+      "to": "RPT"
+    },
+    {
+      "contract": "",
+      "declared": true,
+      "from": "RPT",
+      "id": "R-06",
+      "note": "",
+      "observed": true,
+      "status": "ok",
+      "to": "HUM"
+    },
+    {
+      "contract": "",
+      "declared": true,
+      "from": "HUM",
+      "id": "R-07",
+      "note": "",
+      "observed": true,
+      "status": "ok",
+      "to": "ACT"
+    }
+  ],
+  "run": {
+    "duration_ms": 2500,
+    "final_output_status": "EMITTED",
+    "id": "RUN-FIXED-FOR-GOLDEN",
+    "manager": "GroupChatManager",
+    "operator": "j.kowalski",
+    "pattern": "AutoPattern",
+    "started": "2026-05-03T14:22:08Z",
+    "task": "Concise literature review on whether multi-agent systems improve reliability in research workflows.",
+    "workflow": "LITERATUREREVIEWASSISTANT"
+  },
+  "spans": [],
+  "stats": {
+    "agents_run": 6,
+    "contracts_passed": 5,
+    "contracts_total": 5,
+    "events_total": 6,
+    "repair_ready": 0,
+    "tool_events": 2,
+    "violations": 0
+  },
+  "status": "completed",
+  "status_history": [
+    "queued",
+    "analyzing",
+    "completed"
+  ],
+  "test": {
+    "assertions": [],
+    "duration_ms": 0,
+    "image": "python:3.11-slim",
+    "lines": [
+      {
+        "k": "info",
+        "t": "00:00.012",
+        "v": "daytona create sandbox dt-local"
+      },
+      {
+        "k": "info",
+        "t": "00:00.612",
+        "v": "pip install autogen-ag2 pytest"
+      },
+      {
+        "k": "info",
+        "t": "00:02.220",
+        "v": "pytest tests/test_contract_repair.py -v"
+      },
+      {
+        "k": "info",
+        "t": "00:00.000",
+        "v": "daytona stop dt-local"
+      }
+    ],
+    "name": "test_contract_repair",
+    "runner": "Daytona Sandbox",
+    "sandbox_id": "dt-local"
+  },
+  "topology": {
+    "edges": [
+      {
+        "declared": true,
+        "from": "RES",
+        "kind": "tool_call",
+        "to": "TAV"
+      },
+      {
+        "declared": true,
+        "from": "TAV",
+        "kind": "tool_call",
+        "returns": true,
+        "to": "RES"
+      },
+      {
+        "declared": true,
+        "from": "RES",
+        "kind": "handoff",
+        "to": "CRT"
+      },
+      {
+        "declared": true,
+        "from": "CRT",
+        "kind": "handoff",
+        "to": "VRF"
+      },
+      {
+        "declared": true,
+        "from": "VRF",
+        "kind": "tool_call",
+        "to": "TAV"
+      },
+      {
+        "declared": true,
+        "from": "TAV",
+        "kind": "tool_call",
+        "returns": true,
+        "to": "VRF"
+      },
+      {
+        "declared": true,
+        "from": "VRF",
+        "kind": "handoff",
+        "to": "RPT"
+      },
+      {
+        "declared": true,
+        "from": "RPT",
+        "kind": "handoff",
+        "to": "HUM"
+      },
+      {
+        "declared": true,
+        "from": "HUM",
+        "kind": "handoff",
+        "to": "ACT"
+      }
+    ],
+    "entry": "RES",
+    "nodes": [
+      {
+        "contracts": [],
+        "id": "RES",
+        "kind": "agent",
+        "name": "ResearcherAgent",
+        "role": "researcher"
+      },
+      {
+        "contracts": [],
+        "id": "TAV",
+        "kind": "tool",
+        "name": "tavily_search",
+        "role": "tavily_search"
+      },
+      {
+        "contracts": [],
+        "id": "CRT",
+        "kind": "agent",
+        "name": "CriticAgent",
+        "role": "critic"
+      },
+      {
+        "contracts": [],
+        "id": "VRF",
+        "kind": "agent",
+        "name": "VerifierAgent",
+        "role": "verifier"
+      },
+      {
+        "contracts": [],
+        "id": "RPT",
+        "kind": "agent",
+        "name": "ReporterAgent",
+        "role": "reporter"
+      },
+      {
+        "contracts": [],
+        "id": "HUM",
+        "kind": "agent",
+        "name": "HumanGateAgent",
+        "role": "humangate"
+      },
+      {
+        "contracts": [],
+        "id": "ACT",
+        "kind": "agent",
+        "name": "ActionAgent",
+        "role": "action"
+      }
+    ]
+  },
+  "trace": [
+    {
+      "agent": "ResearcherAgent",
+      "ctx": {
+        "handoff_to": "CriticAgent",
+        "retrieved_sources": [
+          "src1",
+          "src2",
+          "src3"
+        ],
+        "tool_events": [
+          {
+            "evidence_id": "ev_001",
+            "input": "q",
+            "output": "r",
+            "status": "success",
+            "timestamp": 0.1,
+            "tool_name": "tavily_search"
+          }
+        ]
+      },
+      "status": "OK",
+      "step": 1,
+      "ts": "14:22:08.100",
+      "type": "agent_turn"
+    },
+    {
+      "agent": "CriticAgent",
+      "ctx": {
+        "handoff_to": "VerifierAgent"
+      },
+      "status": "OK",
+      "step": 2,
+      "ts": "14:22:08.500",
+      "type": "agent_turn"
+    },
+    {
+      "agent": "VerifierAgent",
+      "ctx": {
+        "approval_status": "approved",
+        "handoff_to": "ReporterAgent",
+        "tool_events": [
+          {
+            "evidence_id": "ev_002",
+            "input": "q",
+            "output": "r",
+            "status": "success",
+            "timestamp": 1.0,
+            "tool_name": "tavily_search"
+          }
+        ],
+        "verified_sources_count": 3
+      },
+      "status": "OK",
+      "step": 3,
+      "ts": "14:22:09.000",
+      "type": "agent_turn"
+    },
+    {
+      "agent": "ReporterAgent",
+      "ctx": {
+        "final_output": {
+          "citations": [
+            "r1"
+          ],
+          "claims": [
+            "c1"
+          ],
+          "next_steps": [],
+          "risks": [],
+          "summary": "MAS improve reliability."
+        },
+        "handoff_to": "HumanGateAgent"
+      },
+      "status": "OK",
+      "step": 4,
+      "ts": "14:22:10.000",
+      "type": "agent_turn"
+    },
+    {
+      "agent": "HumanGateAgent",
+      "ctx": {
+        "approval_status": "approved",
+        "handoff_to": "ActionAgent"
+      },
+      "status": "OK",
+      "step": 5,
+      "ts": "14:22:10.200",
+      "type": "agent_turn"
+    },
+    {
+      "agent": "ActionAgent",
+      "ctx": {
+        "content": "Report saved."
+      },
+      "status": "OK",
+      "step": 6,
+      "ts": "14:22:10.500",
+      "type": "agent_turn"
+    }
+  ],
+  "violations": []
+}

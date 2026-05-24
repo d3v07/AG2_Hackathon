@@ -5,7 +5,7 @@ Concord has two deployable surfaces:
 - FastAPI backend: run this on Render, Railway, or another container host.
 - Static dashboard: Vercel can serve `public/index.html`, but it should point live-mode traffic at the hosted backend.
 
-No hosted deploy was executed in this sprint because provider credentials are not available in the local environment. The code, scripts, and configuration below are ready for a credentialed operator.
+The hosted backend URL is a placeholder until the first credentialed deploy. After deploying, replace every occurrence of `https://<your-backend>.onrender.com` (or the Railway equivalent) in this doc with the actual URL, then re-run `./scripts/smoke_api.sh <URL>` to confirm.
 
 ## Local Stack
 
@@ -53,14 +53,17 @@ FALKORDB_HOST=<falkordb-host>
 FALKORDB_PORT=6379
 ```
 
-Optional live integrations:
+Required secrets for live pipeline runs:
 
 ```bash
-OPENROUTER_API_KEY=<provider-key>
-TAVILY_API_KEY=<tavily-key>
-DAYTONA_API_KEY=<daytona-key>
-DAYTONA_API_URL=<daytona-api-url>
+OPENROUTER_API_KEY=<openrouter-key>   # required for Zone B LLM agents
+TAVILY_API_KEY=<tavily-key>           # required for Zone A live web search
+DAYTONA_API_KEY=<daytona-key>         # required for sandboxed regression tests
+DAYTONA_API_URL=https://app.daytona.io/api
+CONCORD_API_KEY=<tenant-api-key>      # required for authenticated API calls
 ```
+
+These four keys — `OPENROUTER_API_KEY`, `TAVILY_API_KEY`, `DAYTONA_API_KEY`, and `CONCORD_API_KEY` — are the minimum set needed to run a fully live end-to-end pipeline. `CONCORD_API_KEY` is minted at first startup via `POST /api/api-keys` (see ONBOARDING.md step 2).
 
 Daytona credentials are not required for the API to start; missing credentials produce an explicit regression-test infrastructure error instead of a fake pass.
 
@@ -68,7 +71,7 @@ Daytona credentials are not required for the API to start; missing credentials p
 
 1. Create a new Web Service from this repository.
 2. Use the Docker runtime.
-3. Set the branch to `main`.
+3. Set the branch to `production`.
 4. Add a persistent disk mounted at `/app/data`.
 5. Add the environment variables above.
 6. Deploy and run:
@@ -118,6 +121,18 @@ pytest -x --tb=short
 ```
 
 The workflow runs on pushes and pull requests targeting `main` or `production`.
+
+## Live Smoke Test (post-PR-#94 merge)
+
+Once PR #94 lands on `production`, a `workflow_dispatch`-triggered workflow will be available at `.github/workflows/live-smoke.yml`. To trigger it manually:
+
+1. Go to the repository Actions tab on GitHub.
+2. Select the `Live Smoke` workflow.
+3. Click `Run workflow`, choose the `production` branch, and confirm.
+4. The workflow runs `tests/e2e/live_smoke.py` against the hosted backend URL.
+5. Expected cost per run: placeholder — update after the first live-smoke run completes.
+
+The secrets `OPENROUTER_API_KEY`, `TAVILY_API_KEY`, `DAYTONA_API_KEY`, and `CONCORD_API_KEY` must be configured in the repository's Actions secrets before the first run.
 
 ## Branch Protection
 

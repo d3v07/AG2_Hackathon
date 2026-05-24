@@ -23,7 +23,9 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+from shared.logging import get_logger
 
 from autogen import ConversableAgent
 from autogen.agentchat.group import (
@@ -236,14 +238,34 @@ def build_swarm(
     return [researcher, critic, verifier, reporter, human_gate, action], ctx
 
 
+_TAVILY_FALLBACK_PATH = Path(__file__).parent / "fixtures" / "tavily_fallback.json"
+
+
+def _load_tavily_fallback() -> list[dict[str, Any]]:
+    """Read the committed offline fallback fixture (3 sources)."""
+    return json.loads(_TAVILY_FALLBACK_PATH.read_text()).get("results", [])
+
+
 def _build_initial_message(task: str, research_question: str) -> str:
-    """Optionally pre-fetch Tavily results so ResearcherAgent has context."""
+    """Pre-fetch Tavily results so ResearcherAgent has context.
+
+    All failure paths (missing key, network error, rate limit, bad response
+    shape) fall back to the committed offline fixture. Every path emits a
+    structured log line so failures are debuggable in production. Tavily
+    stays the ONLY search source — the fallback is offline data, not another
+    vendor.
+    """
+    logger = get_logger("zone_a.swarm")
     tavily_key = os.environ.get("TAVILY_API_KEY", "").strip()
     if not tavily_key:
-        return (
-            f"Task: {task}\n\nResearch question: {research_question}\n\n"
-            "(no search results available — proceed with what you know)"
+        logger.warning(
+            "zone_a.tavily.missing_key",
+            extra={"using_fallback": True, "reason": "no TAVILY_API_KEY env var"},
         )
+        results = _load_tavily_fallback()
+        return _render_initial_message(task, research_question, results, source="fallback:no_key")
+
+    start = time.monotonic()
     try:
         from tavily import TavilyClient
 
@@ -251,17 +273,55 @@ def _build_initial_message(task: str, research_question: str) -> str:
         raw = client.search(
             query=research_question, max_results=3, search_depth="basic"
         )
-        results = json.dumps(raw.get("results", []), indent=2)
-        return (
-            f"Task: {task}\n\nResearch question: {research_question}\n\n"
-            f"Tavily search results:\n{results}\n\n"
-            "Call `record_research` to record sources and tool_call_id."
+        if not isinstance(raw, dict) or not isinstance(raw.get("results"), list):
+            logger.warning(
+                "zone_a.tavily.bad_response_shape",
+                extra={
+                    "using_fallback": True,
+                    "latency_ms": int((time.monotonic() - start) * 1000),
+                },
+            )
+            return _render_initial_message(
+                task, research_question, _load_tavily_fallback(), source="fallback:bad_shape"
+            )
+        results = raw["results"]
+        logger.info(
+            "zone_a.tavily.search",
+            extra={
+                "query": research_question,
+                "status": "success",
+                "source_count": len(results),
+                "latency_ms": int((time.monotonic() - start) * 1000),
+            },
         )
-    except Exception as e:
-        return (
-            f"Task: {task}\n\nResearch question: {research_question}\n\n"
-            f"(Tavily search failed: {e})"
+        return _render_initial_message(task, research_question, results, source="tavily")
+    except Exception as exc:
+        logger.warning(
+            "zone_a.tavily.error",
+            extra={
+                "using_fallback": True,
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+                "latency_ms": int((time.monotonic() - start) * 1000),
+            },
         )
+        return _render_initial_message(
+            task,
+            research_question,
+            _load_tavily_fallback(),
+            source=f"fallback:{type(exc).__name__}",
+        )
+
+
+def _render_initial_message(
+    task: str, research_question: str, results: list[dict[str, Any]], source: str
+) -> str:
+    serialized = json.dumps(results, indent=2)
+    return (
+        f"Task: {task}\n\nResearch question: {research_question}\n\n"
+        f"Search results (source={source}):\n{serialized}\n\n"
+        "Call `record_research` to record sources and tool_call_id."
+    )
 
 
 def _chat_history_to_trace_events(
@@ -279,7 +339,7 @@ def _chat_history_to_trace_events(
     }
     seen: set[str] = set()
     events: list[TraceEvent] = []
-    now = time.time()
+    now = 0.0  # fixed timestamp keeps stub mode fully deterministic across runs
 
     for msg in chat_history:
         name = msg.get("name") or ""
@@ -342,6 +402,191 @@ def _chat_history_to_trace_events(
 SWARM_TRACE_PATH = "zone_b/fixtures/swarm_trace.json"
 
 
+FailureMode = Literal[
+    "force_no_evidence",
+    "force_no_tool_call",
+    "force_routing_break",
+    "force_no_approval",
+    "force_malformed_output",
+]
+
+
+def _synthesize_stub_run(
+    task: str,
+    research_question: str,
+    failure_mode: FailureMode | None = None,
+) -> tuple[list[TraceEvent], ContextVariables]:
+    """Build a deterministic 6-event trace without any LLM or Tavily call.
+
+    With ``failure_mode=None`` produces a clean trace that passes all Zone B
+    contract checks. With ``failure_mode="force_*"`` produces a trace that
+    triggers exactly one Zone B contract violation type:
+
+    - force_no_evidence       → evidence violation (verified_sources_count = 0)
+    - force_no_tool_call      → tool violation (verifier missing tool_call_id)
+    - force_routing_break     → routing violation (verifier tool_event not success)
+    - force_no_approval       → approval violation (approval_status != approved)
+    - force_malformed_output  → schema violation (final_output missing keys)
+
+    Each force_* mode keeps the OTHER four contracts passing, so contract
+    checker output is exactly {expected_contract_type}.
+    """
+    now = 0.0  # fixed timestamp keeps stub mode fully deterministic across runs
+
+    # Per-mode toggles. Each force_* mode flips exactly one knob so Zone B
+    # produces exactly one violation type. Defaults below are the clean path.
+    verified_sources_count = 1
+    verifier_tool_call_id_value: str | None = "tc_v01"
+    verifier_tool_event_status = "success"
+    approval_status_value = "approved"
+    approval_granted_value = True
+    final_output_complete = True
+
+    if failure_mode == "force_no_evidence":
+        verified_sources_count = 0
+    elif failure_mode == "force_no_tool_call":
+        verifier_tool_call_id_value = None
+    elif failure_mode == "force_routing_break":
+        # Tool contract uses the EVENT-level tool_call_id, so keep it set.
+        # Routing contract requires a SUCCESSFUL verifier tool_event preceding
+        # Reporter — flip status to "failure" to break routing without
+        # tripping the tool contract.
+        verifier_tool_event_status = "failure"
+    elif failure_mode == "force_no_approval":
+        approval_status_value = "pending"
+        approval_granted_value = False
+    elif failure_mode == "force_malformed_output":
+        final_output_complete = False
+
+    if final_output_complete:
+        stub_final_output: dict[str, Any] = {
+            "summary": f"Stub summary for: {task}",
+            "claims": ["Stub claim from verified sources."],
+            "citations": ["https://stub.example.com/source-1"],
+            "risks": ["No real risks — this is a stub trace."],
+            "next_steps": ["Replace stub with a live swarm run for production results."],
+        }
+    else:
+        # Drop required keys to trigger the schema contract
+        stub_final_output = {"summary": f"Stub malformed for: {task}"}
+
+    verifier_tool_event = ToolEvent(
+        tool_name="tavily_search",
+        input=research_question,
+        output="stub verified result"
+        if verifier_tool_event_status == "success"
+        else "stub verification failed",
+        status=verifier_tool_event_status,
+        evidence_id="ev_stub_01",
+        timestamp=now,
+    )
+
+    events: list[TraceEvent] = [
+        TraceEvent(
+            step=1,
+            agent="ResearcherAgent",
+            type="agent_turn",
+            content=f"[stub] Retrieved 1 source for: {research_question}",
+            tool_call_id="tc_r01",
+            context_delta={
+                "retrieved_sources": [{"title": "Stub Source", "url": "https://stub.example.com/source-1", "snippet": "Stub snippet."}],
+                "tool_events": [
+                    ToolEvent(
+                        tool_name="tavily_search",
+                        input=research_question,
+                        output="stub search result",
+                        status="success",
+                        evidence_id="ev_stub_00",
+                        timestamp=now,
+                    )
+                ],
+            },
+            handoff_to="CriticAgent",
+            timestamp=now,
+        ),
+        TraceEvent(
+            step=2,
+            agent="CriticAgent",
+            type="agent_turn",
+            content="[stub] Sources look credible — no major risks identified.",
+            tool_call_id=None,
+            context_delta={},
+            handoff_to="VerifierAgent",
+            timestamp=now,
+        ),
+        TraceEvent(
+            step=3,
+            agent="VerifierAgent",
+            type="agent_turn",
+            content=(
+                f"[stub] Verified {verified_sources_count} source(s). "
+                f"tool_call_id: {verifier_tool_call_id_value or 'null'}"
+            ),
+            tool_call_id=verifier_tool_call_id_value,
+            context_delta={
+                "verified_sources_count": verified_sources_count,
+                "tool_events": [verifier_tool_event],
+            },
+            handoff_to="ReporterAgent",
+            timestamp=now,
+        ),
+        TraceEvent(
+            step=4,
+            agent="ReporterAgent",
+            type="agent_turn",
+            content="[stub] Final memo produced.",
+            tool_call_id=None,
+            context_delta={"final_output": stub_final_output},
+            handoff_to="HumanGateAgent",
+            timestamp=now,
+        ),
+        TraceEvent(
+            step=5,
+            agent="HumanGateAgent",
+            type="agent_turn",
+            content=f"[stub] Report approval status: {approval_status_value}.",
+            tool_call_id=None,
+            context_delta={"approval_status": approval_status_value},
+            handoff_to="ActionAgent",
+            timestamp=now,
+        ),
+        TraceEvent(
+            step=6,
+            agent="ActionAgent",
+            type="agent_turn",
+            content="[stub] Action recorded — report saved.",
+            tool_call_id=None,
+            context_delta={},
+            handoff_to=None,
+            timestamp=now,
+        ),
+    ]
+
+    ctx = ContextVariables(
+        data={
+            "retrieved_sources": [{"title": "Stub Source", "url": "https://stub.example.com/source-1", "snippet": "Stub snippet."}],
+            "researcher_tool_call_id": "tc_r01",
+            "researcher_summary": f"Stub summary for: {task}",
+            "critique_notes": ["Stub critique note."],
+            "risk_flags": [],
+            "verified_sources_count": verified_sources_count,
+            "verifier_tool_call_id": verifier_tool_call_id_value or "",
+            "verifier_narrative": "Stub verification passed."
+            if verified_sources_count > 0
+            else "Stub verification failed: no sources verified.",
+            "sources_verified": verified_sources_count > 0,
+            "final_output": stub_final_output,
+            "approval_granted": approval_granted_value,
+            "approval_status": approval_status_value,
+            "approval_comments": "Stub approval granted."
+            if approval_granted_value
+            else "Stub approval denied.",
+            "action_taken": "Report saved to disk (stub).",
+        }
+    )
+    return events, ctx
+
+
 async def run_swarm(
     task: str | None = None,
     research_question: str | None = None,
@@ -349,8 +594,14 @@ async def run_swarm(
     interactive: bool = False,
     fixture_path: str | Path | None = "zone_a/fixtures/task.json",
     output_path: str | Path = SWARM_TRACE_PATH,
+    mode: Literal["live", "stub"] = "live",
+    failure_mode: FailureMode | None = None,
 ) -> dict[str, Any]:
     """Run the Zone A swarm and emit a trace JSON for Zone B to consume.
+
+    ``mode="stub"`` skips ``a_initiate_group_chat`` and Tavily entirely,
+    synthesising a deterministic 6-event clean trace for offline testing.
+    ``mode="live"`` (default) preserves all existing behaviour.
 
     The swarm produces a *partial* trace when it terminates early on a
     contract violation. Output defaults to ``zone_b/fixtures/swarm_trace.json``
@@ -369,23 +620,34 @@ async def run_swarm(
         research_question = research_question or fixture["research_question"]
         run_id = fixture.get("run_id", run_id)
 
-    agents, ctx = build_swarm(interactive=interactive)
-    initial_message = _build_initial_message(task, research_question)
+    if mode == "stub":
+        events, final_ctx = _synthesize_stub_run(
+            task, research_question, failure_mode=failure_mode
+        )
+        last_agent_name: str | None = "ActionAgent"
+    elif mode == "live":
+        if failure_mode is not None:
+            raise ValueError("failure_mode is only supported in stub mode")
+        agents, ctx = build_swarm(interactive=interactive)
+        initial_message = _build_initial_message(task, research_question)
 
-    pattern = RoundRobinPattern(
-        initial_agent=agents[0],
-        agents=agents,
-        context_variables=ctx,
-        group_after_work=TerminateTarget(),
-    )
+        pattern = RoundRobinPattern(
+            initial_agent=agents[0],
+            agents=agents,
+            context_variables=ctx,
+            group_after_work=TerminateTarget(),
+        )
 
-    chat_result, final_ctx, last_agent = await a_initiate_group_chat(
-        pattern=pattern,
-        messages=initial_message,
-        max_rounds=18,
-    )
+        chat_result, final_ctx, last_agent = await a_initiate_group_chat(
+            pattern=pattern,
+            messages=initial_message,
+            max_rounds=18,
+        )
 
-    events = _chat_history_to_trace_events(chat_result.chat_history, final_ctx)
+        events = _chat_history_to_trace_events(chat_result.chat_history, final_ctx)
+        last_agent_name = last_agent.name if last_agent else None
+    else:
+        raise ValueError(f"unknown mode: {mode!r} (expected 'live' or 'stub')")
 
     snapshot = ContextSnapshot(
         retrieved_sources=final_ctx.get("retrieved_sources") or [],
@@ -397,7 +659,7 @@ async def run_swarm(
             if isinstance(te, ToolEvent)
         ],
         approval_status=final_ctx.get("approval_status") or "pending",
-        failed_agent=last_agent.name if last_agent else None,
+        failed_agent=last_agent_name,
         failed_step=len(events),
         final_output=final_ctx.get("final_output"),
     )
@@ -408,7 +670,7 @@ async def run_swarm(
     return {
         "events": events,
         "context": final_ctx,
-        "last_agent": last_agent.name if last_agent else None,
+        "last_agent": last_agent_name,
         "terminated_early": terminated_early,
         "trace_path": str(written),
     }
