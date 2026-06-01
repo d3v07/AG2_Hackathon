@@ -4,10 +4,10 @@
 - Project: Concord
 - Mode: safe
 - Phase: Recovery run
-- Branch: `codex/issue-140-daytona-validation-states`
-- Current Sprint: Recovery issue #140
-- Current Task: #140 honest validation states passed local gates and reviewer follow-up
-- Last Checkpoint: Issues #135-#139 are merged to `main`. #140 now carries explicit validation states through regression, reporter, API adapter, dashboard/export, fixture data, and CLI reports. Credential failures, unavailable sandboxes, execution errors, skipped validation, failed validation, and passed validation are distinct and no longer collapse to green pass.
+- Branch: `codex/issue-141-api-key-ui`
+- Current Sprint: Recovery issue #141
+- Current Task: #141 in-product API key creation passed local gates and reviewer pass; ready for PR to `main`
+- Last Checkpoint: Issues #135-#140 are merged to `main`. #141 adds a landing-page API Access panel that can create/reveal a session API key, paste an existing key, preflight auth status without protected-route 401s, and use the session key for protected live API calls.
 
 ## Sprint Board
 Recovery issue plan:
@@ -16,8 +16,8 @@ Recovery issue plan:
 - #137 Demote public stub mode and default to real runs — closed on `main`
 - #138 Add in-product workflow registration/import — closed on `main`
 - #139 Tighten completed-run coherence and rebrand to Concord — closed on `main`
-- #140 Make Daytona validation states honest — local gates passed on `codex/issue-140-daytona-validation-states`
-- #141 Add in-product API key creation
+- #140 Make Daytona validation states honest — closed on `main`
+- #141 Add in-product API key creation — local gates and reviewer pass complete on `codex/issue-141-api-key-ui`
 - #142 Consolidate north-star docs
 - #143 Archive orphaned Lite/prototype artifacts
 - #144 Final end-to-end Concord demo script
@@ -50,6 +50,13 @@ Recovery issue plan:
 - #140 API probe passed on local server: fixture page 200 and `GET /api/workflows` 200.
 - #140 reviewer follow-up found no remaining blockers after fixing partial-report false-pass adapter fallback and legacy reporter stdout/sandbox validation mapping.
 - #140 post-merge seeded API fixture gap was fixed on follow-up branch `codex/issue-140-seeded-validation-state`: `GET /api/runs/RUN-041` now carries `test.validation_state=passed`, per-assertion validation states, and `report.validation_summary`.
+- #141 focused gate passed: `.venv/bin/python -m pytest tests/test_api_key_ui.py tests/test_auth.py tests/test_public_run_mode.py tests/test_public_workflow_import.py tests/test_workflow_import_ui.py -q` passed 20 tests.
+- #141 full gate passed: `.venv/bin/python -m pytest -x --tb=short` passed 549 tests, 1 skipped.
+- #141 frontend gate passed: `npm test -- --run` passed 9 tests.
+- #141 lint/diff gate passed: `.venv/bin/python -m ruff check .` and `git diff --check`.
+- #141 fixture gate passed: `.venv/bin/python run_all.py --fixture` exited 0 and retained the honest `credential_failure` validation state for invalid local sandbox credentials.
+- #141 browser QA passed on desktop/mobile `/`: API Access panel created a `local` session key, revealed it once, persisted it in `sessionStorage`, reused an existing key with `GET /api/workflows` status 200, cleared a stale invalid session before protected fetches, disabled key creation until auth when keys already exist, and logged no console/page errors.
+- #141 reviewer follow-up found no remaining blockers after adding hosted bootstrap status, stale-session preflight, and removing session-key writes to `window`.
 
 ## Historical Sprint Board
 Sprint 3: Foundation

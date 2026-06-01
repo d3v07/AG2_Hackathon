@@ -37,7 +37,9 @@ The dashboard is available at `http://localhost:8000`.
 
 ## 2. Create an API Key
 
-Local development allows the first key to be created from localhost.
+Local development allows the first key to be created from localhost. Hosted deployments should bootstrap the first key from a trusted shell or local tunnel, then paste that key into the **API Access** panel. After a key exists, the product UI can create additional tenant keys from an authenticated browser session.
+
+In the product UI, open the landing page and use the **API Access** panel to create a session key for the current browser tab, or paste an existing key when the API already requires authentication. A newly created key is revealed once; keep it in your local password manager if you need it again.
 
 Endpoint: `POST /api/api-keys`
 

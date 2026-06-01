@@ -31,6 +31,61 @@ def test_health_endpoint_remains_public(tmp_path):
     assert response.json() == {"status": "ok"}
 
 
+def test_api_key_status_endpoint_is_public(tmp_path):
+    client = _client(tmp_path)
+
+    assert client.get("/api/api-keys/status").json() == {
+        "requires_api_key": False,
+        "can_create_first_key": True,
+        "authenticated": False,
+        "tenant_id": "",
+    }
+    created = client.post(
+        "/api/api-keys",
+        json={"tenant_id": "local", "name": "local primary"},
+    )
+    assert created.status_code == 201
+
+    response = client.get("/api/api-keys/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "requires_api_key": True,
+        "can_create_first_key": False,
+        "authenticated": False,
+        "tenant_id": "",
+    }
+
+
+def test_api_key_status_reports_bootstrap_and_session_state(tmp_path):
+    remote = _remote_client(tmp_path)
+
+    response = remote.get("/api/api-keys/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "requires_api_key": False,
+        "can_create_first_key": False,
+        "authenticated": False,
+        "tenant_id": "",
+    }
+
+    client = _client(tmp_path)
+    created = client.post(
+        "/api/api-keys",
+        json={"tenant_id": "tenant-a", "name": "tenant-a primary"},
+    ).json()
+
+    valid = client.get("/api/api-keys/status", headers={"Authorization": f"Bearer {created['api_key']}"})
+    invalid = client.get("/api/api-keys/status", headers={"Authorization": "Bearer concord_invalid"})
+
+    assert valid.status_code == 200
+    assert valid.json()["authenticated"] is True
+    assert valid.json()["tenant_id"] == "tenant-a"
+    assert invalid.status_code == 200
+    assert invalid.json()["authenticated"] is False
+
+
 def test_protected_api_routes_require_api_key(tmp_path):
     client = _client(tmp_path)
     from api.auth import create_api_key

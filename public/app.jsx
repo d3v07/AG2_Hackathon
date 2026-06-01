@@ -1,6 +1,58 @@
 /* global React, ReactDOM */
 const { useState, useEffect, useMemo } = React;
 const BOOT_DATA = window.CONCORD_DATA;
+const SESSION_AUTH_KEY = "concord.session_auth";
+let BROWSER_AUTH = readSessionAuth();
+applyBrowserAuth(BROWSER_AUTH);
+
+function readSessionAuth() {
+  if (typeof window === "undefined" || !window.sessionStorage) return {};
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_AUTH_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !parsed.api_key) return {};
+    return {
+      api_key: String(parsed.api_key),
+      tenant_id: String(parsed.tenant_id || "local"),
+      name: String(parsed.name || ""),
+      key_prefix: String(parsed.key_prefix || ""),
+    };
+  } catch (_error) {
+    return {};
+  }
+}
+
+function applyBrowserAuth(auth) {
+  if (typeof window === "undefined" || !auth?.api_key) return;
+  BROWSER_AUTH = {
+    api_key: String(auth.api_key),
+    tenant_id: String(auth.tenant_id || "local"),
+    name: String(auth.name || ""),
+    key_prefix: String(auth.key_prefix || ""),
+  };
+  if (window.sessionStorage) {
+    window.sessionStorage.setItem(SESSION_AUTH_KEY, JSON.stringify(BROWSER_AUTH));
+  }
+}
+
+function clearBrowserAuth() {
+  BROWSER_AUTH = {};
+  if (typeof window === "undefined") return;
+  if (window.sessionStorage) window.sessionStorage.removeItem(SESSION_AUTH_KEY);
+  delete window.CONCORD_API_KEY;
+  delete window.CONCORD_TENANT_ID;
+}
+
+function currentBrowserAuth() {
+  const apiKey = BROWSER_AUTH.api_key || window.CONCORD_API_KEY || "";
+  return {
+    has_key: Boolean(apiKey),
+    tenant_id: BROWSER_AUTH.tenant_id || window.CONCORD_TENANT_ID || "",
+    key_prefix: BROWSER_AUTH.key_prefix || (apiKey ? `${apiKey.slice(0, 11)}...` : ""),
+    name: BROWSER_AUTH.name || "",
+  };
+}
 
 function normalizeDashboardData(data, options = {}) {
   const source = data || {};
@@ -55,10 +107,12 @@ function normalizeDashboardData(data, options = {}) {
 
 function liveHeaders() {
   const headers = {};
-  if (window.CONCORD_TENANT_ID) headers["X-Tenant-ID"] = window.CONCORD_TENANT_ID;
-  if (window.CONCORD_API_KEY) {
-    headers["Authorization"] = `Bearer ${window.CONCORD_API_KEY}`;
-    headers["X-Concord-API-Key"] = window.CONCORD_API_KEY;
+  const tenantId = BROWSER_AUTH.tenant_id || window.CONCORD_TENANT_ID;
+  const apiKey = BROWSER_AUTH.api_key || window.CONCORD_API_KEY;
+  if (tenantId) headers["X-Tenant-ID"] = tenantId;
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+    headers["X-Concord-API-Key"] = apiKey;
   }
   return headers;
 }
@@ -1931,7 +1985,17 @@ const RESEARCH_QUESTION_MAX = 500;
 const WORKFLOW_IMPORT_MAX = 6000;
 
 function hasBrowserTenantCredentials() {
-  return Boolean(window.CONCORD_API_KEY || window.CONCORD_TENANT_ID);
+  return Boolean(BROWSER_AUTH.api_key || window.CONCORD_API_KEY);
+}
+
+async function fetchApiKeyStatus() {
+  const response = await fetch("/api/api-keys/status", { headers: liveHeaders() });
+  if (!response.ok) return null;
+  return response.json();
+}
+
+function statusBlocksProtectedFetch(status) {
+  return Boolean(status && !status.authenticated && (status.requires_api_key || status.can_create_first_key === false));
 }
 
 async function submitRunPayload(payload) {
@@ -2038,6 +2102,19 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
   const [importState, setImportState] = useState("idle");
   const [importError, setImportError] = useState("");
   const [importSuccess, setImportSuccess] = useState("");
+  const [apiKeyOpen, setApiKeyOpen] = useState(false);
+  const [apiTenantId, setApiTenantId] = useState(() => currentBrowserAuth().tenant_id || "local");
+  const [apiKeyName, setApiKeyName] = useState("Browser session");
+  const [apiKeyState, setApiKeyState] = useState("idle");
+  const [apiKeyError, setApiKeyError] = useState("");
+  const [apiKeySuccess, setApiKeySuccess] = useState("");
+  const [createdApiKey, setCreatedApiKey] = useState("");
+  const [existingApiKey, setExistingApiKey] = useState("");
+  const [existingKeyState, setExistingKeyState] = useState("idle");
+  const [canCreateApiKey, setCanCreateApiKey] = useState(() => currentBrowserAuth().has_key);
+  const [copyState, setCopyState] = useState("idle");
+  const [authInfo, setAuthInfo] = useState(() => currentBrowserAuth());
+  const [authVersion, setAuthVersion] = useState(0);
   const [submitState, setSubmitState] = useState("idle");
   const [submitError, setSubmitError] = useState("");
 
@@ -2045,6 +2122,22 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
     let cancelled = false;
     async function load() {
       try {
+        const hadCredentials = hasBrowserTenantCredentials();
+        const status = await fetchApiKeyStatus();
+        if (status) {
+          const allowedToCreate = Boolean(status.authenticated || (!status.requires_api_key && status.can_create_first_key));
+          setCanCreateApiKey(allowedToCreate);
+          if (hadCredentials && status.requires_api_key && !status.authenticated) {
+            clearBrowserAuth();
+            setAuthInfo(currentBrowserAuth());
+            setApiKeyOpen(true);
+            throw new Error("invalid API key");
+          }
+          if (!hadCredentials && statusBlocksProtectedFetch(status)) {
+            setApiKeyOpen(true);
+            throw new Error(status.requires_api_key ? "missing API key" : "first API key must be created from localhost or deployment shell");
+          }
+        }
         const res = await fetch("/api/workflows", { headers: liveHeaders() });
         if (!res.ok) throw new Error(`workflows fetch ${res.status}`);
         const body = await res.json();
@@ -2063,7 +2156,14 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
     }
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [authVersion]);
+
+  const workflowAuthError =
+    workflowsState === "error" && /401|403|missing api key|invalid api key/i.test(workflowsError);
+
+  useEffect(() => {
+    if (workflowAuthError) setApiKeyOpen(true);
+  }, [workflowAuthError]);
 
   const canSubmit =
     workflowId &&
@@ -2143,6 +2243,95 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
     }
   }
 
+  async function handleCreateApiKey() {
+    setApiKeyState("creating");
+    setApiKeyError("");
+    setApiKeySuccess("");
+    setCreatedApiKey("");
+    setCopyState("idle");
+    try {
+      const res = await fetch("/api/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...liveHeaders() },
+        body: JSON.stringify({
+          tenant_id: apiTenantId.trim() || "local",
+          name: apiKeyName.trim() || "Browser session",
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setApiKeyError(`Key creation failed: ${apiDetailText(body.detail || res.statusText)}`);
+        setApiKeyState("error");
+        return;
+      }
+      applyBrowserAuth(body);
+      setAuthInfo(currentBrowserAuth());
+      setApiTenantId(body.tenant_id || apiTenantId);
+      setCreatedApiKey(body.api_key || "");
+      setApiKeySuccess(`Created key ${body.key_prefix || ""} for ${body.tenant_id || "local"}.`);
+      setApiKeyState("success");
+      setCanCreateApiKey(true);
+      setWorkflowsState("loading");
+      setWorkflowsError("");
+      setAuthVersion((version) => version + 1);
+    } catch (err) {
+      setApiKeyError(`Network error: ${err.message || err}`);
+      setApiKeyState("error");
+    }
+  }
+
+  async function handleUseExistingApiKey() {
+    const candidate = existingApiKey.trim();
+    if (!candidate) return;
+    const tenantId = apiTenantId.trim() || "local";
+    setExistingKeyState("verifying");
+    setApiKeyError("");
+    setApiKeySuccess("");
+    setCreatedApiKey("");
+    try {
+      const headers = {
+        "Authorization": `Bearer ${candidate}`,
+        "X-Concord-API-Key": candidate,
+        "X-Tenant-ID": tenantId,
+      };
+      const res = await fetch("/api/workflows", { headers });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setApiKeyError(`Existing key failed: ${apiDetailText(body.detail || res.statusText)}`);
+        setExistingKeyState("error");
+        return;
+      }
+      applyBrowserAuth({
+        api_key: candidate,
+        tenant_id: tenantId,
+        name: "Browser session",
+        key_prefix: `${candidate.slice(0, 12)}...`,
+      });
+      setAuthInfo(currentBrowserAuth());
+      setExistingApiKey("");
+      setApiKeySuccess(`Loaded session key for ${tenantId}.`);
+      setExistingKeyState("success");
+      setCanCreateApiKey(true);
+      setWorkflowsState("loading");
+      setWorkflowsError("");
+      setAuthVersion((version) => version + 1);
+    } catch (err) {
+      setApiKeyError(`Network error: ${err.message || err}`);
+      setExistingKeyState("error");
+    }
+  }
+
+  async function handleCopyApiKey() {
+    if (!createdApiKey || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(createdApiKey);
+      setCopyState("copied");
+      setTimeout(() => setCopyState("idle"), 1800);
+    } catch (_error) {
+      setCopyState("error");
+    }
+  }
+
   return (
     <div className="landing">
       <div className="landing-card">
@@ -2181,6 +2370,108 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
                 ))}
               </select>
             )}
+            <div className="api-key-panel">
+              <div className="api-key-row">
+                <div>
+                  <div className="api-key-title">API Access</div>
+                  <div className="api-key-meta">
+                    {authInfo.has_key
+                      ? `${authInfo.tenant_id || "local"} · ${authInfo.key_prefix || "session key"}`
+                      : "No session key"}
+                  </div>
+                </div>
+                <div className="api-key-actions">
+                  <span className={`api-key-status ${authInfo.has_key ? "ready" : "missing"}`}>
+                    {authInfo.has_key ? "READY" : "MISSING"}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-link"
+                    onClick={() => setApiKeyOpen((open) => !open)}
+                    aria-expanded={apiKeyOpen}
+                  >
+                    {authInfo.has_key ? "Create another key →" : "Create key →"}
+                  </button>
+                </div>
+              </div>
+              {apiKeyOpen && (
+                <div className="api-key-create">
+                  <div className="api-key-grid">
+                    <div className="form-row">
+                      <label htmlFor="api-key-tenant" className="form-label">Tenant</label>
+                      <input
+                        id="api-key-tenant"
+                        className="form-input"
+                        value={apiTenantId}
+                        onChange={(e) => setApiTenantId(e.target.value)}
+                        maxLength={64}
+                        placeholder="local"
+                      />
+                    </div>
+                    <div className="form-row">
+                      <label htmlFor="api-key-name" className="form-label">Key Name</label>
+                      <input
+                        id="api-key-name"
+                        className="form-input"
+                        value={apiKeyName}
+                        onChange={(e) => setApiKeyName(e.target.value)}
+                        maxLength={120}
+                        placeholder="Browser session"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleCreateApiKey}
+                    disabled={apiKeyState === "creating" || !apiTenantId.trim() || (!authInfo.has_key && !canCreateApiKey)}
+                    aria-busy={apiKeyState === "creating"}
+                  >
+                    {apiKeyState === "creating" ? "Creating…" : "Create API key"}
+                  </button>
+                  {!authInfo.has_key && !canCreateApiKey && (
+                    <div className="form-error" role="alert">
+                      Load an existing key first. First-key bootstrap is available only from localhost or deployment shell.
+                    </div>
+                  )}
+                  {apiKeyError && <div className="form-error" role="alert">{apiKeyError}</div>}
+                  {apiKeySuccess && <div className="form-success" role="status">{apiKeySuccess}</div>}
+                  {createdApiKey && (
+                    <div className="api-key-reveal">
+                      <span>Created key</span>
+                      <code>{createdApiKey}</code>
+                      <button type="button" className="btn-link" onClick={handleCopyApiKey}>
+                        {copyState === "copied" ? "Copied" : "Copy"}
+                      </button>
+                      {copyState === "error" && <span className="api-key-copy-error">Clipboard unavailable</span>}
+                    </div>
+                  )}
+                  <div className="api-key-existing">
+                    <label htmlFor="api-key-existing" className="form-label">Use Existing Key</label>
+                    <div className="api-key-existing-row">
+                      <input
+                        id="api-key-existing"
+                        className="form-input"
+                        type="password"
+                        value={existingApiKey}
+                        onChange={(e) => setExistingApiKey(e.target.value)}
+                        placeholder="concord_..."
+                        autoComplete="off"
+                      />
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={handleUseExistingApiKey}
+                        disabled={existingKeyState === "verifying" || !existingApiKey.trim()}
+                        aria-busy={existingKeyState === "verifying"}
+                      >
+                        {existingKeyState === "verifying" ? "Verifying…" : "Use key"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               type="button"
               className="btn-link import-toggle"
@@ -2301,6 +2592,23 @@ function Sidebar({ currentRunId, onPickRun, onSubmitNew, onPickFixture, expanded
     let cancelled = false;
     async function load() {
       try {
+        const hadCredentials = hasBrowserTenantCredentials();
+        const status = await fetchApiKeyStatus();
+        if (status && hadCredentials && status.requires_api_key && !status.authenticated) {
+          clearBrowserAuth();
+          if (!cancelled) {
+            setRuns([]);
+            setState("auth");
+          }
+          return;
+        }
+        if (status && !hadCredentials && statusBlocksProtectedFetch(status)) {
+          if (!cancelled) {
+            setRuns([]);
+            setState("auth");
+          }
+          return;
+        }
         const res = await fetch("/api/runs", { headers: liveHeaders() });
         if (!res.ok) throw new Error(`runs ${res.status}`);
         const body = await res.json();
@@ -2336,6 +2644,7 @@ function Sidebar({ currentRunId, onPickRun, onSubmitNew, onPickFixture, expanded
           <div className="sidebar-section">
             <h3 className="sidebar-heading">Recent runs</h3>
             {state === "loading" && <div className="sidebar-empty">Loading…</div>}
+            {state === "auth" && <div className="sidebar-empty">API key required</div>}
             {state === "error" && <div className="sidebar-empty">Could not load runs</div>}
             {state === "loaded" && runs.length === 0 && <div className="sidebar-empty">No runs yet</div>}
             {state === "loaded" && runs.length > 0 && (
