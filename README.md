@@ -24,15 +24,14 @@ curl -X POST $CONCORD_API_BASE/api/runs \
     "workflow_id": "WF-...",
     "task_spec": {
       "task": "Survey reliability patterns in multi-agent systems",
-      "research_question": "What architectural patterns improve MAS reliability?",
-      "mode": "stub"
+      "research_question": "What architectural patterns improve MAS reliability?"
     }
   }'
 ```
 
-`mode=stub` is deterministic (no LLM credentials needed). `mode=live` runs the
-real AG2 swarm + Tavily + Daytona regression — requires `OPENROUTER_API_KEY`,
-`TAVILY_API_KEY`, `DAYTONA_API_KEY` on the backend.
+Omitting `mode` uses the product default: the real AG2 swarm with Tavily and
+Daytona regression. Explicit `mode=stub` remains available for deterministic
+internal tests, not as the public product path.
 
 ---
 

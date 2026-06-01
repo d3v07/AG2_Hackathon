@@ -87,13 +87,14 @@ async def _execute_zone_a_from_task_spec(
 ) -> dict[str, Any]:
     """Run the Zone A swarm from a task_spec and return the resulting raw_trace dict.
 
-    Stub mode is the default — fully deterministic, no LLM, no Tavily. Live mode
-    drives the real AG2 swarm. The swarm writes the trace JSON to a temp file;
-    we read it back, parse it, and hand it off to the existing Zone B pipeline.
+    Live mode is the product default. Stub mode remains available for
+    deterministic internal tests. The swarm writes the trace JSON to a temp
+    file; we read it back, parse it, and hand it off to the existing Zone B
+    pipeline.
     """
     task = task_spec.get("task")
     research_question = task_spec.get("research_question")
-    mode = task_spec.get("mode", "stub")
+    mode = task_spec.get("mode", "live")
 
     if not task or not research_question:
         raise ValueError("task_spec requires non-empty task and research_question")

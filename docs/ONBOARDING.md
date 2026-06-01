@@ -26,12 +26,12 @@ The dashboard is available at `http://localhost:8000`.
 
 | Mode | Command | What runs | Credentials needed |
 |------|---------|-----------|-------------------|
-| stub | `python run_all.py --fixture` | Zone B pipeline on pre-baked trace | none |
 | live | `python run_all.py` | Zone A + Zone B end-to-end | `OPENROUTER_API_KEY`, `TAVILY_API_KEY` |
-| swarm stub | `python run_all.py --swarm --fixture` | Zone B GroupChat on pre-baked trace | `OPENROUTER_API_KEY` |
+| fixture demo | `python run_all.py --fixture` | Zone B pipeline on pre-baked trace | none |
 | swarm live | `python run_all.py --swarm` | Zone A swarm + Zone B GroupChat | `OPENROUTER_API_KEY`, `TAVILY_API_KEY` |
+| swarm fixture | `python run_all.py --swarm --fixture` | Zone B GroupChat on pre-baked trace | `OPENROUTER_API_KEY` |
 
-**stub mode** uses `zone_b/fixtures/sample_trace.json` — 5 pre-baked agent turns with 4 violations, always produces the same deterministic output. Use this to explore the pipeline without spending LLM credits or standing up Tavily.
+**fixture demo** uses `zone_b/fixtures/sample_trace.json` — 5 pre-baked agent turns with 4 violations, always produces the same deterministic output. Use this to explore the pipeline without spending LLM credits or standing up Tavily.
 
 **live mode** calls Tavily for real web search results, then runs all seven Zone B agents through Gemini 2.5 Flash. Set `DAYTONA_API_KEY` to enable the sandboxed regression test stage; without it the stage returns `test_status=error` rather than silently passing.
 
@@ -130,9 +130,9 @@ PY
 )"
 ```
 
-### Submit via task_spec (schema target — Zone A wiring pending)
+### Submit via task_spec
 
-Once Zone A runtime wiring lands, you will be able to submit a task specification directly:
+Submit a task specification directly:
 
 ```bash
 curl -X POST "$CONCORD_API/api/runs" \
@@ -142,18 +142,15 @@ curl -X POST "$CONCORD_API/api/runs" \
     "workflow_id": "'"$WORKFLOW_ID"'",
     "task_spec": {
       "task": "Create a literature review memo on whether multi-agent systems improve reliability in research workflows.",
-      "research_question": "Do multi-agent systems improve reliability in research workflows?",
-      "mode": "stub"
+      "research_question": "Do multi-agent systems improve reliability in research workflows?"
     }
   }'
 ```
 
-`mode` controls Zone A execution:
+Omitting `mode` uses live execution. `mode` is still accepted for internal tests:
 
-- `stub`: deterministic run on the pre-baked fixture trace — no LLM credentials needed, output is reproducible.
 - `live`: runs Zone A end-to-end with Tavily search and Gemini LLM — requires `TAVILY_API_KEY` and `OPENROUTER_API_KEY`.
-
-The `force_verifier_fail`, `force_approval_fail`, and `force_tool_fail` flags (part of the `task_spec` schema) inject specific contract violations for testing Zone B detection without touching Zone A code.
+- `stub`: deterministic internal test run on the clean stub trace.
 
 Poll status:
 
@@ -175,7 +172,7 @@ Open the dashboard:
 http://localhost:8000/?run=<RUN_ID>
 ```
 
-Hosted static pages must not embed tenant API keys. Keep the dashboard in fixture mode, or put a small authenticated backend in front of LIVE mode that keeps the tenant key server-side and returns only a run payload plus short-lived stream token.
+Hosted static pages must not embed tenant API keys. For same-origin hosted live submissions, enable the server-side public run relay with `CONCORD_PUBLIC_RUNS_ENABLED=1` and `CONCORD_PUBLIC_TENANT_ID=<tenant>`. The relay accepts task submissions only, keeps tenant credentials server-side, and leaves raw trace submission behind authenticated API routes.
 
 ## 5. Reading the Forensic Span Tree (available once PRs #110-#113 land)
 

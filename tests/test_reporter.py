@@ -47,7 +47,8 @@ class TestViolationsToDicts:
         result = _violations_to_dicts([_v()])
         assert len(result) == 1
         d = result[0]
-        assert set(d.keys()) == {"contract_type", "severity", "rule", "expected", "observed", "failed_agent", "failed_step"}
+        assert set(d.keys()) == {"contract_type", "severity", "rule", "expected", "observed", "failed_agent", "failed_step", "span_id"}
+        assert d["span_id"] is None
 
     def test_values_match_violation(self):
         v = _v("approval", "high", "ActionAgent", 5)

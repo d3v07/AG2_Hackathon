@@ -11,7 +11,7 @@ def test_valid_task_spec_parses() -> None:
     spec = TaskSpec(task="research reliability", research_question="What makes systems reliable?")
     assert spec.task == "research reliability"
     assert spec.research_question == "What makes systems reliable?"
-    assert spec.mode == "stub"
+    assert spec.mode == "live"
 
 
 def test_missing_task_raises_validation_error() -> None:
@@ -49,9 +49,9 @@ def test_unknown_mode_raises_validation_error() -> None:
     assert any(e["loc"] == ("mode",) for e in errors)
 
 
-def test_default_mode_is_stub() -> None:
+def test_default_mode_is_live() -> None:
     spec = TaskSpec(task="research reliability", research_question="Why?")
-    assert spec.mode == "stub"
+    assert spec.mode == "live"
 
 
 def test_run_create_with_valid_task_spec_parses() -> None:
@@ -61,7 +61,7 @@ def test_run_create_with_valid_task_spec_parses() -> None:
     )
     assert isinstance(run.task_spec, TaskSpec)
     assert run.task_spec.task == "research reliability"
-    assert run.task_spec.mode == "stub"
+    assert run.task_spec.mode == "live"
     assert run.raw_trace is None
 
 

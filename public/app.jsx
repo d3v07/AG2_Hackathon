@@ -76,6 +76,96 @@ async function openStreamToken(liveRunId, headers) {
 const FIXTURE_DATA = normalizeDashboardData(window.CONCORD_DATA, { fallbackFixture: true });
 let D = FIXTURE_DATA;
 
+function buildReportExportPayload(data) {
+  const source = data || {};
+  const report = source.report || {};
+  const test = source.test || {};
+  const cost = source.cost || report.cost_summary || {};
+  return {
+    exported_at: new Date().toISOString(),
+    run: source.run || {},
+    status: source.status || "",
+    workflow: {
+      name: source.run?.workflow || source.workflow_name || "",
+      topology: source.topology || {},
+      contracts: source.contracts || [],
+      routes: source.routes || [],
+      recurrences: source.recurrences || [],
+    },
+    verdicts: {
+      violation_count: report.violation_count ?? source.violations?.length ?? 0,
+      severity_summary: report.severity_summary || source.stats?.severity || {},
+      regression_test_status: report.regression_test_status || test.status || "",
+      approval_status: report.approval?.status || "",
+    },
+    evidence: {
+      trace: source.trace || [],
+      spans: source.spans || [],
+      violations: source.violations || [],
+    },
+    patches: source.patches || report.patches || [],
+    regression: {
+      test,
+      regression_tests: report.regression_tests || [],
+      regression_summary: report.regression_summary || {},
+      sandbox_id: report.sandbox_id || test.sandbox_id || "",
+      duration_ms: report.regression_duration_ms ?? test.duration_ms ?? 0,
+    },
+    cost,
+    report,
+  };
+}
+
+function reportExportFilename(data) {
+  const runId = data?.run?.id || data?.run_id || "run";
+  const safeRunId = String(runId).replace(/[^A-Za-z0-9._-]+/g, "-");
+  return `concord-report-${safeRunId}.json`;
+}
+
+function downloadReportJson(filename, jsonText) {
+  const blob = new Blob([jsonText], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function writeClipboardText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  return copied;
+}
+
+async function exportReportJson(data) {
+  const payload = buildReportExportPayload(data);
+  const jsonText = JSON.stringify(payload, null, 2);
+  const filename = reportExportFilename(data);
+  downloadReportJson(filename, jsonText);
+  let copied = false;
+  try {
+    copied = await writeClipboardText(jsonText);
+  } catch (_error) {
+    copied = false;
+  }
+  return { payload, jsonText, filename, copied };
+}
+
 const SCREENS = [
   { id: "overview",   num: "01", label: "Overview" },
   { id: "topology",   num: "02", label: "Workflow DAG" },
@@ -1506,6 +1596,24 @@ function Regression() {
 /* ---------------- REPORT ---------------- */
 function Report({ setScreen }) {
   const r = D.report;
+  const [exportState, setExportState] = useState("idle");
+  async function handleExport() {
+    setExportState("exporting");
+    try {
+      const result = await exportReportJson(D);
+      setExportState(result.copied ? "copied" : "downloaded");
+      setTimeout(() => setExportState("idle"), 2400);
+    } catch (_error) {
+      setExportState("error");
+    }
+  }
+  const exportLabel = {
+    idle: "EXPORT JSON",
+    exporting: "EXPORTING...",
+    copied: "EXPORTED + COPIED",
+    downloaded: "DOWNLOADED",
+    error: "EXPORT FAILED",
+  }[exportState];
   return (
     <>
       <div className="section-head">
@@ -1577,8 +1685,18 @@ function Report({ setScreen }) {
           <hr />
           <div className="btn-row">
             <button className="btn ghost" onClick={() => setScreen("regression")}>VIEW TEST</button>
-            <button className="btn ghost">EXPORT JSON</button>
+            <button className="btn ghost" onClick={handleExport} disabled={exportState === "exporting"}>
+              {exportLabel}
+            </button>
           </div>
+          {exportState !== "idle" && (
+            <div className="text-2" aria-live="polite" style={{fontSize: 10.5, letterSpacing: "0.12em", padding: "8px 12px 0"}}>
+              {exportState === "copied" && "JSON downloaded and copied to clipboard"}
+              {exportState === "downloaded" && "JSON downloaded; clipboard unavailable"}
+              {exportState === "exporting" && "Preparing report payload"}
+              {exportState === "error" && "Export failed in this browser"}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1598,6 +1716,28 @@ function Report({ setScreen }) {
 const TASK_MAX = 1000;
 const RESEARCH_QUESTION_MAX = 500;
 
+function hasBrowserTenantCredentials() {
+  return Boolean(window.CONCORD_API_KEY || window.CONCORD_TENANT_ID);
+}
+
+async function submitRunPayload(payload) {
+  const options = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  };
+  if (!hasBrowserTenantCredentials()) {
+    const publicResponse = await fetch("/api/public/runs", options);
+    if (publicResponse.ok || ![403, 404].includes(publicResponse.status)) {
+      return publicResponse;
+    }
+  }
+  return fetch("/api/runs", {
+    ...options,
+    headers: { ...options.headers, ...liveHeaders() },
+  });
+}
+
 function SubmitForm({ onSubmitted, onSwitchToFixture }) {
   const [workflows, setWorkflows] = useState([]);
   const [workflowsState, setWorkflowsState] = useState("loading");
@@ -1605,7 +1745,6 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
   const [workflowId, setWorkflowId] = useState("");
   const [task, setTask] = useState("");
   const [researchQuestion, setResearchQuestion] = useState("");
-  const [mode, setMode] = useState("stub");
   const [submitState, setSubmitState] = useState("idle");
   const [submitError, setSubmitError] = useState("");
 
@@ -1647,13 +1786,9 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
     setSubmitState("submitting");
     setSubmitError("");
     try {
-      const res = await fetch("/api/runs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...liveHeaders() },
-        body: JSON.stringify({
-          workflow_id: workflowId,
-          task_spec: { task: task.trim(), research_question: researchQuestion.trim(), mode },
-        }),
+      const res = await submitRunPayload({
+        workflow_id: workflowId,
+        task_spec: { task: task.trim(), research_question: researchQuestion.trim(), mode: "live" },
       });
       if (res.status === 422 || res.status === 400) {
         const body = await res.json().catch(() => ({}));
@@ -1749,18 +1884,6 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
             />
             <div className="form-counter">{researchQuestion.length} / {RESEARCH_QUESTION_MAX}</div>
           </div>
-
-          <fieldset className="form-mode" aria-required="true">
-            <legend className="form-label">Mode</legend>
-            <label className="form-radio">
-              <input type="radio" name="mode" value="stub" checked={mode === "stub"} onChange={(e) => setMode(e.target.value)} />
-              <span><strong>stub</strong> — deterministic, no LLM credentials needed</span>
-            </label>
-            <label className="form-radio">
-              <input type="radio" name="mode" value="live" checked={mode === "live"} onChange={(e) => setMode(e.target.value)} />
-              <span><strong>live</strong> — real AG2 swarm + Tavily + LLM</span>
-            </label>
-          </fieldset>
 
           {submitError && (
             <div className="form-error" role="alert" aria-live="polite">{submitError}</div>
@@ -2062,4 +2185,3 @@ function Dashboard({ onSubmitNew, onPickRun, onPickFixture, sidebarExpanded, set
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-

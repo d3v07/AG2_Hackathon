@@ -1,15 +1,38 @@
 # /go State
 
 ## Overview
-- Project: Concord Lite / Concord v1.0
+- Project: Concord
 - Mode: safe
-- Phase: Complete
-- Branch: main steady state; short-lived cleanup branches may exist only while landing this state file
-- Current Sprint: Sprint 12
-- Current Task: #39-#41 complete and closed
-- Last Checkpoint: Sprint 12 landed on `production` through PR #60 and `main` through PR #61. Issues #39, #40, and #41 are closed. PR checks passed on both merge paths, local `production` verification passed, and stale merged branches were deleted locally and remotely.
+- Phase: Recovery run
+- Branch: `codex/issue-135-baseline-scorecard`
+- Current Sprint: Recovery issues #135-#137
+- Current Task: #135-#137 ready to land
+- Last Checkpoint: Issues #135-#144 were created on GitHub and assigned only to `d3v07`. Issue #135 restored the local baseline gate by updating stale static tests, then passed full pytest, Vitest, ruff, diff check, fixture report generation, and API probes. #136 now wires `EXPORT JSON` to a completed-run report download with clipboard attempt and browser-verified JSON payload. #137 removes the public stub/live mode radio, posts live task specs, keeps fixture/demo access, and adds a disabled-by-default same-origin public run relay so hosted live submissions do not require tenant API keys in browser code. Daytona validation currently reports `error` / `no-sandbox` with invalid local credentials; tracked by #140.
 
 ## Sprint Board
+Recovery issue plan:
+- #135 Verify green main and PRD launch scorecard — implemented locally on `codex/issue-135-baseline-scorecard`
+- #136 Export completed run report — implemented locally on `codex/issue-135-baseline-scorecard`
+- #137 Demote public stub mode and default to real runs — implemented locally on `codex/issue-135-baseline-scorecard`
+- #138 Add in-product workflow registration/import
+- #139 Tighten completed-run coherence and rebrand to Concord
+- #140 Make Daytona validation states honest
+- #141 Add in-product API key creation
+- #142 Consolidate north-star docs
+- #143 Archive orphaned Lite/prototype artifacts
+- #144 Final end-to-end Concord demo script
+
+## Current Verification
+- `.venv/bin/python -m pytest -x --tb=short` passed 519 tests, 1 skipped after #137 and the public relay fix.
+- `npm test -- --run` passed 9 frontend tests.
+- `.venv/bin/python -m ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python run_all.py --fixture` exited 0 after #137 and produced a report; Daytona returned `error` / `no-sandbox` due invalid local credentials.
+- Browser export QA passed on `/?fixture=1`: downloaded `concord-report-RUN-041.json` with 4 violations and 4 patches and no console errors when a local API key was configured.
+- Browser submit QA passed on `/`: no mode radio, fixture CTA remains, intercepted submit posted `task_spec.mode="live"` to `/api/public/runs`, redirected to the run, and logged no console errors.
+- API probe passed: health 200, fixture page 200, authenticated `GET /api/runs/RUN-041` returned completed with 4 violations and 4 patches; disabled public relay returned 403.
+
+## Historical Sprint Board
 Sprint 3: Foundation
 - #12 P0 Docs: Audit current state and write NEXT_PHASE_AUDIT.md — closed on `main`
 - #13 P0 Zone B: Add C-RTE Routing contract as deterministic lambda — closed on `main`
