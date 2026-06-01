@@ -1715,6 +1715,7 @@ function Report({ setScreen }) {
    the sidebar control. */
 const TASK_MAX = 1000;
 const RESEARCH_QUESTION_MAX = 500;
+const WORKFLOW_IMPORT_MAX = 6000;
 
 function hasBrowserTenantCredentials() {
   return Boolean(window.CONCORD_API_KEY || window.CONCORD_TENANT_ID);
@@ -1738,6 +1739,79 @@ async function submitRunPayload(payload) {
   });
 }
 
+async function postWorkflowImportPayload(payload) {
+  const options = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  };
+  if (!hasBrowserTenantCredentials()) {
+    const publicResponse = await fetch("/api/public/workflows", options);
+    if (publicResponse.ok || ![403, 404].includes(publicResponse.status)) {
+      return publicResponse;
+    }
+  }
+  return fetch("/api/workflows", {
+    ...options,
+    headers: { ...options.headers, ...liveHeaders() },
+  });
+}
+
+function apiDetailText(detail) {
+  if (Array.isArray(detail)) {
+    return detail.map((item) => item?.msg || JSON.stringify(item)).join("; ");
+  }
+  if (detail && typeof detail === "object") return JSON.stringify(detail);
+  return String(detail || "Request failed");
+}
+
+function importWorkflowPayload(specText, workflowName) {
+  const spec = specText.trim();
+  const name = workflowName.trim();
+  if (!spec) throw new Error("Import spec is required.");
+  if (spec.startsWith("{") || spec.startsWith("[")) {
+    let payload;
+    try {
+      payload = JSON.parse(spec);
+    } catch (error) {
+      throw new Error(`Invalid JSON: ${error.message}`);
+    }
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error("JSON workflow spec must be an object.");
+    }
+    const normalized = { ...payload };
+    if (!normalized.name && name) normalized.name = name;
+    if (!normalized.name) throw new Error("Workflow name is required.");
+    if (typeof normalized.name !== "string") throw new Error("Workflow name must be a string.");
+    if (
+      normalized.declared_topology !== undefined &&
+      (typeof normalized.declared_topology !== "object" || Array.isArray(normalized.declared_topology))
+    ) {
+      throw new Error("declared_topology must be an object.");
+    }
+    for (const key of ["agents", "tools", "contracts"]) {
+      if (normalized[key] !== undefined && !Array.isArray(normalized[key])) {
+        throw new Error(`${key} must be an array.`);
+      }
+    }
+    if (!normalized.declared_topology) normalized.declared_topology = {};
+    if (normalized.agents === undefined) normalized.agents = [];
+    if (normalized.tools === undefined) normalized.tools = [];
+    if (normalized.contracts === undefined) normalized.contracts = [];
+    return normalized;
+  }
+  if (!name) throw new Error("Workflow name is required for YAML imports.");
+  return {
+    name,
+    owner: "",
+    declared_topology: {},
+    agents: [],
+    tools: [],
+    contracts: [],
+    contracts_yaml: spec,
+  };
+}
+
 function SubmitForm({ onSubmitted, onSwitchToFixture }) {
   const [workflows, setWorkflows] = useState([]);
   const [workflowsState, setWorkflowsState] = useState("loading");
@@ -1745,6 +1819,12 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
   const [workflowId, setWorkflowId] = useState("");
   const [task, setTask] = useState("");
   const [researchQuestion, setResearchQuestion] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importName, setImportName] = useState("");
+  const [importSpec, setImportSpec] = useState("");
+  const [importState, setImportState] = useState("idle");
+  const [importError, setImportError] = useState("");
+  const [importSuccess, setImportSuccess] = useState("");
   const [submitState, setSubmitState] = useState("idle");
   const [submitError, setSubmitError] = useState("");
 
@@ -1815,6 +1895,41 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
     }
   }
 
+  async function handleImportWorkflow() {
+    setImportState("submitting");
+    setImportError("");
+    setImportSuccess("");
+    try {
+      const payload = importWorkflowPayload(importSpec, importName);
+      const res = await postWorkflowImportPayload(payload);
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 400 || res.status === 422) {
+        setImportError(`Validation error: ${apiDetailText(body.detail || res.statusText)}`);
+        setImportState("error");
+        return;
+      }
+      if (!res.ok) {
+        setImportError(`Server error ${res.status}.`);
+        setImportState("error");
+        return;
+      }
+      const created = body.workflow_id ? body : { ...body, workflow_id: body.id };
+      setWorkflows((current) => {
+        const withoutDuplicate = current.filter(
+          (workflow) => (workflow.workflow_id || workflow.id) !== created.workflow_id
+        );
+        return [created, ...withoutDuplicate];
+      });
+      setWorkflowId(created.workflow_id || created.id);
+      setWorkflowsState("loaded");
+      setImportSuccess(`Imported ${created.name || created.workflow_id || "workflow"}.`);
+      setImportState("success");
+    } catch (err) {
+      setImportError(`Validation error: ${err.message || err}`);
+      setImportState("error");
+    }
+  }
+
   return (
     <div className="landing">
       <div className="landing-card">
@@ -1852,6 +1967,61 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
                   </option>
                 ))}
               </select>
+            )}
+            <button
+              type="button"
+              className="btn-link import-toggle"
+              onClick={() => setImportOpen((open) => !open)}
+              aria-expanded={importOpen}
+            >
+              Import workflow contract →
+            </button>
+            {importOpen && (
+              <div className="workflow-import-panel">
+                <div className="form-row">
+                  <label htmlFor="workflow-import-name" className="form-label">Workflow Name</label>
+                  <input
+                    id="workflow-import-name"
+                    className="form-input"
+                    value={importName}
+                    onChange={(e) => setImportName(e.target.value)}
+                    maxLength={120}
+                    placeholder="CustomerSupportReview"
+                  />
+                </div>
+                <div className="form-row">
+                  <label htmlFor="workflow-import-spec" className="form-label">
+                    Paste JSON workflow spec or YAML contract DSL
+                  </label>
+                  <textarea
+                    id="workflow-import-spec"
+                    className="form-textarea workflow-import-spec"
+                    value={importSpec}
+                    onChange={(e) => setImportSpec(e.target.value)}
+                    maxLength={WORKFLOW_IMPORT_MAX}
+                    rows={8}
+                    placeholder={"contracts:\n  evidence:\n    id: C-EVD\n    rule: verified_sources_count must be > 0 before ReporterAgent runs"}
+                  />
+                  <div className="form-counter">{importSpec.length} / {WORKFLOW_IMPORT_MAX}</div>
+                </div>
+                {importError && (
+                  <div className="form-error" role="alert" aria-live="polite">{importError}</div>
+                )}
+                {importSuccess && (
+                  <div className="form-success" role="status" aria-live="polite">{importSuccess}</div>
+                )}
+                <div className="import-actions">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleImportWorkflow}
+                    disabled={importState === "submitting" || !importSpec.trim()}
+                    aria-busy={importState === "submitting"}
+                  >
+                    {importState === "submitting" ? "Importing…" : "Import workflow"}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 

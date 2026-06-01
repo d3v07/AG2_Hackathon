@@ -44,6 +44,10 @@ def create_workflow_endpoint(
     body: WorkflowCreate,
     tenant_id: str = Depends(get_tenant_id),
 ) -> dict:
+    return create_workflow_for_tenant(body, tenant_id)
+
+
+def create_workflow_for_tenant(body: WorkflowCreate, tenant_id: str) -> dict:
     payload = body.model_dump()
     _normalize_contracts(payload)
     _validate_contracts(payload["contracts"])

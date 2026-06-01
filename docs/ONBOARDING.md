@@ -174,6 +174,8 @@ http://localhost:8000/?run=<RUN_ID>
 
 Hosted static pages must not embed tenant API keys. For same-origin hosted live submissions, enable the server-side public run relay with `CONCORD_PUBLIC_RUNS_ENABLED=1` and `CONCORD_PUBLIC_TENANT_ID=<tenant>`. The relay accepts task submissions only, keeps tenant credentials server-side, and leaves raw trace submission behind authenticated API routes.
 
+For same-origin workflow import from the landing page, enable `CONCORD_PUBLIC_WORKFLOWS_ENABLED=1` with the same public tenant. Keep it disabled for private deployments where workflow registration should require an authenticated operator key.
+
 ## 5. Reading the Forensic Span Tree (available once PRs #110-#113 land)
 
 The Forensic screen displays the full execution trace as a tree of spans. Each span represents one unit of work in the pipeline.

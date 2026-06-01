@@ -4,17 +4,17 @@
 - Project: Concord
 - Mode: safe
 - Phase: Recovery run
-- Branch: `codex/issue-135-baseline-scorecard`
-- Current Sprint: Recovery issues #135-#137
-- Current Task: #135-#137 ready to land
-- Last Checkpoint: Issues #135-#144 were created on GitHub and assigned only to `d3v07`. Issue #135 restored the local baseline gate by updating stale static tests, then passed full pytest, Vitest, ruff, diff check, fixture report generation, and API probes. #136 now wires `EXPORT JSON` to a completed-run report download with clipboard attempt and browser-verified JSON payload. #137 removes the public stub/live mode radio, posts live task specs, keeps fixture/demo access, and adds a disabled-by-default same-origin public run relay so hosted live submissions do not require tenant API keys in browser code. Daytona validation currently reports `error` / `no-sandbox` with invalid local credentials; tracked by #140.
+- Branch: `codex/issue-138-workflow-import`
+- Current Sprint: Recovery issue #138
+- Current Task: #138 in-product workflow registration/import implemented locally
+- Last Checkpoint: Issues #135-#137 are merged to `main` through PR #145. #138 now adds an inline landing-page import panel for JSON workflow specs or YAML contract DSL, posts through existing workflow validation via `/api/workflows` or the opt-in same-origin relay, shows server validation errors inline, rejects malformed JSON arrays before submit, and selects the imported workflow without a page refresh. Daytona validation currently reports `error` / `no-sandbox` with invalid local credentials; tracked by #140.
 
 ## Sprint Board
 Recovery issue plan:
-- #135 Verify green main and PRD launch scorecard — implemented locally on `codex/issue-135-baseline-scorecard`
-- #136 Export completed run report — implemented locally on `codex/issue-135-baseline-scorecard`
-- #137 Demote public stub mode and default to real runs — implemented locally on `codex/issue-135-baseline-scorecard`
-- #138 Add in-product workflow registration/import
+- #135 Verify green main and PRD launch scorecard — closed on `main`
+- #136 Export completed run report — closed on `main`
+- #137 Demote public stub mode and default to real runs — closed on `main`
+- #138 Add in-product workflow registration/import — implemented locally on `codex/issue-138-workflow-import`
 - #139 Tighten completed-run coherence and rebrand to Concord
 - #140 Make Daytona validation states honest
 - #141 Add in-product API key creation
@@ -23,7 +23,7 @@ Recovery issue plan:
 - #144 Final end-to-end Concord demo script
 
 ## Current Verification
-- `.venv/bin/python -m pytest -x --tb=short` passed 519 tests, 1 skipped after #137 and the public relay fix.
+- `.venv/bin/python -m pytest -x --tb=short` passed 525 tests, 1 skipped after #138.
 - `npm test -- --run` passed 9 frontend tests.
 - `.venv/bin/python -m ruff check .` passed.
 - `git diff --check` passed.
@@ -31,6 +31,8 @@ Recovery issue plan:
 - Browser export QA passed on `/?fixture=1`: downloaded `concord-report-RUN-041.json` with 4 violations and 4 patches and no console errors when a local API key was configured.
 - Browser submit QA passed on `/`: no mode radio, fixture CTA remains, intercepted submit posted `task_spec.mode="live"` to `/api/public/runs`, redirected to the run, and logged no console errors.
 - API probe passed: health 200, fixture page 200, authenticated `GET /api/runs/RUN-041` returned completed with 4 violations and 4 patches; disabled public relay returned 403.
+- #138 browser import QA passed: landing import panel posted YAML to `/api/public/workflows`, selected the imported workflow in-place, rejected malformed JSON arrays inline, and logged no console errors.
+- #138 API probe passed: health 200, landing page 200, workflows 200 with imported workflow present, and `GET /api/runs/RUN-041` returned completed with 4 violations and 4 patches.
 
 ## Historical Sprint Board
 Sprint 3: Foundation

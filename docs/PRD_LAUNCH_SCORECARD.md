@@ -22,7 +22,7 @@ PRD source: `concord_v1_artifacts/docs/CONCORD_PRD.md:320`.
 | # | Criterion | Status | Evidence | Follow-up |
 | --- | --- | --- | --- | --- |
 | 1 | Create an API key. | PARTIAL | Backend route exists at `api/routes/api_keys.py:13`; live public submissions can use the server-side relay at `api/routes/public_runs.py:21`, but in-product key creation is still missing. | #141 |
-| 2 | Register an AG2 workflow. | PARTIAL | API supports workflow registration and `contracts_yaml` normalization at `api/routes/workflows.py:42`; landing UI only exposes a picker and tells users to `POST /api/workflows` first at `public/app.jsx:1695`. | #138 |
+| 2 | Register an AG2 workflow. | PASS | API supports workflow registration and `contracts_yaml` normalization at `api/routes/workflows.py:47`; landing UI imports JSON workflow specs or YAML contract DSL through `/api/workflows` or the opt-in same-origin relay at `public/app.jsx:1742`. | #138 |
 | 3 | Submit a trace or run task. | PASS | Run submission route accepts task specs/raw traces at `api/routes/runs.py:63`; landing form posts live `task_spec` payloads at `public/app.jsx:1791`. | None |
 | 4 | See live run status. | PASS | SSE token and event routes exist at `api/routes/runs.py:105` and `api/routes/runs.py:148`; frontend opens `EventSource` at `public/app.jsx:1988`. | None |
 | 5 | View contract violations. | PASS | Five deterministic default contracts are registered in `zone_b/contracts/registry.py:13`; completed run probe returned 4 fixture violations. | None |
@@ -41,3 +41,5 @@ PRD source: `concord_v1_artifacts/docs/CONCORD_PRD.md:320`.
 #136 is implemented locally on `codex/issue-135-baseline-scorecard`: `EXPORT JSON` now downloads `concord-report-<run_id>.json`, attempts to copy the same JSON to clipboard, and includes verdicts, trace evidence, violations, patches, regression data, cost, run metadata, workflow metadata, and the final report block. Browser QA downloaded `concord-report-RUN-041.json` from `/?fixture=1` and verified 4 violations and 4 patches.
 
 #137 is implemented locally on `codex/issue-135-baseline-scorecard`: public task submission no longer exposes a stub/live radio, the submitted task spec uses `mode: "live"`, and `TaskSpec` defaults to live when mode is omitted. Stub remains available only as an explicit internal/test mode. Browser QA verified the landing form has no mode radio, keeps the fixture CTA, and posts `mode: "live"` to the same-origin public relay when no browser tenant credentials exist.
+
+#138 is implemented locally on `codex/issue-138-workflow-import`: the landing workflow selector now includes an import panel that accepts full JSON workflow specs or YAML contract DSL, posts to existing workflow validation through `/api/workflows` or an opt-in same-origin relay, shows validation errors inline, and selects the imported workflow without a page refresh.
