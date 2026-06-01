@@ -4,6 +4,8 @@ Audit timestamp: 2026-05-06 12:43:39 EDT
 
 Scope: GitHub issue #12 plus the follow-up regression-gate stabilization requested after the audit surfaced a fixture smoke risk.
 
+Historical note: this document is the #12 baseline snapshot from May 6. Use `docs/PLAN_VS_REALITY.md` for the current Concord v1 north-star scorecard.
+
 ## Summary
 
 - Branch: `feat/sprint-3-foundation`, created from clean local `production`.
@@ -15,7 +17,7 @@ Scope: GitHub issue #12 plus the follow-up regression-gate stabilization request
 - Live demo: `https://concord-lite.vercel.app/` returns HTTP 200.
 - Lint gate: unavailable in the current Python environment because `ruff` is not installed.
 - API import gate: unavailable in the current Python environment because `fastapi` is not installed.
-- Handoff doc gap: `docs/PLAN_VS_REALITY.md` is referenced by the handoff but is missing after an earlier revert.
+- Handoff doc gap at audit time: `docs/PLAN_VS_REALITY.md` was referenced by the handoff but missing after an earlier revert. It has since been restored as the current north-star scorecard.
 
 ## Command Results
 
@@ -31,7 +33,7 @@ Scope: GitHub issue #12 plus the follow-up regression-gate stabilization request
 | Fixture integration | `pytest tests/test_integration.py::TestRunAllFixtureMode -q` | 0 | 4 passed |
 | Lint | `python3 -m ruff check .` | 1 | `No module named ruff` |
 | Live demo | `curl -s -o /dev/null -w "%{http_code}\n" https://concord-lite.vercel.app/` | 0 | `200` |
-| Required docs | existence check | 0 | all present except `docs/PLAN_VS_REALITY.md` |
+| Required docs | existence check | 0 | audit-time result: all present except `docs/PLAN_VS_REALITY.md`; current status: restored |
 | AG2 imports | import check | 0 | core, handoffs, Daytona executor, Tavily tool import successfully |
 | API import | `python3 -c "import api.index"` | 0 wrapper, import failed | `ModuleNotFoundError: No module named 'fastapi'` |
 
@@ -107,7 +109,7 @@ Credential names are present in `.env`; no secret values were read or copied int
 4. Repair now emits one backend patch per violation.
    - Sprint #15 changed `run_repair` to return `patches[]` in violation input order and cardinality.
    - Legacy scalar repair fields still mirror the highest-severity patch for existing callers.
-   - The dashboard adapter still creates visual patch rows by synthesis at `api/adapter.py:187-202`; passthrough of backend `report.patches[]` is assigned to #17.
+   - Current adapter behavior: native backend `report.patches[]` passes through to dashboard data when present; legacy synthesis remains only for scalar-only reports.
 
 5. Regression test generation was not deterministic enough for a gate. This has been stabilized in the follow-up fix.
    - Before the fix, if the generation call succeeded but returned a semantically bad test, the fallback was not used.
@@ -121,9 +123,9 @@ Credential names are present in `.env`; no secret values were read or copied int
    - `requirements.txt` includes FastAPI and Pydantic, but the current Python environment has not installed FastAPI.
    - Importing `api.index` fails because `api/index.py:19-22` imports FastAPI.
 
-7. Handoff pre-flight references a missing document.
+7. Handoff pre-flight referenced a missing document at audit time.
    - The project handoff requires reading `docs/PLAN_VS_REALITY.md`.
-   - The file is missing locally; git history shows it was removed by commit `99a760f` during a revert of unauthorized doc pushes.
+   - The file has since been restored; the missing-file note is retained here only as historical audit evidence.
 
 8. Local branch baseline is ahead of GitHub main.
    - `git log origin/main..HEAD --oneline` shows 19 commits ahead.
@@ -131,4 +133,4 @@ Credential names are present in `.env`; no secret values were read or copied int
 
 ## Recommended Gate Before #13
 
-The regression gate blocker from this audit is stabilized. #13 may proceed after acknowledging the remaining toolchain gaps: `ruff` is unavailable, FastAPI is not installed in the current Python environment, and `docs/PLAN_VS_REALITY.md` is still missing.
+The regression gate blocker from this audit was stabilized before #13. The current north-star and remaining recovery work now live in `docs/PLAN_VS_REALITY.md`.

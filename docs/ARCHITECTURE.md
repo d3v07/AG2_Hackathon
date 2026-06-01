@@ -1,6 +1,6 @@
 # Concord — Architecture & Demo Walkthrough
 
-**Live demo:** https://concord-lite.vercel.app/
+**Live demo URL:** https://concord-lite.vercel.app/
 **Repo:** https://github.com/d3v07/AG2_Hackathon
 **Built with:** AG2 (autogen) · Tavily · Daytona · Gemini 2.5 Flash via OpenRouter
 
@@ -12,7 +12,7 @@ This doc is the Q&A-ready reference. Read it, keep it open during the demo. Ever
 
 Multi-agent systems fail silently. An agent claims "I verified the sources" but writes `verified_sources_count=0`. An action agent saves a report without waiting for human approval. A reporter emits final output before the verifier even ran a tool call. These are **contract violations** — the gap between what an agent *says* and what its trace *proves*.
 
-**Concord is a 7-agent diagnostic pipeline that watches a multi-agent workflow run, detects every contract violation in the trace, attributes it to the responsible agent, generates an AG2-native repair patch, validates the patch in a sandboxed pytest, and produces a Contract Violation Report — fully automated.**
+**Concord is a diagnostic pipeline that watches an AG2 workflow run, detects contract violations in the trace, attributes them to the responsible agent/primitive, generates one AG2-native repair patch per violation, validates the repair in sandboxed tests, persists the result, and produces a Contract Violation Report.**
 
 We didn't build a better workflow. We built a *referee* for any AG2 workflow.
 
@@ -22,9 +22,9 @@ We didn't build a better workflow. We built a *referee* for any AG2 workflow.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  Zone A — TARGET WORKFLOW (Literature Review Assistant)             │
-│  Broken by design. Demonstrates the contract violations Zone B      │
-│  catches. Produces a JSON trace.                                     │
+│  Zone A — TARGET WORKFLOW (Literature Review Assistant demo)        │
+│  Can run clean or in controlled failure modes. Produces a JSON trace │
+│  that demonstrates the violations Zone B catches.                    │
 └────────────────────────────────┬─────────────────────────────────────┘
                                  │  zone_b/fixtures/sample_trace.json
 ┌────────────────────────────────▼─────────────────────────────────────┐
@@ -91,13 +91,15 @@ TraceCollector → ContractChecker → Attribution → Repair
 
 - **Input:** `RunTrace` + `ContextSnapshot`
 - **Output:** `list[Violation]` + `violation_count` + `severity_summary`
-- **Three contracts (deterministic lambdas, lines 9-33):**
+- **Five default contracts (deterministic checks in `zone_b/contracts/`):**
 
   | Contract type | Severity | Rule | Check |
   |---------------|----------|------|-------|
   | `evidence` | high | `verified_sources_count > 0` before Reporter runs | `snap.verified_sources_count > 0` |
   | `tool` | high | VerifierAgent must record a `tool_call_id` (Tavily or Daytona) | any VerifierAgent event has tool_call_id |
+  | `routing` | medium | Reporter requires a successful Verifier tool event; Action requires HumanGate first | handoff path and tool events satisfy the route preconditions |
   | `approval` | high | ActionAgent requires `approval_status=='approved'` | `snap.approval_status == "approved"` |
+  | `schema` | medium | Final output must contain required report keys | `snap.final_output` has the required keys |
 
 - **LLM use:** `ConversableAgent` only generates the human-readable `expected` / `observed` strings (`_generate_violation_text:43-70`). The pass/fail decision is pure code — never delegated to the LLM.
 
@@ -123,7 +125,7 @@ TraceCollector → ContractChecker → Attribution → Repair
   | `approval` | **HumanGate** (UserProxyAgent) |
   | `schema` | **Guardrail** |
 
-- **LLM use:** generates the Python `patch_code` snippet + `expected_impact` sentence for each patch. Falls back to a stub comment per patch if parse fails (`_build_patch`). Confidence drops from 0.85 to 0.5 on fallback.
+- **LLM use:** generates the Python `patch_code` snippet + `expected_impact` sentence for each patch. Falls back to a deterministic placeholder comment per patch if parse fails (`_build_patch`). Confidence drops from 0.85 to 0.5 on fallback.
 - `_pick_primary` now selects the highest-severity patch only for legacy scalar aliases; `patches[]` preserves violation input order and cardinality.
 
 ### B5. RegressionTest (`zone_b/agents/regression_test.py`) — **Daytona-powered**
@@ -227,7 +229,7 @@ The frontend is a self-contained React app served as static assets from Vercel (
 ### Screen 5 — **Repair Patch** (`screen === "repair"`)
 - **Renders:** 4 patch cards with primitive (Guardrail / ToolGate / OnContextCondition / HumanGate), target agent, before/after diff (red removed lines / green added lines), and an APPLY button per patch. Filter buttons (ALL / P-001 / P-002 / P-003 / P-004).
 - **Data sources:** `D.patches[]`.
-- **Backend equivalent:** `report.patches[]` from `zone_b/agents/repair.py`, plus scalar `report.affected_primitive` and `report.patch_code` aliases for current callers. The public dashboard adapter still synthesizes the visual diff rows until #17 wires the plural backend output through.
+- **Backend equivalent:** `report.patches[]` from `zone_b/agents/repair.py`. The public dashboard adapter passes native backend patches through when present and only uses legacy synthesis for older scalar-only reports.
 
 ### Screen 6 — **Regression Test** (`screen === "regression"`)
 - **Renders:** Daytona terminal stream (every line of the sandbox stdout), sandbox metadata card (sandbox_id, image, runner, duration, status), assertions table (4 PASS rows).
@@ -307,7 +309,7 @@ python run_all.py
 #   and /api/runs/RUN-041/events streams status lifecycle events.
 ```
 
-The 298-test pytest suite covers parsing, contract lambdas, primitive map, fallback paths, per-violation regression status, and Zone A→B integration.
+The pytest suite covers parsing, contract checks, primitive mapping, fallback paths, per-violation regression status, auth/tenancy, persistence, API routes, and Zone A→B integration.
 
 ---
 
@@ -320,7 +322,7 @@ Because contract violations need to be *deterministic*. If the same trace produc
 Yes for simple cases. But the agent whose contract *failed* is often downstream of the agent who *caused* the failure. Example: Reporter emits final output without verified sources — Reporter's contract failed, but Verifier is responsible for `verified_sources_count=0`. Attribution reasons over the handoff path to surface the upstream cause.
 
 **Q: Why keep scalar repair fields if repairs are per violation?**
-Current callers still read `repair_patch`, `affected_primitive`, `patch_code`, and `confidence`. The backend now emits `patches[]` in violation order, while the scalar fields mirror the highest-severity patch until downstream API and dashboard code finish moving to the plural shape.
+Some legacy callers still read `repair_patch`, `affected_primitive`, `patch_code`, and `confidence`. The backend emits `patches[]` in violation order, the API adapter passes that plural shape through, and scalar fields remain as aliases for old callers.
 
 **Q: What happens if the LLM returns invalid JSON?**
 Every Zone B agent has a deterministic fallback path — see `run_attribution:96-114`, `run_repair:97-102`, `_fallback_test:60-79`, `reporter._ask_llm_for_narrative`'s except clause. We never crash because the LLM had a bad turn. We mark `confidence=0.5` instead of `0.85` so the operator knows.
@@ -350,7 +352,7 @@ This is a multi-agent observability + repair system. Both tracks fit. Concord is
 
 ## 11. What's Honest to Concede
 
-- **The dashboard's per-violation patch diffs are still template-driven** in the fixture. The backend now emits one repair entry per violation in `report.patches[]`, but the public dashboard adapter still synthesizes its visual diff rows until the API passthrough work lands.
+- **The dashboard normalizes repair patches for display.** Native `report.patches[]` is the primary path; legacy synthesis exists only for old scalar-only reports and fixture compatibility.
 - **Workflow topology persistence is live for registered workflow payloads**, and run traces still derive observed topology/routes when a workflow declaration is not available in the request path. Later contract-DSL work will make declaration authoring richer.
 - **We use Daytona as a real, live integration**, not a stub. `_run_in_daytona` calls the AG2 `DaytonaCodeExecutor` runner. Without `DAYTONA_API_KEY`/`DAYTONA_API_URL` it returns `("Daytona credentials missing", "no-sandbox", "error")` — not a fake `pass`.
 - **Tavily is also live.** `zone_a/agents/researcher.py` actually hits `client.search(...)` for every Zone A run.

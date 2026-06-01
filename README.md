@@ -7,10 +7,11 @@
 
 Concord monitors a multi-agent workflow run, detects when agents violate their behavioural contracts, attributes the root cause to the responsible agent, proposes a repair targeting the correct AG2 primitive, and validates the fix with a sandboxed regression test — all automatically, end-to-end.
 
-**Sprint 17 forensic trace UI:** click any contract violation to jump straight to the offending span; inspect the 16-field shape inline; cross-link from violations → patches → regression.
+**Current product loop:** register a workflow contract, submit a run or trace, inspect deterministic violations, review one repair patch per violation, validate in Daytona, export the report, and return to persisted history.
 
-> **Live demo:** https://concord-lite.vercel.app/
+> **Live demo URL:** https://concord-lite.vercel.app/
 > **Pipeline (CLI):** `python run_all.py --fixture`
+> **North-star scorecard:** [`docs/PLAN_VS_REALITY.md`](docs/PLAN_VS_REALITY.md)
 > **Architecture & Q&A doc:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 > **Demo script & cue cards:** [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)
 > **Deep Q&A reference (70 questions):** [`docs/QA_DEEP.md`](docs/QA_DEEP.md)
@@ -35,18 +36,16 @@ internal tests, not as the public product path.
 
 ---
 
-## Demo Path (4 minutes)
+## Demo Path
 
-1. Open the live mission-control dashboard: **https://concord-lite.vercel.app/**
-2. Walk the 7 screens:
-   - **Overview** — Run #041 stats + animated agent pipeline (▶ REPLAY RUN to play through 12 steps)
-   - **Workflow DAG** — declared topology vs observed path, with skipped guards / missing approvals highlighted
-   - **Agent Trace** — 12-event timeline with FAIL/WARN flags
-   - **Violations** — 4 detected (V-001 evidence, V-002 tool, V-003 routing, V-004 approval). Click a row → jumps to the matching repair patch.
-   - **Repair Patch** — 4 AG2-native primitives (Guardrail, ToolGate, OnContextCondition, UserProxyAgent/HumanGate) shown as before/after diffs
-   - **Regression** — Daytona sandbox terminal log + 4 PASS assertions
-   - **Final Report** — narrative + RERUN READY status flip + APPROVE block
-3. Run the backend pipeline locally: `python run_all.py --fixture` (no API keys needed) — produces the same Contract Violation Report on stdout that drives the dashboard.
+1. Register or import an AG2 workflow contract.
+2. Submit a real task or trace.
+3. Watch the run status move through queued, analyzing, and completed.
+4. Open the completed run and follow violation -> evidence -> AG2 primitive -> repair patch -> regression result.
+5. Export the completed report JSON.
+6. Reopen the run from persisted history.
+
+For deterministic local verification, run `python run_all.py --fixture` (no API keys needed). Fixture mode exercises the same Zone B report path while skipping live Zone A execution.
 
 ---
 
@@ -74,7 +73,7 @@ Multi-agent systems fail silently. An agent claims it verified sources but sets 
 Concord is a diagnostic pipeline that sits *outside* the target workflow, reads its execution trace, and systematically detects, attributes, and repairs those gaps.
 
 ```
-Zone A: target workflow (broken by design)
+Zone A: target workflow (demo fixture can be broken by design)
          ↓  execution trace (JSON)
 Zone B: Concord diagnostic (detects, attributes, repairs)
          ↓  Contract Violation Report

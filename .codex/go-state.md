@@ -4,10 +4,10 @@
 - Project: Concord
 - Mode: safe
 - Phase: Recovery run
-- Branch: `codex/issue-141-api-key-ui`
-- Current Sprint: Recovery issue #141
-- Current Task: #141 in-product API key creation passed local gates and reviewer pass; ready for PR to `main`
-- Last Checkpoint: Issues #135-#140 are merged to `main`. #141 adds a landing-page API Access panel that can create/reveal a session API key, paste an existing key, preflight auth status without protected-route 401s, and use the session key for protected live API calls.
+- Branch: `codex/issue-142-docs-consolidation`
+- Current Sprint: Recovery issue #142
+- Current Task: #142 north-star docs consolidated locally; verification and reviewer pass complete
+- Last Checkpoint: Issues #135-#141 are merged to `main`. #142 restores `docs/PLAN_VS_REALITY.md` as the current north-star scorecard and patches stale active docs for five contracts, native `patches[]` passthrough, honest Daytona states, and resolved API key UI.
 
 ## Sprint Board
 Recovery issue plan:
@@ -17,8 +17,8 @@ Recovery issue plan:
 - #138 Add in-product workflow registration/import — closed on `main`
 - #139 Tighten completed-run coherence and rebrand to Concord — closed on `main`
 - #140 Make Daytona validation states honest — closed on `main`
-- #141 Add in-product API key creation — local gates and reviewer pass complete on `codex/issue-141-api-key-ui`
-- #142 Consolidate north-star docs
+- #141 Add in-product API key creation — closed on `main`
+- #142 Consolidate north-star docs — local docs patch in progress on `codex/issue-142-docs-consolidation`
 - #143 Archive orphaned Lite/prototype artifacts
 - #144 Final end-to-end Concord demo script
 
@@ -57,6 +57,13 @@ Recovery issue plan:
 - #141 fixture gate passed: `.venv/bin/python run_all.py --fixture` exited 0 and retained the honest `credential_failure` validation state for invalid local sandbox credentials.
 - #141 browser QA passed on desktop/mobile `/`: API Access panel created a `local` session key, revealed it once, persisted it in `sessionStorage`, reused an existing key with `GET /api/workflows` status 200, cleared a stale invalid session before protected fetches, disabled key creation until auth when keys already exist, and logged no console/page errors.
 - #141 reviewer follow-up found no remaining blockers after adding hosted bootstrap status, stale-session preflight, and removing session-key writes to `window`.
+- #142 docs grep gate passed: no active hits for stale three-contract, patch-passthrough, unresolved #141, missing PLAN_VS_REALITY, or Concord Lite README wording.
+- #142 docs existence gate passed: `docs/PLAN_VS_REALITY.md`, `docs/ARCHITECTURE.md`, `docs/PRD_LAUNCH_SCORECARD.md`, and `docs/ONBOARDING.md` exist.
+- #142 full gate passed: `.venv/bin/python -m pytest -x --tb=short` passed 549 tests, 1 skipped.
+- #142 frontend gate passed: `npm test -- --run` passed 9 tests.
+- #142 lint/diff gate passed: `.venv/bin/python -m ruff check .` and `git diff --check`.
+- #142 fixture gate passed: `.venv/bin/python run_all.py --fixture` exited 0 and retained the honest `credential_failure` validation state for invalid local sandbox credentials.
+- #142 reviewer pass found no blocking findings.
 
 ## Historical Sprint Board
 Sprint 3: Foundation
@@ -337,7 +344,7 @@ Sprint 12: Release operations and onboarding
 - Sprint 6 reusable SDK sessions initially leaked prior spans into later submissions; fixed by resetting submitted span buffers after each `complete()`.
 - Sprint 8 first reviewer found sandbox-state leakage and per-iteration cost undercounting; fixed with pool reset and cost aggregation tests.
 - Sprint 8 second reviewer found LLM cost double-counting and non-object generated JSON usage loss; fixed with AG2-shaped cost parsing tests.
-- `docs/PLAN_VS_REALITY.md` is referenced by the handoff but missing locally.
+- `docs/PLAN_VS_REALITY.md` was absent during the #12 audit; restored during recovery issue #142.
 - AG2 `graph-rag-falkor-db` extra could not install on Python 3.14 because `graphrag-sdk==0.8.2` has no compatible distribution here. Sprint 9 uses the real `falkordb` client when AG2's optional graph stack is unavailable, while keeping the verified AG2 wrapper import path documented.
 - Sprint 10 first reviewer lane stalled and was replaced with a narrower blocker-only reviewer. The replacement found two parser/API blockers, both fixed.
 - Sprint 12 first reviewer pass found three release blockers in docs, compose auth, and provider port binding. All were fixed with tests and a reviewer re-check.
@@ -355,7 +362,7 @@ Sprint 12: Release operations and onboarding
 - No Sprint 10 blocker remains after reviewer re-check.
 - No Sprint 11 blocker remains after reviewer re-check.
 - No Sprint 12 blocker remains after reviewer re-check.
-- Remaining baseline doc gap: `docs/PLAN_VS_REALITY.md` missing.
+- No remaining baseline doc gap for `docs/PLAN_VS_REALITY.md`; current north-star scorecard is restored.
 
 ## Exact Next Step
 No open GitHub issues remain for #12-#41. Finish any active state-only cleanup PR, keep `main` and `production` in sync, and start next work from a fresh issue and branch.
