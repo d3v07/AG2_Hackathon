@@ -1,197 +1,136 @@
-# Concord — Demo Script & Q&A Cue Cards
+# Concord Final Demo Script
 
-Pull this up on a second screen. Every line in **bold quotes** is verbatim — say it that way.
+This is the current Concord v1 demo path. It replaces the old stage cue cards and avoids the retired seven-tab story.
 
----
+## What This Demo Proves
 
-## OPENING (30 seconds, before clicking anything)
+| Step | Product proof | Current surface |
+|---:|---|---|
+| 1 | Create or load tenant API access | Landing `API Access` panel and `POST /api/api-keys` |
+| 2 | Register a workflow contract | Landing import panel and `POST /api/workflows` with JSON or `contracts_yaml` |
+| 3 | Submit a run | Landing run form for `task_spec`, or API `POST /api/runs` with `raw_trace` |
+| 4 | Catch deterministic violations | Zone B contract checker finds evidence, tool, routing, and approval failures |
+| 5 | Attribute and repair | Report links each violation to an AG2 primitive patch |
+| 6 | Validate repair state | Regression block reports `passed`, `failed`, `credential_failure`, `execution_error`, `unavailable`, or `skipped` |
+| 7 | Export report | `EXPORT JSON` emits the completed report payload |
+| 8 | Revisit history | Sidebar history and `GET /api/runs/{run_id}` reload the completed run |
 
-1. **"Multi-agent systems fail silently. An agent says 'I verified the sources' and writes `verified_sources_count = 0`. An action agent saves a report without waiting for human approval. The narrative says one thing, the trace says another."**
+## Fast Automated Smoke
 
-2. **"Concord is a 7-agent diagnostic pipeline that watches a multi-agent workflow run, catches every contract violation in the trace, attributes it to the responsible agent, generates an AG2-native repair, validates the repair in a Daytona sandbox, and produces a Contract Violation Report — fully automated."**
+Run this before any recorded demo or release handoff:
 
-3. **"We didn't build a better workflow. We built a referee for any AG2 workflow."**
+```bash
+.venv/bin/python scripts/demo_e2e_smoke.py
+npm run test:e2e -- tests/e2e/fixture/report_export.spec.ts --project=chromium
+```
 
-4. **"Live URL is concord-lite.vercel.app. Backend pipeline is `python run_all.py --fixture` — runs end-to-end with no API keys."**
+The smoke creates a temporary SQLite database, creates a local API key, imports the literature-review contract YAML, submits `zone_b/fixtures/sample_trace.json`, verifies four violations, verifies four repair patches, verifies four regression assertions, checks validation state honesty, and revisits the run through history.
 
----
+The Playwright check opens the actual fixture report screen, clicks `EXPORT JSON`, downloads the report, and verifies the exported JSON contains run metadata, verdicts, violations, patches, regression data, and cost.
 
-## ARCHITECTURE OVERVIEW (before the screen tour)
+Expected ending:
 
-5. **"Two zones. Zone A is the target workflow being audited — a Literature Review Assistant with 5 agents that's broken by design. Zone B is Concord — 7 diagnostic agents that read Zone A's trace and produce a report."**
+```text
+PASS demo_e2e_smoke
+run_id=RUN-... workflow_id=WF-... violations=4 patches=4 assertions=4 validation_state=...
+```
 
-6. **"Key separation: contracts are declared in Zone A, verified in Zone B. The workflow can't audit itself."**
+For a fast deterministic local check that does not touch the sandbox provider:
 
-7. **"Both zones use AG2 — `ConversableAgent`, `UserProxyAgent`, real `human_input_mode='ALWAYS'` for human gates. LLM is Gemini 2.5 Flash via OpenRouter. Tavily for live web search in Zone A. Daytona for sandboxed regression testing in Zone B."**
+```bash
+CONCORD_DEMO_REGRESSION_RUNNER=local .venv/bin/python scripts/demo_e2e_smoke.py
+```
 
----
+`CONCORD_DEMO_REGRESSION_RUNNER=product` is the default. It uses the product validation path and accepts honest unavailable or credential-failure states when sandbox credentials are absent or invalid.
 
-## SCREEN-BY-SCREEN WALK (the live demo)
+## Browser Demo Setup
 
-### Screen 1 — Workflows
-8. **(open Workflows screen)** **"This is the workflow registry. Pick Literature Review Assistant."**
+Start the local API and static app:
 
-9. **(click Submit Run)** **"The run form pre-fills with the Literature Review task. There is no mode picker — product submissions use the live AG2 path. Click Submit."**
+```bash
+CONCORD_DB_PATH=data/demo.db \
+CONCORD_PUBLIC_WORKFLOWS_ENABLED=1 \
+CONCORD_PUBLIC_RUNS_ENABLED=1 \
+.venv/bin/python -m uvicorn api.index:app --host 127.0.0.1 --port 8000
+```
 
-10. **"Watch the SSE progress strip: queued → analyzing → completed. That's the full Zone B pipeline running live — TraceCollector, ContractChecker, Attribution, Repair, RegressionTest, Reporter, HumanGate — seven agents in sequence."**
+Open:
 
-### Screen 2 — Overview
-11. **"This is Zone B's report rendered on top of Zone A's execution. The 5 agents you see ARE Zone A — Researcher, Critic, Verifier, Reporter, Action. Zone B added the violation count, the contract status table, and the severity breakdown."**
+```text
+http://127.0.0.1:8000
+```
 
-12. **(click REPLAY RUN)** **"This is the recorded trace playing back. Twelve events, ~520 milliseconds per step. Researcher and Critic pass. Verifier turns red — that's where the contract failure happens. Reporter and Action both fail downstream."**
+## Browser Walkthrough
 
-13. **"Bottom-right of each agent: the per-agent footer. 'no tool_event' under Verifier, 'verified=0' under Reporter, 'approval=pending' under Action. These are the failures we'll trace through the rest of the demo."**
+1. **Create API access.** Open `API Access`, create a `local` browser session key, and confirm the status reads `READY`.
+2. **Import workflow contract.** Open `Import workflow contract`, enter `LiteratureReviewAssistant`, paste the contents of `zone_b/contracts/examples/literature_review.yaml`, and import it.
+3. **Submit a live task when runtime credentials are present.** Pick the imported workflow, enter a task and research question, and click `Run task`.
+4. **If runtime credentials are not present, use the completed fixture for the visual walkthrough.** Click `View demo fixture run`. The backend smoke above is the proof of the actual API loop.
+5. **Walk the completed report.** Show the contract count, violation list, topology, repair patches, regression panel, validation state, and final narrative.
+6. **Export.** Click `EXPORT JSON`; confirm the payload contains `run`, `violations`, `patches`, `test`, `report`, and `cost`.
+7. **Revisit.** Use the sidebar recent-run list to reopen the completed run.
 
-### Screen 3 — Forensic (available once PR #110-#113 land)
-14. **(click Forensic screen)** **"This is the span tree for the workflow run. Every agent turn, tool call, handoff, and guardrail check is a span. The tree shows the full execution path."**
+## Talk Track
 
-15. **(click VerifierAgent span)** **"The inspector opens on the right. Eight sections: Identity, Timing, Error, Input, Output, Attributes, Contract violations, Repair, Regression. VerifierAgent has two contract violations — C-TOL and C-EVD — with deep-links."**
+**"Concord is a contract-to-repair system for AG2 workflows. The workflow declares what must be true, Concord reads the trace, finds deterministic contract violations, maps each one to the responsible AG2 primitive, proposes a repair patch, validates the patch state, and stores the report so the operator can export or revisit it."**
 
-16. **(click a violation in the inspector)** **"That deep-link jumps directly to the Violations screen with the matching violation highlighted."**
+**"The important part is separation. The workflow under test can be wrong in its narrative. Concord does not trust the narrative; it reads the trace and applies code-level contracts."**
 
-### Screen 4 — Violations
-17. **(click 04 Violations)** **"Four violations, three HIGH severity, one MED. Each card has the contract that failed, what was expected, what was observed, the failed agent, and an evidence chain pointing back to the trace steps."**
+**"A clean run is allowed. Concord is not supposed to force failure. When a workflow does fail, the report links evidence, failed agent, failed step, repair patch, regression result, validation state, and exportable metadata in one place."**
 
-18. **(click any violation row)** **"Clicking a violation jumps you straight to the proposed repair patch — that's the operator workflow."**
+## Honest Validation Language
 
-### Screen 5 — Repair Patch
-19. **"Four AG2-native primitive patches. Guardrail, ToolGate, OnContextCondition, and UserProxyAgent slash HumanGate. Each one shows before / after — red lines are removed, green lines are added."**
+Use this wording when the validation block is not green:
 
-20. **"These aren't pseudo-code. The added lines paste straight into the operator's `ConversableAgent(...)` constructor or `Handoffs(...)` call. The repair targets the AG2 framework primitive, not the user's business logic."**
+| State | Say this |
+|---|---|
+| `passed` | "The repair regression passed." |
+| `failed` | "The repair was tested and did not satisfy the regression." |
+| `credential_failure` | "The validation runner was reached, but credentials were missing or invalid. Concord is not pretending this passed." |
+| `execution_error` | "The validation runner errored during execution. The report preserves that state." |
+| `unavailable` | "Validation did not produce a runnable sandbox result in this environment." |
+| `skipped` | "There were no violations to validate." |
 
-21. **"P-001 adds a Guardrail to Reporter — `condition=lambda ctx: ctx['verified_sources_count'] > 0`. P-002 wraps Verifier's `emit_verdict` in a tool-event check. P-003 gates the Verifier→Reporter handoff with `OnContextCondition`. P-004 inserts a UserProxyAgent with `human_input_mode='ALWAYS'` before Action."**
+## API Flow For Q&A
 
-22. **(click patch link "Open on Regression screen")** **"That link jumps directly to the Regression screen for this patch."**
+```bash
+# Health
+curl -s http://127.0.0.1:8000/api/health
 
-### Screen 6 — Regression
-23. **(click 06 Regression)** **"This is the Daytona sandbox. Per-run isolation, fresh `python:3.11-slim` image, sandbox ID `dt-9f3a-2b71`. The terminal stream is captured stdout from `sandbox.process.code_run`."**
-
-24. **"Four assertions, all PASS. The LLM generated the test code. Daytona executed it. We always delete the sandbox in `finally` — no resource leak, no cleanup burden on the operator."**
-
-25. **"This is where Daytona earns its keep. We're executing LLM-generated code — running that on the operator's machine is unsafe."**
-
-### Screen 7 — Final Report
-26. **(click 07 Final Report)** **"Notice the top-right status flipped from '4 VIOLATIONS DETECTED' in red to 'RERUN READY' in green. That's the explicit signal the loop is closed."**
-
-27. **"Executive summary is the final narrative. Approval block shows the report's operator state, and approval decisions are persisted via `POST /api/runs/{run_id}/approval`."**
-
-28. **"Patches Applied table is the deterministic part — four AG2 primitives mapped to four contract types."**
-
----
-
-## CONTRACTS — WHERE THEY LIVE (must-know, very likely Q&A)
-
-26. **"Contracts are declared in Zone A's `workflow_contract.py` as a plain manifest — five rules with IDs C1 through C5, types, and severities. That's the workflow author's promise."**
-
-27. **"Contracts are enforced from Zone B's `zone_b/contracts` registry as deterministic Python checks. `contract_checker.py` loads that registry and adds the operator-facing text. The verdict is pure code — never delegated to an LLM. Same trace, same violations, every time."**
-
-28. **"Today all five contracts are enforced: evidence, tool, routing, approval, and schema. The fixture fails four of them and passes schema."**
-
-29. **"Why this separation? A workflow can't grade its own homework. Zone A could lie in its narrative; Zone B reads the trace and catches the lie."**
-
----
-
-## INPUT / OUTPUT (anticipated Q&A)
-
-30. **"Input is one of two things. A `raw_trace` dict — an AG2-shaped trace JSON that skips Zone A and runs only the Zone B diagnostic. Or a `task_spec` dict — which drives Zone A end-to-end. Today `raw_trace` submission is fully wired; `task_spec` submission is schema-validated but requires Zone A runtime credentials to execute."**
-
-31. **"Output is a Contract Violation Report — same dict shape regardless of input mode. Fourteen-plus fields including the violation list, severity summary, repair details, regression status, and an LLM-generated narrative."**
-
-32. **"The dashboard renders that report via `window.CONCORD_DATA`. The API serves the same shape via `GET /api/runs/{run_id}` — the `api/adapter.py` module does the conversion."**
-
-33. **(if asked about workflow submission)** **"Submit a run via `POST /api/runs` with `workflow_id` and `raw_trace`. The background task runs the full Zone B pipeline and updates the run status via SSE. Fetch the completed report with `GET /api/runs/{run_id}`."**
-
----
-
-## INTEGRATIONS — REAL, NOT STUBBED
-
-34. **"Tavily is live. `zone_a/agents/researcher.py` calls `TavilyClient.search` for every Zone A run, returns up to three sources, formats them with the LLM."**
-
-35. **"Daytona is live. `zone_b/agents/regression_test.py` runs tests through `zone_b.sandbox.DaytonaExecutorPool`, backed by AG2's `DaytonaCodeExecutor`. It executes the generated Python block, parses stdout for PASS or FAIL, records duration/cost, and reports an explicit error if credentials are missing."**
-
-36. **"LLM is Gemini 2.5 Flash via OpenRouter. Cheap, fast, structured-JSON friendly. Temperature 0.1 because we're parsing every response, not generating prose."**
-
----
-
-## ZONE B — THE 7 AGENTS (memorize the chain)
-
-37. **"TraceCollector — pure parsing, no LLM. Folds every `context_delta` left to right to build a final state snapshot."**
-
-38. **"ContractChecker — three deterministic lambdas plus an LLM call only for the human-readable expected and observed strings."**
-
-39. **"Attribution — LLM identifies the failed agent and root cause; deterministic fallback if the LLM response is unparseable."**
-
-40. **"Repair — deterministic primitive map: evidence → Guardrail, tool → OnContextCondition, routing → Handoff, approval → HumanGate. LLM generates the patch_code snippet."**
-
-41. **"RegressionTest — LLM writes a self-contained Python test, Daytona sandbox executes it, stdout is parsed for PASS or FAIL."**
-
-42. **"Reporter — assembles the final report dict, LLM generates only the narrative paragraph."**
-
-43. **"HumanGate — auto-approve in demo mode, real `UserProxyAgent` with stdin prompt in interactive mode."**
-
-44. **"Sequential — not GroupChat. The pipeline is a deterministic DAG; round-robin GroupChat would just add LLM-driven routing on top of an already-deterministic flow."**
-
----
-
-## ANTICIPATED Q&A — VERBATIM ANSWERS
-
-**Q: Why deterministic lambdas for contracts instead of letting the LLM judge?**
-45. **"Because contract verdicts have to be reproducible. If the same trace produces different violations on different runs, you can't trust the report. The LLM is only used to generate the human-readable expected and observed strings — never the pass/fail verdict."**
-
-**Q: Why a separate Attribution agent?**
-46. **"Because the agent whose contract failed is often downstream of the agent who caused the failure. Reporter emits final output without verified sources — Reporter's contract failed, but Verifier is responsible for `verified_sources_count = 0`. Attribution reasons over the handoff path to surface the upstream cause."**
-
-**Q: Why keep a primary repair if repairs are per violation?**
-47. **"The backend now emits one repair entry per violation, in trace order. We still keep a primary scalar repair for existing callers; it mirrors the highest-severity patch until the rest of the pipeline moves fully to the plural shape."**
-
-**Q: What happens if the LLM returns garbage?**
-48. **"Every Zone B agent has a deterministic fallback path. We never crash on a bad LLM turn — we mark `confidence=0.5` instead of `0.85` so the operator knows the patch is templated, not LLM-generated."**
-
-**Q: Why Daytona instead of running tests locally or in a thread?**
-49. **"LLM-generated code execution is inherently untrusted. Daytona gives per-run sandbox isolation with deterministic cleanup. Plus the sandbox image is reproducible — same `python:3.11-slim` every time, regardless of what's installed on the operator's machine."**
-
-**Q: Is the dashboard wired to the live backend?**
-50. **"Currently no — the live deploy uses an inline fixture so the demo can't fail on stage Wi-Fi. The `api/` directory has a working FastAPI adapter that converts a real Zone B report into the dashboard's `CONCORD_DATA` shape. It works locally; we held it off the live deploy for stage reliability."**
-
-**Q: What AG2 primitives would a real operator install based on this report?**
-51. **"Exactly the four shown on the Repair Patch screen — Guardrail with an evidence condition, ToolGate on the verifier's verdict function, OnContextCondition gating the Verifier→Reporter handoff, and UserProxyAgent with `human_input_mode='ALWAYS'` before any side-effect agent. These are AG2 framework primitives — they paste straight into the operator's existing code."**
-
-**Q: How would you extend this beyond Literature Review?**
-52. **"Zone B reads any trace JSON matching the shared models. Define your contracts in `zone_b/contracts` or register normalized YAML contracts through the API, then add your primitive map. The architecture is workflow-agnostic — Zone A is just our demo target."**
-
-**Q: What's the track classification — Multi-Agent Collaboration or Open?**
-53. **"Both fit. Concord is meta — it observes and repairs other multi-agent collaborations. We pitch it as multi-agent collaboration because that's what we're improving."**
-
----
-
-## HONEST CONCESSIONS — say these BEFORE the judge catches them
-
-54. **"All five contracts are enforced in code today. The current fixture passes schema, so the demo reports four violations rather than five."**
-
-55. **"The backend emits four repair entries for the four fixture violations. The dashboard consumes native `report.patches[]` when present; legacy visual synthesis remains only for old scalar-only reports and fixture compatibility."**
-
-56. **"The Workflow DAG topology block is fixture-first for the stage demo, and live mode can now render observed topology plus recurrence badges from persisted run history. Registered workflow declarations are also projected to FalkorDB when graph persistence is enabled."**
-
-57. **"The Forensic screen — span tree, inspector, and deep-links — is queued in PRs #110-#113. It renders once those PRs land on production."**
-
-58. **"Tavily, Daytona, and Gemini are real live integrations. Without valid Daytona credentials we return an explicit `credential_failure` / `no-sandbox` validation state — never a fake PASS."**
-
----
-
-## CLOSER (last 15 seconds)
-
-59. **"Concord — declare your contracts in Zone A, get verdicts and AG2-native repairs from Zone B. Live demo at concord-lite.vercel.app, code at github.com/d3v07/AG2_Hackathon."**
-
-60. **"Multi-agent systems fail silently. Concord makes them fail loudly — and tells you exactly which AG2 primitive fixes it."**
-
----
-
-## EMERGENCY KEYBOARD SHORTCUTS
-
-- **If live demo URL fails on stage:** `python run_all.py --fixture` produces the same report on stdout — fall back to that.
-- **If REPLAY animation glitches:** click END STATE, walk through the static screens manually.
-- **If asked "show me the API":** open `api/index.py` in the repo — point to `/api/health`, `/api/api-keys`, `/api/workflows`, `/api/runs`, `/api/runs/{id}/events`, and `/api/tenant/usage`.
-- **If asked "show me the contracts":** open `zone_b/agents/contract_checker.py` lines 9-33 — that's the entire enforcement layer.
-- **If asked "show me Daytona":** open `zone_b/agents/regression_test.py` lines 91-117 — `_run_in_daytona`.
-- **If asked "show me the swarm":** open `zone_a/swarm.py` — point to `RoundRobinPattern`, `OnContextCondition`, `RegexGuardrail`, `register_handoffs`, `register_for_llm`.
-- **If asked "show me task_spec submission":** the `RunCreate` schema in `api/schemas.py` accepts `task_spec`; the runtime check in `api/routes/runs.py:48-52` returns HTTP 400 until Zone A runtime wiring lands.
+# Create a local key
+curl -s -X POST http://127.0.0.1:8000/api/api-keys \
+  -H 'Content-Type: application/json' \
+  -d '{"tenant_id":"local","name":"demo"}'
+
+# Register a workflow with normalized YAML contracts
+curl -s -X POST http://127.0.0.1:8000/api/workflows \
+  -H "Authorization: Bearer $CONCORD_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d @workflow.json
+
+# Submit a run
+curl -s -X POST http://127.0.0.1:8000/api/runs \
+  -H "Authorization: Bearer $CONCORD_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d @run.json
+
+# Fetch report and history
+curl -s http://127.0.0.1:8000/api/runs/$RUN_ID -H "Authorization: Bearer $CONCORD_API_KEY"
+curl -s http://127.0.0.1:8000/api/runs -H "Authorization: Bearer $CONCORD_API_KEY"
+```
+
+## Files To Open If Asked
+
+| Question | File |
+|---|---|
+| Workflow contracts | `zone_b/contracts/examples/literature_review.yaml` |
+| Deterministic checks | `zone_b/contracts/registry.py` and `zone_b/agents/contract_checker.py` |
+| Repair patches | `zone_b/agents/repair.py` |
+| Regression validation | `zone_b/agents/regression_test.py` and `zone_b/sandbox/runner.py` |
+| API routes | `api/routes/workflows.py`, `api/routes/runs.py`, `api/routes/api_keys.py` |
+| Dashboard export | `public/app.jsx` `buildReportExportPayload()` |
+| Automated demo proof | `scripts/demo_e2e_smoke.py` |
+
+## Final Line
+
+**"Concord turns AG2 traces into deterministic verdicts, targeted repair patches, honest validation states, and a report the operator can export or revisit."**

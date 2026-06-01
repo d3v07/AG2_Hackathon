@@ -2351,8 +2351,7 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
             )}
             {workflowsState === "loaded" && workflows.length === 0 && (
               <div className="form-empty">
-                No workflows registered yet. Register one via{" "}
-                <code>POST /api/workflows</code> first.
+                No workflows registered yet. Import a workflow contract below to start.
               </div>
             )}
             {workflowsState === "loaded" && workflows.length > 0 && (

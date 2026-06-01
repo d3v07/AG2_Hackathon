@@ -4,10 +4,10 @@
 - Project: Concord
 - Mode: safe
 - Phase: Recovery run
-- Branch: `codex/issue-143-archive-prototypes`
-- Current Sprint: Recovery issue #143
-- Current Task: #143 orphaned prototype artifacts removed locally; verification and reviewer pass complete
-- Last Checkpoint: Issues #135-#142 are merged to `main`. #143 removes unreferenced prototype dashboard payloads and old worktree gitlinks while preserving canonical Concord v1 docs and current runtime code.
+- Branch: `codex/issue-144-final-demo-script`
+- Current Sprint: Recovery issue #144
+- Current Task: #144 final demo script and automated smoke implemented; final review and landing in progress
+- Last Checkpoint: Issues #135-#143 are merged to `main`. #144 now proves the current Concord loop with `scripts/demo_e2e_smoke.py`, refreshes `docs/DEMO_SCRIPT.md`, fixes the hosted live-smoke schema, and hardens the final report layout used by browser QA.
 
 ## Sprint Board
 Recovery issue plan:
@@ -19,8 +19,8 @@ Recovery issue plan:
 - #140 Make Daytona validation states honest — closed on `main`
 - #141 Add in-product API key creation — closed on `main`
 - #142 Consolidate north-star docs — closed on `main`
-- #143 Archive orphaned Lite/prototype artifacts — local cleanup in progress on `codex/issue-143-archive-prototypes`
-- #144 Final end-to-end Concord demo script
+- #143 Archive orphaned Lite/prototype artifacts — closed on `main`
+- #144 Final end-to-end Concord demo script — local verification green on `codex/issue-144-final-demo-script`
 
 ## Current Verification
 - `.venv/bin/python -m pytest -x --tb=short` passed 525 tests, 1 skipped after #138.
@@ -72,6 +72,17 @@ Recovery issue plan:
 - #143 lint/diff gate passed: `.venv/bin/python -m ruff check .` and `git diff --check`.
 - #143 fixture gate passed: `.venv/bin/python run_all.py --fixture` exited 0 and retained the honest `credential_failure` validation state for invalid local sandbox credentials.
 - #143 reviewer pass found no blocking findings.
+- #144 automated smoke passed: `.venv/bin/python scripts/demo_e2e_smoke.py` proved workflow import -> run submission -> 4 violations -> 4 patches -> 4 regression assertions -> honest `credential_failure` validation state -> history revisit.
+- #144 deterministic smoke passed: `.venv/bin/python scripts/demo_e2e_smoke.py --runner local` proved the same loop with `validation_state=passed` and `sandbox_id=local-regression`.
+- #144 focused gate passed: `.venv/bin/python -m pytest tests/test_demo_e2e_smoke.py tests/test_dashboard_report_export.py tests/e2e/live_smoke.py -q` passed 4 tests and skipped the credential-gated live smoke.
+- #144 full gate passed: `.venv/bin/python -m pytest -x --tb=short` passed 550 tests, 1 skipped.
+- #144 frontend gate passed: `npm test -- --run` passed 9 tests.
+- #144 lint/diff gate passed: `.venv/bin/python -m ruff check .` and `git diff --check`.
+- #144 fixture gate passed: `.venv/bin/python run_all.py --fixture` exited 0 and retained honest `credential_failure` validation state for invalid local sandbox credentials.
+- #144 local API probe passed: health 200, landing 200, fixture 200, authenticated workflows present, and `GET /api/runs/RUN-041` returned completed with 4 violations and 4 patches.
+- #144 browser QA passed on desktop and mobile: API Access session loaded, fixture final report exported `concord-report-RUN-041.json` with 4 violations and 4 patches, run history reopened `RUN-041`, no console/page errors, and no horizontal overflow after final report layout fix.
+- #144 Playwright export proof passed: `npm run test:e2e -- tests/e2e/fixture/report_export.spec.ts --project=chromium` clicked the real `EXPORT JSON` button and parsed the downloaded report.
+- #144 AG2 import smoke passed for core agents, group patterns, `DaytonaCodeExecutor`, Daytona executor pool, runner, and Concord span exporter.
 
 ## Historical Sprint Board
 Sprint 3: Foundation
