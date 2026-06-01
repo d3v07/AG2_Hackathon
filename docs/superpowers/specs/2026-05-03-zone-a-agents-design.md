@@ -1,12 +1,12 @@
 # Zone A Agents — Design Spec
 **Date:** 2026-05-03
-**Status:** Approved
+**Status:** Historical design note; superseded by `docs/PLAN_VS_REALITY.md` and the current `zone_a/` implementation.
 
 ---
 
 ## Overview
 
-Zone A is the target AG2 workflow under test: a Literature Review Assistant implemented as a flat collection of independent agent modules. It deliberately contains 3 contract violations so Zone B can detect them.
+Zone A is the target AG2 workflow under test: a Literature Review Assistant implemented as a flat collection of independent agent modules. This early spec described three deliberate violations; the current product supports five default contract types and controlled clean/failure modes.
 
 ---
 

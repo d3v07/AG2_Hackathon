@@ -2,6 +2,8 @@
 
 You are Codex (or any subsequent AI coding agent) picking up work on Concord v1.0. This document is self-contained: read it before touching anything. Do not skip the pre-flight checks.
 
+Current status note: this handoff preserves the original execution instructions for the #12-#41 buildout. For current product truth, start with `docs/PLAN_VS_REALITY.md` and then use this file only for historical workflow rules and reference links.
+
 ---
 
 ## 1. The mission
@@ -335,7 +337,7 @@ These are Concord Platform (post-v1.0) territory.
 | AG2 leverage plan with code stubs | `concord_v1_artifacts/docs/CONCORD_AG2_LEVERAGE.md` |
 | The original ChatGPT execution prompt | `concord_v1_artifacts/CLAUDE_EXECUTION_PROMPT_CONCORD_V1.md` |
 | Source URLs for AG2 docs | `concord_v1_artifacts/docs/SOURCES.md` |
-| Concord Lite README + demo path | `README.md` |
+| Concord README + demo path | `README.md` |
 
 ---
 

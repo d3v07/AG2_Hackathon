@@ -168,13 +168,13 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 54. **"All five contracts are enforced in code today. The current fixture passes schema, so the demo reports four violations rather than five."**
 
-55. **"The backend emits four repair entries for the four fixture violations. The Repair screen's visual before/after diffs are still template-driven until the API passthrough work lands."**
+55. **"The backend emits four repair entries for the four fixture violations. The dashboard consumes native `report.patches[]` when present; legacy visual synthesis remains only for old scalar-only reports and fixture compatibility."**
 
 56. **"The Workflow DAG topology block is fixture-first for the stage demo, and live mode can now render observed topology plus recurrence badges from persisted run history. Registered workflow declarations are also projected to FalkorDB when graph persistence is enabled."**
 
 57. **"The Forensic screen — span tree, inspector, and deep-links — is queued in PRs #110-#113. It renders once those PRs land on production."**
 
-58. **"Tavily, Daytona, and Gemini are real live integrations — not stubs. Without `DAYTONA_API_KEY` we return an explicit `(stdout='Daytona credentials missing', sandbox_id='no-sandbox', status='error')` — never a fake PASS."**
+58. **"Tavily, Daytona, and Gemini are real live integrations. Without valid Daytona credentials we return an explicit `credential_failure` / `no-sandbox` validation state — never a fake PASS."**
 
 ---
 

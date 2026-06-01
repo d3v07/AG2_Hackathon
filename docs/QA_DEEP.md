@@ -48,7 +48,7 @@ verifier.register_handoffs([
 ])
 ```
 
-Translation: "Hand off to Reporter only if `sources_verified` is True; otherwise terminate the swarm." The `sources_verified` variable is set by `record_verification` (`zone_a/swarm_tools.py:43-64`) based on `verified_sources_count > 0 and bool(tool_call_id)`. **Two of the three contracts (C-EVD evidence + C-TOL tool) are co-enforced by this single handoff condition.**
+Translation: "Hand off to Reporter only if `sources_verified` is True; otherwise terminate the swarm." The `sources_verified` variable is set by `record_verification` (`zone_a/swarm_tools.py:43-64`) based on `verified_sources_count > 0 and bool(tool_call_id)`. **Two of the five default contracts (C-EVD evidence + C-TOL tool) are co-enforced by this single handoff condition.**
 
 The HumanGate has the same pattern for C-APR approval:
 ```python
@@ -360,7 +360,7 @@ Same trace in → same violations and same primitive recommendations out. The na
 
 `zone_b/utils.py:parse_json_body()` raises. Each agent's caller catches and falls back:
 - `attribution.py:96-114` — uses the first violation's `failed_agent`, deterministic step lookup
-- `repair.py:97-102` — stub patch comment, confidence = 0.5
+- `repair.py:97-102` — deterministic placeholder patch comment, confidence = 0.5
 - `regression_test.py:164-178` — calls `_fallback_test()` which returns hard-coded test code that asserts the five enforced contracts
 - `reporter.py:68-74` — uses templated narrative
 
