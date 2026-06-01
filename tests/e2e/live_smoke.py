@@ -1,13 +1,14 @@
 """Live end-to-end smoke against a hosted Concord backend.
 
 Exercises the full task_spec -> AG2 swarm -> Zone B contract checking ->
-Daytona regression -> forensic CONCORD_DATA -> approval flow.
+Daytona regression -> forensic CONCORD_DATA -> history -> approval flow.
 
 Skipped unless OPENROUTER_API_KEY is set (the live-mode gate). The test
 hits a real backend at CONCORD_API_BASE, registers the canonical
 Literature Review topology with 5 deterministic contracts, submits a
-task_spec run with mode=live, polls until completion, validates the
-forensic shape, then approves the run.
+task_spec run with mode=live, polls until completion, validates that the
+demo produced violations, patches, validation state, and history, then
+approves the run.
 
 Run locally:
     OPENROUTER_API_KEY=... TAVILY_API_KEY=... DAYTONA_API_KEY=... \
@@ -29,6 +30,14 @@ POLL_INTERVAL_SECONDS = 2.0
 RUN_TIMEOUT_SECONDS = 180.0
 HTTP_TIMEOUT_SECONDS = 30.0
 TERMINAL_STATUSES = {"completed", "failed"}
+VALIDATION_STATES = {
+    "passed",
+    "failed",
+    "skipped",
+    "unavailable",
+    "credential_failure",
+    "execution_error",
+}
 
 
 pytestmark = pytest.mark.live_smoke
@@ -115,12 +124,12 @@ def _canonical_workflow_payload() -> dict[str, Any]:
 
 def _task_spec_payload() -> dict[str, Any]:
     return {
-        "topic": "multi-agent systems reliability in research workflows",
-        "instructions": (
+        "task": (
             "Produce a concise literature review on whether multi-agent systems improve "
-            "reliability in research workflows. Cite at least 2 sources."
+            "reliability in research workflows."
         ),
-        "max_sources": 3,
+        "research_question": "Do multi-agent systems improve reliability in research workflows?",
+        "mode": "live",
     }
 
 
@@ -140,7 +149,6 @@ def _submit_run(client: httpx.Client, base: str, workflow_id: str) -> str:
     body = {
         "workflow_id": workflow_id,
         "task_spec": _task_spec_payload(),
-        "mode": "live",
     }
     response = client.post(f"{base}/api/runs", json=body, headers=_auth_headers())
     assert response.status_code in (200, 202), (
@@ -192,33 +200,49 @@ def _approve_run(client: httpx.Client, base: str, run_id: str) -> dict[str, Any]
     return response.json()
 
 
-def _assert_concord_data_shape(report: dict[str, Any]) -> None:
-    spans = report.get("spans")
+def _assert_history_contains(client: httpx.Client, base: str, run_id: str) -> None:
+    response = client.get(f"{base}/api/runs", headers=_auth_headers())
+    assert response.status_code == 200, (
+        f"run history fetch failed: {response.status_code} {response.text}"
+    )
+    assert run_id in response.json().get("run_ids", []), (
+        f"run {run_id} missing from history: {response.text}"
+    )
+
+
+def _assert_concord_data_shape(payload: dict[str, Any]) -> None:
+    spans = payload.get("spans")
     assert isinstance(spans, list) and spans, (
         "CONCORD_DATA.spans must be a non-empty list (Sprint 15 #74 contract)"
     )
 
-    violations = report.get("violations") or []
+    violations = payload.get("violations") or []
+    assert violations, "demo run must produce at least one contract violation"
     for index, violation in enumerate(violations):
         assert violation.get("span_id"), (
             f"violations[{index}] missing span_id (Sprint 15 #75 contract); got {violation}"
         )
 
-    patches = report.get("patches") or []
-    if patches:
-        test_block = report.get("test") or {}
-        assertions = test_block.get("assertions") or []
-        assert len(assertions) >= len(patches), (
-            f"each patch must have a corresponding regression assertion; "
-            f"patches={len(patches)} assertions={len(assertions)}"
+    patches = payload.get("patches") or []
+    assert patches, "demo run must produce at least one repair patch"
+    test_block = payload.get("test") or {}
+    report = payload.get("report") or {}
+    validation_state = test_block.get("validation_state") or report.get("validation_state")
+    assert validation_state in VALIDATION_STATES, (
+        f"demo run missing honest validation state; got {validation_state!r}"
+    )
+    assertions = test_block.get("assertions") or []
+    assert len(assertions) >= len(patches), (
+        f"each patch must have a corresponding regression assertion; "
+        f"patches={len(patches)} assertions={len(assertions)}"
+    )
+    for index, patch in enumerate(patches):
+        patch_violation = patch.get("violation")
+        assert patch_violation, f"patches[{index}] missing violation reference"
+        assertion = assertions[index]
+        assert assertion.get("status") in {"PASS", "FAIL"}, (
+            f"regression assertions[{index}] missing status"
         )
-        for index, patch in enumerate(patches):
-            patch_violation = patch.get("violation")
-            assert patch_violation, f"patches[{index}] missing violation reference"
-            assertion = assertions[index]
-            assert assertion.get("status") in {"PASS", "FAIL"}, (
-                f"regression assertions[{index}] missing status"
-            )
 
 
 def test_live_smoke_full_flow() -> None:
@@ -236,8 +260,8 @@ def test_live_smoke_full_flow() -> None:
         )
 
         run_payload = _fetch_run(client, base, run_id)
-        report = run_payload.get("report") or run_payload
-        _assert_concord_data_shape(report)
+        _assert_concord_data_shape(run_payload)
+        _assert_history_contains(client, base, run_id)
 
         _approve_run(client, base, run_id)
         approved_payload = _fetch_run(client, base, run_id)
