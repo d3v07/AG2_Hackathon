@@ -97,6 +97,11 @@
       "llm_cost_usd": 0.0,
       "llm_tokens": 0
     },
+    "fallback_reason": "",
+    "fallback_used": false,
+    "generated_sandbox_id": "",
+    "generated_stdout": "",
+    "generated_test_status": "",
     "patches_applied": [],
     "regression_summary": {
       "error": 0,
@@ -109,6 +114,15 @@
       "completion_tokens": 0,
       "prompt_tokens": 0,
       "total_tokens": 0
+    },
+    "validation_state": "skipped",
+    "validation_summary": {
+      "credential_failure": 0,
+      "execution_error": 0,
+      "failed": 0,
+      "passed": 0,
+      "skipped": 1,
+      "unavailable": 0
     }
   },
   "routes": [
@@ -238,7 +252,8 @@
     ],
     "name": "test_contract_repair",
     "runner": "Daytona Sandbox",
-    "sandbox_id": "dt-local"
+    "sandbox_id": "dt-local",
+    "validation_state": "skipped"
   },
   "topology": {
     "edges": [

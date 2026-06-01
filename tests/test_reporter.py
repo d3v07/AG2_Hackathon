@@ -114,6 +114,13 @@ class TestRunReporterShape:
     def _regression(self):
         return {"test_name": "test_fix", "test_code": "print('PASS')", "assertions": [],
                 "test_status": "pass", "stdout": "PASS", "sandbox_id": "sb_001",
+                "validation_state": "passed",
+                "validation_summary": {"passed": 1, "failed": 0, "skipped": 0, "unavailable": 0, "credential_failure": 0, "execution_error": 0},
+                "generated_test_status": "",
+                "generated_stdout": "",
+                "generated_sandbox_id": "",
+                "fallback_used": False,
+                "fallback_reason": "",
                 "duration_ms": 1250,
                 "usage": {"prompt_tokens": 8, "completion_tokens": 4, "total_tokens": 12},
                 "cost": {"daytona_seconds": 1.25, "llm_tokens": 12,
@@ -190,6 +197,89 @@ class TestRunReporterShape:
             _trace(), [_v()], self._attribution(), self._repair(), self._regression(), _snap()
         ))
         assert result["report"]["regression_test_status"] == "pass"
+        assert result["report"]["validation_state"] == "passed"
+        assert result["report"]["validation_summary"]["passed"] == 1
+
+    def test_validation_provenance_fields_propagate(self, monkeypatch):
+        monkeypatch.setattr("zone_b.agents.reporter._ask_llm_for_narrative", lambda _: "x")
+        regression = self._regression()
+        regression.update({
+            "test_status": "pass",
+            "generated_test_status": "fail",
+            "generated_stdout": "FAIL: generated assertion",
+            "generated_sandbox_id": "sb-generated",
+            "fallback_used": True,
+            "fallback_reason": "generated_test_fail",
+        })
+
+        result = asyncio.run(run_reporter(
+            _trace(), [_v()], self._attribution(), self._repair(), regression, _snap()
+        ))
+        report = result["report"]
+
+        assert report["generated_test_status"] == "fail"
+        assert report["generated_stdout"] == "FAIL: generated assertion"
+        assert report["generated_sandbox_id"] == "sb-generated"
+        assert report["fallback_used"] is True
+        assert report["fallback_reason"] == "generated_test_fail"
+
+    def test_validation_state_propagates_to_violations_and_regression_tests(self, monkeypatch):
+        monkeypatch.setattr("zone_b.agents.reporter._ask_llm_for_narrative", lambda _: "x")
+        regression = self._regression()
+        regression["test_status"] = "error"
+        regression["validation_state"] = "credential_failure"
+        regression["validation_summary"] = {
+            "passed": 0,
+            "failed": 0,
+            "skipped": 0,
+            "unavailable": 0,
+            "credential_failure": 1,
+            "execution_error": 0,
+        }
+        regression["per_violation_results"] = [
+            {
+                "contract_type": "evidence",
+                "severity": "high",
+                "rule": "test rule",
+                "failed_agent": "VerifierAgent",
+                "failed_step": 3,
+                "test_name": "test_fix",
+                "assertion": "evidence contract",
+                "test_status": "error",
+                "validation_state": "credential_failure",
+                "stdout": "Daytona credentials missing",
+                "sandbox_id": "no-sandbox",
+            }
+        ]
+
+        result = asyncio.run(run_reporter(
+            _trace(), [_v()], self._attribution(), self._repair(), regression, _snap()
+        ))
+        report = result["report"]
+
+        assert report["validation_state"] == "credential_failure"
+        assert report["violations"][0]["validation_state"] == "credential_failure"
+        assert report["regression_tests"][0]["validation_state"] == "credential_failure"
+
+    def test_legacy_regression_error_stdout_maps_to_credential_failure(self, monkeypatch):
+        monkeypatch.setattr("zone_b.agents.reporter._ask_llm_for_narrative", lambda _: "x")
+        regression = self._regression()
+        regression.pop("validation_state", None)
+        regression.pop("validation_summary", None)
+        regression.pop("per_violation_results", None)
+        regression["test_status"] = "error"
+        regression["stdout"] = "Daytona error: invalid credentials"
+        regression["sandbox_id"] = "no-sandbox"
+
+        result = asyncio.run(run_reporter(
+            _trace(), [_v()], self._attribution(), self._repair(), regression, _snap()
+        ))
+        report = result["report"]
+
+        assert report["validation_state"] == "credential_failure"
+        assert report["violations"][0]["validation_state"] == "credential_failure"
+        assert report["regression_tests"][0]["validation_state"] == "credential_failure"
+        assert report["validation_summary"]["credential_failure"] == 1
 
     def test_regression_metadata_and_iteration_count_propagate(self, monkeypatch):
         monkeypatch.setattr("zone_b.agents.reporter._ask_llm_for_narrative", lambda _: "x")

@@ -8,6 +8,7 @@ from zone_b.agents.regression_test import (
     _extract_llm_usage,
     _fallback_test,
     _parse_status,
+    _validation_state_for_result,
     run_regression_test,
 )
 
@@ -64,6 +65,22 @@ class TestParseStatus:
 
     def test_multiline_pass(self):
         assert _parse_status("Running test...\nPASS") == "pass"
+
+
+class TestValidationState:
+    @pytest.mark.parametrize(
+        ("status", "stdout", "sandbox_id", "expected"),
+        [
+            ("pass", "PASS", "sb-001", "passed"),
+            ("fail", "FAIL: broken", "sb-001", "failed"),
+            ("error", "Daytona credentials missing", "no-sandbox", "credential_failure"),
+            ("error", "Daytona error: RuntimeError('Invalid credentials')", "no-sandbox", "credential_failure"),
+            ("error", "Daytona unavailable", "no-sandbox", "unavailable"),
+            ("error", "Traceback: boom", "sb-001", "execution_error"),
+        ],
+    )
+    def test_validation_state_mapping(self, status, stdout, sandbox_id, expected):
+        assert _validation_state_for_result(status, stdout, sandbox_id) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -239,9 +256,38 @@ class TestRunRegressionTest:
         )
 
         assert result["test_status"] == "error"
+        assert result["validation_state"] == "credential_failure"
+        assert result["per_violation_results"][0]["validation_state"] == "credential_failure"
+        assert result["validation_summary"] == {
+            "passed": 0,
+            "failed": 0,
+            "skipped": 0,
+            "unavailable": 0,
+            "credential_failure": 1,
+            "execution_error": 0,
+        }
         assert result["fallback_used"] is False
         assert result["generated_test_status"] == "error"
         assert len(calls) == 1
+
+    def test_empty_violation_list_skips_validation_without_sandbox(self, monkeypatch):
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._ask_llm_for_test",
+            lambda *_: (_ for _ in ()).throw(AssertionError("should not generate")),
+        )
+        monkeypatch.setattr(
+            "zone_b.agents.regression_test._run_in_daytona",
+            lambda *_: (_ for _ in ()).throw(AssertionError("should not execute")),
+        )
+
+        result = asyncio.run(
+            run_regression_test("patch", [], RunTrace("r", "w", [], None))
+        )
+
+        assert result["test_status"] == "skipped"
+        assert result["validation_state"] == "skipped"
+        assert result["sandbox_id"] == ""
+        assert result["per_violation_results"] == []
 
     def test_non_list_generated_assertions_fall_back_to_default_assertions(self, monkeypatch):
         monkeypatch.setattr(

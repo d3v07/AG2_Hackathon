@@ -98,9 +98,11 @@ def test_backend_report_patches_passthrough_one_per_violation():
             "daytona_cost_usd": 0.00025,
         },
         "regression_summary": {"pass": 2, "fail": 0, "error": 0},
+        "validation_state": "passed",
+        "validation_summary": {"passed": 2, "failed": 0, "skipped": 0, "unavailable": 0, "credential_failure": 0, "execution_error": 0},
         "regression_tests": [
-            {"test_name": "test_tool", "test_status": "pass", "sandbox_id": "dt-report"},
-            {"test_name": "test_routing", "test_status": "pass", "sandbox_id": "dt-report"},
+            {"test_name": "test_tool", "test_status": "pass", "validation_state": "passed", "sandbox_id": "dt-report"},
+            {"test_name": "test_routing", "test_status": "pass", "validation_state": "passed", "sandbox_id": "dt-report"},
         ],
         "approval_status": "approved",
     }
@@ -135,6 +137,8 @@ def test_backend_report_patches_passthrough_one_per_violation():
         "daytona_cost_usd": 0.00025,
     }
     assert data["report"]["regression_summary"] == {"pass": 2, "fail": 0, "error": 0}
+    assert data["test"]["validation_state"] == "passed"
+    assert data["report"]["validation_summary"]["passed"] == 2
     assert data["report"]["regression_tests"][0]["test_name"] == "test_tool"
     assert data["report"]["usage_summary"] == {
         "prompt_tokens": 8,
@@ -142,6 +146,79 @@ def test_backend_report_patches_passthrough_one_per_violation():
         "total_tokens": 12,
     }
     assert data["report"]["cost_summary"] == data["cost"]
+
+
+def test_adapter_preserves_honest_validation_states_for_dashboard():
+    report = {
+        "narrative": "repair blocked by credentials",
+        "patch_code": "legacy_patch()",
+        "regression_test_status": "error",
+        "validation_state": "credential_failure",
+        "validation_summary": {
+            "passed": 0,
+            "failed": 0,
+            "skipped": 0,
+            "unavailable": 0,
+            "credential_failure": 2,
+            "execution_error": 0,
+        },
+        "regression_tests": [
+            {
+                "test_name": "test_tool",
+                "test_status": "error",
+                "validation_state": "credential_failure",
+                "stdout": "Daytona credentials missing",
+                "sandbox_id": "no-sandbox",
+            },
+            {
+                "test_name": "test_routing",
+                "test_status": "error",
+                "validation_state": "credential_failure",
+                "stdout": "Daytona credentials missing",
+                "sandbox_id": "no-sandbox",
+            },
+        ],
+        "approval_status": "approved",
+    }
+
+    data = report_to_concord_data(report, _run_trace(), _violations(), sandbox_id="no-sandbox")
+
+    assert data["test"]["validation_state"] == "credential_failure"
+    assert [a["validation_state"] for a in data["test"]["assertions"]] == [
+        "credential_failure",
+        "credential_failure",
+    ]
+    assert [a["status"] for a in data["test"]["assertions"]] == [
+        "CREDENTIAL_FAILURE",
+        "CREDENTIAL_FAILURE",
+    ]
+    assert data["report"]["validation_state"] == "credential_failure"
+    assert data["report"]["validation_summary"]["credential_failure"] == 2
+
+
+def test_adapter_does_not_synthesize_pass_assertions_from_partial_validation_report():
+    report = {
+        "narrative": "validation blocked",
+        "patch_code": "legacy_patch()",
+        "validation_state": "credential_failure",
+        "regression_tests": [
+            {},
+            {"test_status": "pass"},
+        ],
+        "approval_status": "approved",
+    }
+
+    data = report_to_concord_data(report, _run_trace(), _violations(), sandbox_id="no-sandbox")
+
+    assert data["test"]["validation_state"] == "credential_failure"
+    assert [a["validation_state"] for a in data["test"]["assertions"]] == [
+        "credential_failure",
+        "credential_failure",
+    ]
+    assert [a["status"] for a in data["test"]["assertions"]] == [
+        "CREDENTIAL_FAILURE",
+        "CREDENTIAL_FAILURE",
+    ]
 
 
 def test_adapter_preserves_stable_violation_recurrence_aliases():

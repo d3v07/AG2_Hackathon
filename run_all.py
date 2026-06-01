@@ -62,6 +62,7 @@ def _print_report(report: dict) -> None:
     print(f"  Repair confidence : {report.get('repair_confidence', 0):.2f}")
     print(f"  Iteration count   : {report.get('iteration_count', 1)}")
     print(f"  Regression status : {report.get('regression_test_status', '<unknown>')}")
+    print(f"  Validation state  : {report.get('validation_state', 'unavailable')}")
     regression_summary = report.get("regression_summary", {})
     if regression_summary:
         print(
@@ -69,6 +70,17 @@ def _print_report(report: dict) -> None:
             f"{regression_summary.get('pass', 0)} pass / "
             f"{regression_summary.get('fail', 0)} fail / "
             f"{regression_summary.get('error', 0)} error"
+        )
+    validation_summary = report.get("validation_summary", {})
+    if validation_summary:
+        print(
+            "  Validation states  : "
+            f"{validation_summary.get('passed', 0)} passed / "
+            f"{validation_summary.get('failed', 0)} failed / "
+            f"{validation_summary.get('skipped', 0)} skipped / "
+            f"{validation_summary.get('credential_failure', 0)} credential failure / "
+            f"{validation_summary.get('execution_error', 0)} execution error / "
+            f"{validation_summary.get('unavailable', 0)} unavailable"
         )
     print(f"  Approval status   : {report.get('approval_status', '<unknown>')}")
     narrative = report.get("narrative", "")

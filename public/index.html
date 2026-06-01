@@ -1191,6 +1191,7 @@ window.CONCORD_DATA = {
     name: "test_run_041_contract_repair",
     runner: "Daytona Sandbox",
     sandbox_id: "dt-9f3a-2b71",
+    validation_state: "passed",
     image: "python:3.11-slim",
     duration_ms: 4128,
     lines: [
@@ -1213,14 +1214,16 @@ window.CONCORD_DATA = {
       { t: "00:04.128", k: "info", v: "daytona stop dt-9f3a-2b71" }
     ],
     assertions: [
-      { id: "A1", name: "evidence_guardrail_blocks_reporter", time_ms: 161, status: "PASS" },
-      { id: "A2", name: "verifier_requires_tool_event",       time_ms: 311, status: "PASS" },
-      { id: "A3", name: "reporter_handoff_gated_on_tool_ok",  time_ms: 399, status: "PASS" },
-      { id: "A4", name: "action_blocked_until_human_gate",    time_ms: 690, status: "PASS" }
+      { id: "A1", name: "evidence_guardrail_blocks_reporter", time_ms: 161, status: "PASS", validation_state: "passed", violation_id: "V-001", patch_id: "P-001" },
+      { id: "A2", name: "verifier_requires_tool_event",       time_ms: 311, status: "PASS", validation_state: "passed", violation_id: "V-002", patch_id: "P-002" },
+      { id: "A3", name: "reporter_handoff_gated_on_tool_ok",  time_ms: 399, status: "PASS", validation_state: "passed", violation_id: "V-003", patch_id: "P-003" },
+      { id: "A4", name: "action_blocked_until_human_gate",    time_ms: 690, status: "PASS", validation_state: "passed", violation_id: "V-004", patch_id: "P-004" }
     ]
   },
   report: {
     summary: "Run #041 of LITERATURE_REVIEW_ASSISTANT emitted a final memo despite four violated contracts. The Verifier recorded a verdict without a tool event and wrote verified_sources_count=0; the Reporter then produced a final output and the Action Agent attempted a save_report side effect with approval_status=pending. Concord mapped each violation to an AG2-native repair (Guardrail, ToolGate, OnContextCondition, UserProxyAgent/HumanGate) and a Daytona-run regression test confirmed all four repairs hold. The workflow is rerun-ready pending operator approval.",
+    validation_state: "passed",
+    validation_summary: { passed: 4, failed: 0, skipped: 0, unavailable: 0, credential_failure: 0, execution_error: 0 },
     usage_summary: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
     cost_summary: {
       daytona_seconds: 4.128,

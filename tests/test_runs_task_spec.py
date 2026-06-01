@@ -214,3 +214,5 @@ def test_raw_trace_path_still_works(tmp_path, clean_trace_raw):
     data = client.get(f"/api/runs/{run_id}").json()
     assert data["status"] == "completed"
     assert data["stats"]["violations"] == 0
+    assert data["test"]["validation_state"] == "skipped"
+    assert data["report"]["validation_state"] == "skipped"

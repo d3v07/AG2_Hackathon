@@ -4,10 +4,10 @@
 - Project: Concord
 - Mode: safe
 - Phase: Recovery run
-- Branch: `codex/issue-139-coherence-rebrand`
-- Current Sprint: Recovery issue #139
-- Current Task: #139 completed-run coherence and Concord rebrand passed local gates
-- Last Checkpoint: Issues #135-#138 are merged to `main` through PRs #145 and #146. #139 now changes visible product chrome and API/CLI naming to Concord, makes completed-run claims data-driven, and links evidence → AG2 primitive → patch → regression with explicit fixture patch/violation IDs. Reviewer pass found no remaining blocking issues after the Overview hardening. Daytona validation currently reports `error` / `no-sandbox` with invalid local credentials; tracked by #140.
+- Branch: `codex/issue-140-daytona-validation-states`
+- Current Sprint: Recovery issue #140
+- Current Task: #140 honest validation states passed local gates and reviewer follow-up
+- Last Checkpoint: Issues #135-#139 are merged to `main`. #140 now carries explicit validation states through regression, reporter, API adapter, dashboard/export, fixture data, and CLI reports. Credential failures, unavailable sandboxes, execution errors, skipped validation, failed validation, and passed validation are distinct and no longer collapse to green pass.
 
 ## Sprint Board
 Recovery issue plan:
@@ -15,8 +15,8 @@ Recovery issue plan:
 - #136 Export completed run report — closed on `main`
 - #137 Demote public stub mode and default to real runs — closed on `main`
 - #138 Add in-product workflow registration/import — closed on `main`
-- #139 Tighten completed-run coherence and rebrand to Concord — local gates passed on `codex/issue-139-coherence-rebrand`
-- #140 Make Daytona validation states honest
+- #139 Tighten completed-run coherence and rebrand to Concord — closed on `main`
+- #140 Make Daytona validation states honest — local gates passed on `codex/issue-140-daytona-validation-states`
 - #141 Add in-product API key creation
 - #142 Consolidate north-star docs
 - #143 Archive orphaned Lite/prototype artifacts
@@ -41,6 +41,14 @@ Recovery issue plan:
 - #139 browser QA passed on desktop/mobile `/?fixture=1`: Concord brand, violation repair path, P-001 patch link, regression repair links, no console errors.
 - #139 API probe passed: health 200, fixture page 200, `GET /api/runs/RUN-041` 200 with completed / 4 violations / 4 patches, and OpenAPI title `Concord API`.
 - #139 reviewer pass: no remaining blocking issue after Overview/test hardening.
+- #140 focused gate passed: `.venv/bin/python -m pytest tests/test_regression_test.py tests/test_reporter.py tests/test_api_adapter_multi_patch.py tests/test_dashboard_validation_states.py tests/test_dashboard_report_export.py tests/test_runs_task_spec.py tests/test_dashboard_live_mode.py -q` passed 78 tests before reviewer fixes; final targeted fallback gate passed 62 tests across regression/report/adapter.
+- #140 full gate passed: `.venv/bin/python -m pytest -x --tb=short` passed 543 tests, 1 skipped.
+- #140 frontend gate passed: `npm test -- --run` passed 9 tests.
+- #140 lint/diff gate passed: `.venv/bin/python -m ruff check .` and `git diff --check`.
+- #140 fixture gate passed: `.venv/bin/python run_all.py --fixture` exited 0 and now reports `Validation state  : credential_failure` with 4 credential-failure validation states when local sandbox credentials are invalid.
+- #140 browser QA passed on desktop/mobile `/?fixture=1` report screen: validation label visible, export JSON included `verdicts.validation_state=passed` and `regression.validation_state=passed`, and no console errors.
+- #140 API probe passed on local server: fixture page 200 and `GET /api/workflows` 200.
+- #140 reviewer follow-up found no remaining blockers after fixing partial-report false-pass adapter fallback and legacy reporter stdout/sandbox validation mapping.
 
 ## Historical Sprint Board
 Sprint 3: Foundation

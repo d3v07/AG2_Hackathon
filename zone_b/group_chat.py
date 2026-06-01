@@ -258,4 +258,5 @@ if __name__ == "__main__":
         print(f"Violation count   : {report.get('violation_count')}")
         print(f"Severity summary  : {report.get('severity_summary')}")
         print(f"Failed agent      : {report.get('failed_agent')}")
+        print(f"Validation state  : {report.get('validation_state', 'unavailable')}")
         print(f"Approval status   : {report.get('approval_status')}")

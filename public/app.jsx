@@ -96,6 +96,7 @@ function buildReportExportPayload(data) {
       violation_count: report.violation_count ?? source.violations?.length ?? 0,
       severity_summary: report.severity_summary || source.stats?.severity || {},
       regression_test_status: report.regression_test_status || test.status || "",
+      validation_state: report.validation_state || test.validation_state || "",
       approval_status: report.approval?.status || "",
     },
     evidence: {
@@ -108,6 +109,11 @@ function buildReportExportPayload(data) {
       test,
       regression_tests: report.regression_tests || [],
       regression_summary: report.regression_summary || {},
+      validation_state: report.validation_state || test.validation_state || "",
+      validation_summary: report.validation_summary || {},
+      generated_test_status: report.generated_test_status || test.generated_test_status || "",
+      fallback_used: report.fallback_used ?? test.fallback_used ?? false,
+      fallback_reason: report.fallback_reason || test.fallback_reason || "",
       sandbox_id: report.sandbox_id || test.sandbox_id || "",
       duration_ms: report.regression_duration_ms ?? test.duration_ms ?? 0,
     },
@@ -186,9 +192,36 @@ function normalizedStatus(value, fallback = "UNKNOWN") {
 }
 
 function statusPillKind(status) {
-  const normalized = normalizedStatus(status);
+  const normalized = normalizedStatus(status).replaceAll("-", "_");
   if (["PASS", "PASSED", "SUCCESS", "APPLIED"].includes(normalized)) return "pass";
-  if (["FAIL", "FAILED", "ERROR"].includes(normalized)) return "fail";
+  if (["FAIL", "FAILED", "ERROR", "CREDENTIAL_FAILURE", "EXECUTION_ERROR"].includes(normalized)) return "fail";
+  return "warn";
+}
+
+function canonicalValidationState(value, fallback = "unavailable") {
+  const normalized = String(value || fallback).trim().toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
+  if (["pass", "passed", "success"].includes(normalized)) return "passed";
+  if (["fail", "failed"].includes(normalized)) return "failed";
+  if (["skipped", "unavailable", "credential_failure", "execution_error"].includes(normalized)) return normalized;
+  if (normalized === "error") return "execution_error";
+  return "unavailable";
+}
+
+function validationLabel(state) {
+  return {
+    passed: "PASSED",
+    failed: "FAILED",
+    skipped: "SKIPPED",
+    unavailable: "UNAVAILABLE",
+    credential_failure: "CREDENTIAL FAILURE",
+    execution_error: "EXECUTION ERROR",
+  }[canonicalValidationState(state)] || "UNAVAILABLE";
+}
+
+function validationPillKind(state) {
+  const normalized = canonicalValidationState(state);
+  if (normalized === "passed") return "pass";
+  if (["failed", "credential_failure", "execution_error"].includes(normalized)) return "fail";
   return "warn";
 }
 
@@ -203,15 +236,19 @@ function testAssertionStats(test = D.test) {
     return acc;
   }, { pass: 0, fail: 0, error: 0, other: 0 });
   const total = assertions.length;
-  let status = normalizedStatus(test?.status || D.report?.regression_test_status, total ? "UNKNOWN" : "UNAVAILABLE");
+  let status = canonicalValidationState(
+    test?.validation_state || D.report?.validation_state,
+    test?.status || D.report?.regression_test_status || (total ? "unknown" : "unavailable"),
+  );
   if (total > 0) {
-    if (counts.fail > 0) status = "FAIL";
-    else if (counts.error > 0) status = "ERROR";
-    else if (counts.other > 0 || counts.pass < total) status = "PARTIAL";
-    else status = "PASS";
+    if (test?.validation_state || D.report?.validation_state) {
+      status = canonicalValidationState(test?.validation_state || D.report?.validation_state);
+    } else if (counts.fail > 0) status = "failed";
+    else if (counts.error > 0) status = "execution_error";
+    else if (counts.other > 0 || counts.pass < total) status = "unavailable";
+    else status = "passed";
   }
-  const label = status === "PASS" ? "ALL PASS" : status;
-  return { ...counts, total, status, label };
+  return { ...counts, total, status, label: validationLabel(status) };
 }
 
 function assertionRepairLink(assertion, index) {
@@ -1244,14 +1281,19 @@ function regressionForViolation(violation, patch) {
     item.id === assertionId
   );
   const status = byContract?.test_status || assertion?.status || D.report?.regression_test_status || "unknown";
+  const state = canonicalValidationState(
+    byContract?.validation_state || assertion?.validation_state || D.report?.validation_state,
+    status,
+  );
   return {
-    status: String(status).toUpperCase(),
+    status: validationLabel(state),
+    state,
     label: byContract?.test_name || byContract?.assertion || assertion?.name || "regression pending",
   };
 }
 
 function regressionPillKind(status) {
-  return statusPillKind(status);
+  return validationPillKind(status);
 }
 
 function Violations({ setScreen, setSelectedPatch }) {
@@ -1330,7 +1372,7 @@ function Violations({ setScreen, setSelectedPatch }) {
                 </div>
                 <div>
                   <span className="path-label">Regression</span>
-                  <Pill kind={regressionPillKind(regression.status)}>{regression.status}</Pill>
+                  <Pill kind={regressionPillKind(regression.state)}>{regression.status}</Pill>
                   <span className="muted path-test">{regression.label}</span>
                 </div>
               </div>
@@ -1710,7 +1752,7 @@ function Regression() {
             <div className="lbl">Image</div><div className="val">{t.image}</div>
             <div className="lbl">Runner</div><div className="val">{t.runner || "unknown"}</div>
             <div className="lbl">Duration</div><div className="val">{(t.duration_ms/1000).toFixed(2)}s</div>
-            <div className="lbl">Status</div><div className="val"><Pill kind={statusPillKind(stats.status)}>{stats.label}</Pill></div>
+            <div className="lbl">Validation</div><div className="val"><Pill kind={validationPillKind(stats.status)}>{stats.label}</Pill></div>
           </div>
         </div>
       </div>
@@ -1742,7 +1784,12 @@ function Regression() {
                     )}
                   </td>
                   <td className="num-col">{a.time_ms} ms</td>
-                  <td><Pill kind={statusPillKind(a.status)}>{normalizedStatus(a.status)}</Pill></td>
+                  <td>
+                    {(() => {
+                      const state = canonicalValidationState(a.validation_state, a.status);
+                      return <Pill kind={validationPillKind(state)}>{validationLabel(state)}</Pill>;
+                    })()}
+                  </td>
                 </tr>
               );
             })}
@@ -1844,6 +1891,7 @@ function Report({ setScreen }) {
           <div className="kv-list">
             <div className="lbl">Test</div><div className="val">{D.test.name}</div>
             <div className="lbl">Assertions</div><div className="val">{stats.pass} / {stats.total} passed</div>
+            <div className="lbl">Validation</div><div className="val"><Pill kind={validationPillKind(stats.status)}>{stats.label}</Pill></div>
             <div className="lbl">Sandbox</div><div className="val">{D.test.sandbox_id}</div>
             <div className="lbl">Duration</div><div className="val">{(D.test.duration_ms/1000).toFixed(2)}s</div>
           </div>
