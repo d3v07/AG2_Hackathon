@@ -1,6 +1,6 @@
 # Visual Regression Tests
 
-Golden-screenshot tests that catch unintended UI drift on the Concord Lite
+Golden-screenshot tests that catch unintended UI drift on the Concord
 dashboard. Driven by Playwright's `toHaveScreenshot` against the static
 `public/` server on port 4173.
 

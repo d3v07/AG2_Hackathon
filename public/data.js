@@ -1,4 +1,4 @@
-// Concord Lite — Literature Review Assistant Run #041 fixture
+// Concord — Literature Review Assistant Run #041 fixture
 window.CONCORD_DATA = {
   run: {
     id: "RUN-041",
@@ -204,10 +204,10 @@ window.CONCORD_DATA = {
       { t: "00:04.128", k: "info", v: "daytona stop dt-9f3a-2b71" }
     ],
     assertions: [
-      { id: "A1", name: "evidence_guardrail_blocks_reporter", time_ms: 161, status: "PASS" },
-      { id: "A2", name: "verifier_requires_tool_event",       time_ms: 311, status: "PASS" },
-      { id: "A3", name: "reporter_handoff_gated_on_tool_ok",  time_ms: 399, status: "PASS" },
-      { id: "A4", name: "action_blocked_until_human_gate",    time_ms: 690, status: "PASS" }
+      { id: "A1", name: "evidence_guardrail_blocks_reporter", time_ms: 161, status: "PASS", violation_id: "V-001", patch_id: "P-001" },
+      { id: "A2", name: "verifier_requires_tool_event",       time_ms: 311, status: "PASS", violation_id: "V-002", patch_id: "P-002" },
+      { id: "A3", name: "reporter_handoff_gated_on_tool_ok",  time_ms: 399, status: "PASS", violation_id: "V-003", patch_id: "P-003" },
+      { id: "A4", name: "action_blocked_until_human_gate",    time_ms: 690, status: "PASS", violation_id: "V-004", patch_id: "P-004" }
     ]
   },
   report: {

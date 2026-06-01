@@ -4,18 +4,18 @@
 - Project: Concord
 - Mode: safe
 - Phase: Recovery run
-- Branch: `codex/issue-138-workflow-import`
-- Current Sprint: Recovery issue #138
-- Current Task: #138 in-product workflow registration/import implemented locally
-- Last Checkpoint: Issues #135-#137 are merged to `main` through PR #145. #138 now adds an inline landing-page import panel for JSON workflow specs or YAML contract DSL, posts through existing workflow validation via `/api/workflows` or the opt-in same-origin relay, shows server validation errors inline, rejects malformed JSON arrays before submit, and selects the imported workflow without a page refresh. Daytona validation currently reports `error` / `no-sandbox` with invalid local credentials; tracked by #140.
+- Branch: `codex/issue-139-coherence-rebrand`
+- Current Sprint: Recovery issue #139
+- Current Task: #139 completed-run coherence and Concord rebrand passed local gates
+- Last Checkpoint: Issues #135-#138 are merged to `main` through PRs #145 and #146. #139 now changes visible product chrome and API/CLI naming to Concord, makes completed-run claims data-driven, and links evidence → AG2 primitive → patch → regression with explicit fixture patch/violation IDs. Reviewer pass found no remaining blocking issues after the Overview hardening. Daytona validation currently reports `error` / `no-sandbox` with invalid local credentials; tracked by #140.
 
 ## Sprint Board
 Recovery issue plan:
 - #135 Verify green main and PRD launch scorecard — closed on `main`
 - #136 Export completed run report — closed on `main`
 - #137 Demote public stub mode and default to real runs — closed on `main`
-- #138 Add in-product workflow registration/import — implemented locally on `codex/issue-138-workflow-import`
-- #139 Tighten completed-run coherence and rebrand to Concord
+- #138 Add in-product workflow registration/import — closed on `main`
+- #139 Tighten completed-run coherence and rebrand to Concord — local gates passed on `codex/issue-139-coherence-rebrand`
 - #140 Make Daytona validation states honest
 - #141 Add in-product API key creation
 - #142 Consolidate north-star docs
@@ -33,6 +33,14 @@ Recovery issue plan:
 - API probe passed: health 200, fixture page 200, authenticated `GET /api/runs/RUN-041` returned completed with 4 violations and 4 patches; disabled public relay returned 403.
 - #138 browser import QA passed: landing import panel posted YAML to `/api/public/workflows`, selected the imported workflow in-place, rejected malformed JSON arrays inline, and logged no console errors.
 - #138 API probe passed: health 200, landing page 200, workflows 200 with imported workflow present, and `GET /api/runs/RUN-041` returned completed with 4 violations and 4 patches.
+- #139 focused gate passed: `.venv/bin/python -m pytest tests/test_completed_run_coherence.py tests/test_dashboard_live_mode.py tests/test_dashboard_report_export.py -q` passed 10 tests.
+- #139 frontend gate passed: `npm test -- --run` passed 9 tests.
+- #139 full gate passed: `.venv/bin/python -m pytest -x --tb=short` passed 528 tests, 1 skipped.
+- #139 fixture gate passed: `.venv/bin/python run_all.py --fixture` exited 0 and reported `Regression status : error` with `sandbox=no-sandbox` due invalid local Daytona credentials.
+- #139 lint/diff gate passed: `.venv/bin/python -m ruff check .` and `git diff --check`.
+- #139 browser QA passed on desktop/mobile `/?fixture=1`: Concord brand, violation repair path, P-001 patch link, regression repair links, no console errors.
+- #139 API probe passed: health 200, fixture page 200, `GET /api/runs/RUN-041` 200 with completed / 4 violations / 4 patches, and OpenAPI title `Concord API`.
+- #139 reviewer pass: no remaining blocking issue after Overview/test hardening.
 
 ## Historical Sprint Board
 Sprint 3: Foundation

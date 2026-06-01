@@ -43,3 +43,5 @@ PRD source: `concord_v1_artifacts/docs/CONCORD_PRD.md:320`.
 #137 is implemented locally on `codex/issue-135-baseline-scorecard`: public task submission no longer exposes a stub/live radio, the submitted task spec uses `mode: "live"`, and `TaskSpec` defaults to live when mode is omitted. Stub remains available only as an explicit internal/test mode. Browser QA verified the landing form has no mode radio, keeps the fixture CTA, and posts `mode: "live"` to the same-origin public relay when no browser tenant credentials exist.
 
 #138 is implemented locally on `codex/issue-138-workflow-import`: the landing workflow selector now includes an import panel that accepts full JSON workflow specs or YAML contract DSL, posts to existing workflow validation through `/api/workflows` or an opt-in same-origin relay, shows validation errors inline, and selects the imported workflow without a page refresh.
+
+#139 is implemented locally on `codex/issue-139-coherence-rebrand`: visible product chrome now uses Concord, and the completed-run violations table shows the evidence, AG2 primitive, patch, and regression status path in one row.

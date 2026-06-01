@@ -1,4 +1,4 @@
-# Concord Lite — Demo Script & Q&A Cue Cards
+# Concord — Demo Script & Q&A Cue Cards
 
 Pull this up on a second screen. Every line in **bold quotes** is verbatim — say it that way.
 
@@ -8,7 +8,7 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 1. **"Multi-agent systems fail silently. An agent says 'I verified the sources' and writes `verified_sources_count = 0`. An action agent saves a report without waiting for human approval. The narrative says one thing, the trace says another."**
 
-2. **"Concord Lite is a 7-agent diagnostic pipeline that watches a multi-agent workflow run, catches every contract violation in the trace, attributes it to the responsible agent, generates an AG2-native repair, validates the repair in a Daytona sandbox, and produces a Contract Violation Report — fully automated."**
+2. **"Concord is a 7-agent diagnostic pipeline that watches a multi-agent workflow run, catches every contract violation in the trace, attributes it to the responsible agent, generates an AG2-native repair, validates the repair in a Daytona sandbox, and produces a Contract Violation Report — fully automated."**
 
 3. **"We didn't build a better workflow. We built a referee for any AG2 workflow."**
 
@@ -73,7 +73,7 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 ### Screen 7 — Final Report
 26. **(click 07 Final Report)** **"Notice the top-right status flipped from '4 VIOLATIONS DETECTED' in red to 'RERUN READY' in green. That's the explicit signal the loop is closed."**
 
-27. **"Executive summary is LLM-generated narrative. Approval block shows PENDING_OPERATOR. Click Approve — the status flips to APPROVED and the decision is persisted via `POST /api/runs/{run_id}/approval`."**
+27. **"Executive summary is the final narrative. Approval block shows the report's operator state, and approval decisions are persisted via `POST /api/runs/{run_id}/approval`."**
 
 28. **"Patches Applied table is the deterministic part — four AG2 primitives mapped to four contract types."**
 
@@ -180,7 +180,7 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 
 ## CLOSER (last 15 seconds)
 
-59. **"Concord Lite — declare your contracts in Zone A, get verdicts and AG2-native repairs from Zone B. Live demo at concord-lite.vercel.app, code at github.com/d3v07/AG2_Hackathon."**
+59. **"Concord — declare your contracts in Zone A, get verdicts and AG2-native repairs from Zone B. Live demo at concord-lite.vercel.app, code at github.com/d3v07/AG2_Hackathon."**
 
 60. **"Multi-agent systems fail silently. Concord makes them fail loudly — and tells you exactly which AG2 primitive fixes it."**
 

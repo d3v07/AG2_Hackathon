@@ -100,7 +100,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print("=" * 60)
-    print("  CONCORD LITE — Full Pipeline Run")
+    print("  CONCORD — Full Pipeline Run")
     if args.swarm:
         print("  Mode: AG2 swarm + group chat")
     elif args.fixture:

@@ -1,4 +1,4 @@
-# Concord Lite — Architecture & Demo Walkthrough
+# Concord — Architecture & Demo Walkthrough
 
 **Live demo:** https://concord-lite.vercel.app/
 **Repo:** https://github.com/d3v07/AG2_Hackathon
@@ -12,7 +12,7 @@ This doc is the Q&A-ready reference. Read it, keep it open during the demo. Ever
 
 Multi-agent systems fail silently. An agent claims "I verified the sources" but writes `verified_sources_count=0`. An action agent saves a report without waiting for human approval. A reporter emits final output before the verifier even ran a tool call. These are **contract violations** — the gap between what an agent *says* and what its trace *proves*.
 
-**Concord Lite is a 7-agent diagnostic pipeline that watches a multi-agent workflow run, detects every contract violation in the trace, attributes it to the responsible agent, generates an AG2-native repair patch, validates the patch in a sandboxed pytest, and produces a Contract Violation Report — fully automated.**
+**Concord is a 7-agent diagnostic pipeline that watches a multi-agent workflow run, detects every contract violation in the trace, attributes it to the responsible agent, generates an AG2-native repair patch, validates the patch in a sandboxed pytest, and produces a Contract Violation Report — fully automated.**
 
 We didn't build a better workflow. We built a *referee* for any AG2 workflow.
 
@@ -236,7 +236,7 @@ The frontend is a self-contained React app served as static assets from Vercel (
 - **Why Daytona shows up here:** this is where it earns its keep. Per-run sandbox, isolated exec, deterministic cleanup.
 
 ### Screen 7 — **Final Report** (`screen === "report"`)
-- **Renders:** executive summary paragraph, approval block (status PENDING_OPERATOR in orange — flips to APPROVED when the user clicks the approve button), patches-applied table, verification card with EXPORT JSON / VIEW TEST buttons.
+- **Renders:** executive summary paragraph, approval block from report data, patches-applied table, verification card with EXPORT JSON / VIEW TEST buttons.
 - **Data sources:** `D.report.{summary, patches_applied, approval}`.
 - **Backend equivalent:** `report.narrative` + `report.approval_status`.
 - **Status cluster top-right flips from "4 VIOLATIONS DETECTED" (brick) to "RERUN READY" (sage)** only on this screen — explicit visual signal that the loop is closed.
