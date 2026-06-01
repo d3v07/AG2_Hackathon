@@ -1,6 +1,6 @@
-# Concord Lite Visual Identity
+# Concord Visual Identity
 
-Concord Lite ships a deliberately non-default visual identity. This is a one-page
+Concord ships a deliberately non-default visual identity. This is a one-page
 record of what we picked, what we rejected, and why — so future contributors don't
 silently regress to generic SaaS aesthetics.
 
@@ -48,7 +48,7 @@ Preferred audit-grade language:
 
 ## Self-distinguishing test
 
-If you put Concord Lite next to 10 other AI-built SaaS dashboards, this is what
+If you put Concord next to 10 other SaaS dashboards, this is what
 makes it not-generic:
 
 1. **Monospace chrome** — almost all SaaS apps use Inter/Roboto. We don't.

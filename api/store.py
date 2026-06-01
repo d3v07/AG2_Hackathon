@@ -1,6 +1,6 @@
 """In-memory run store seeded with the Run #041 fixture.
 
-The seeded fixture matches the shape consumed by the Concord Lite frontend
+The seeded fixture matches the shape consumed by the Concord frontend
 (window.CONCORD_DATA). Adapter-side synthesis converts real backend report
 output into this shape; see api/adapter.py.
 """

@@ -1,6 +1,6 @@
 # Live E2E Smoke
 
-End-to-end smoke test that exercises the full Concord Lite stack against a
+End-to-end smoke test that exercises the full Concord stack against a
 real backend: `task_spec` submission → AG2 swarm execution → Zone B contract
 checking → Daytona regression → forensic `CONCORD_DATA` → operator approval.
 

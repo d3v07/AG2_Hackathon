@@ -181,6 +181,50 @@ function Pill({ kind, children }) {
   return <span className={`pill ${kind}`}><Sq kind={kind} />{children}</span>;
 }
 
+function normalizedStatus(value, fallback = "UNKNOWN") {
+  return String(value || fallback).trim().toUpperCase();
+}
+
+function statusPillKind(status) {
+  const normalized = normalizedStatus(status);
+  if (["PASS", "PASSED", "SUCCESS", "APPLIED"].includes(normalized)) return "pass";
+  if (["FAIL", "FAILED", "ERROR"].includes(normalized)) return "fail";
+  return "warn";
+}
+
+function testAssertionStats(test = D.test) {
+  const assertions = Array.isArray(test?.assertions) ? test.assertions : [];
+  const counts = assertions.reduce((acc, assertion) => {
+    const status = normalizedStatus(assertion.status);
+    if (status === "PASS" || status === "PASSED") acc.pass += 1;
+    else if (status === "FAIL" || status === "FAILED") acc.fail += 1;
+    else if (status === "ERROR") acc.error += 1;
+    else acc.other += 1;
+    return acc;
+  }, { pass: 0, fail: 0, error: 0, other: 0 });
+  const total = assertions.length;
+  let status = normalizedStatus(test?.status || D.report?.regression_test_status, total ? "UNKNOWN" : "UNAVAILABLE");
+  if (total > 0) {
+    if (counts.fail > 0) status = "FAIL";
+    else if (counts.error > 0) status = "ERROR";
+    else if (counts.other > 0 || counts.pass < total) status = "PARTIAL";
+    else status = "PASS";
+  }
+  const label = status === "PASS" ? "ALL PASS" : status;
+  return { ...counts, total, status, label };
+}
+
+function assertionRepairLink(assertion, index) {
+  const numericId = Number(String(assertion?.id || "").replace(/\D/g, ""));
+  const patch = assertion?.patch_id
+    ? D.patches.find((item) => item.id === assertion.patch_id)
+    : D.patches[numericId > 0 ? numericId - 1 : index];
+  const violation = assertion?.violation_id
+    ? D.violations.find((item) => item.id === assertion.violation_id)
+    : patch ? D.violations.find((item) => item.id === patch.violation) : null;
+  return { patch, violation };
+}
+
 function sourceBadgeText(sourceMode, connectionState, liveStatus) {
   if (sourceMode === "fixture") return "FIXTURE";
   if (connectionState === "connecting") return "LIVE CONNECTING";
@@ -229,7 +273,7 @@ function TopBar({ screen, setScreen, sourceMode, setSourceMode, connectionState,
   return (
     <header className="topbar">
       <div className="brand">
-        <div className="mark">CONCORD · LITE</div>
+        <div className="mark">CONCORD</div>
         <div className="sub">CONTRACT &nbsp;&middot;&nbsp; REPAIR &nbsp;&middot;&nbsp; REGRESSION</div>
       </div>
       <nav className="tabs">
@@ -608,6 +652,51 @@ function formatSeconds(value) {
   return `${costMetric(value).toFixed(2)}s`;
 }
 
+function formatRunStarted(value) {
+  if (!value) return "start unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toISOString().replace("T", " ").replace("Z", " UTC");
+}
+
+function severitySummary(violations = D.violations) {
+  return (violations || []).reduce((acc, violation) => {
+    const key = normalizedStatus(violation.severity, "LOW").toLowerCase();
+    if (key === "high") acc.high += 1;
+    else if (key === "med" || key === "medium") acc.medium += 1;
+    else acc.low += 1;
+    return acc;
+  }, { high: 0, medium: 0, low: 0 });
+}
+
+function latestTraceContextValue(keys, fallback = 0) {
+  const keyList = Array.isArray(keys) ? keys : [keys];
+  for (const event of [...(D.trace || [])].reverse()) {
+    const ctx = event.ctx || {};
+    for (const key of keyList) {
+      if (Object.prototype.hasOwnProperty.call(ctx, key)) {
+        const value = ctx[key];
+        if (Array.isArray(value)) return value.length;
+        return value ?? fallback;
+      }
+    }
+  }
+  return fallback;
+}
+
+function handoffCount() {
+  return (D.trace || []).filter((event) =>
+    String(event.type || "").toLowerCase() === "handoff" ||
+    Object.prototype.hasOwnProperty.call(event.ctx || {}, "handoff_to")
+  ).length;
+}
+
+function approvalState() {
+  const traceValue = latestTraceContextValue("approval_status", "");
+  const reportValue = D.report?.approval?.status || "";
+  return normalizedStatus(traceValue || reportValue || "unknown").replaceAll("_", " ");
+}
+
 function CostPanel({ usage }) {
   const runCost = D.cost || D.report?.cost_summary || {};
   const tenantUsage = usage || {};
@@ -647,11 +736,17 @@ function CostPanel({ usage }) {
 
 /* ---------------- OVERVIEW ---------------- */
 function Overview({ setScreen, tenantUsage }) {
+  const severity = severitySummary();
+  const patchCount = D.patches.length || D.stats.repair_ready || 0;
+  const retrievedSources = latestTraceContextValue(["retrieved_sources", "retrieved_sources_count"], 0);
+  const verifiedSources = latestTraceContextValue(["verified_sources_count", "verified"], 0);
+  const approval = approvalState();
+  const runState = normalizedStatus(D.status || D.run.final_output_status || "unknown").replaceAll("_", " ");
   return (
     <>
       <div className="section-head">
         <h2>Run Summary &nbsp;//&nbsp; {D.run.id} &nbsp;&middot;&nbsp; {D.run.workflow}</h2>
-        <div className="right">started 14:22:08 UTC &nbsp;&middot;&nbsp; trace nominal</div>
+        <div className="right">started {formatRunStarted(D.run.started)} &nbsp;&middot;&nbsp; {runState}</div>
       </div>
 
       <div className="stat-grid" style={{marginBottom: 22}}>
@@ -659,7 +754,7 @@ function Overview({ setScreen, tenantUsage }) {
           <div className="stat-accent brick"></div>
           <div className="lbl">Contract Violations</div>
           <div className="num brick">{D.stats.violations}</div>
-          <div className="delta">3 HIGH &nbsp;/&nbsp; 1 MED &nbsp;/&nbsp; 0 LOW</div>
+          <div className="delta">{severity.high} HIGH &nbsp;/&nbsp; {severity.medium} MED &nbsp;/&nbsp; {severity.low} LOW</div>
         </div>
         <div className="stat">
           <div className="stat-accent gold"></div>
@@ -671,7 +766,7 @@ function Overview({ setScreen, tenantUsage }) {
           <div className="stat-accent sage"></div>
           <div className="lbl">Repair Ready</div>
           <div className="num sage">{D.stats.repair_ready} <span style={{color: "var(--text-3)", fontSize: 16}}>/ {D.stats.violations}</span></div>
-          <div className="delta">AG2 primitives mapped &nbsp;&middot;&nbsp; 4 PATCHES</div>
+          <div className="delta">AG2 primitives mapped &nbsp;&middot;&nbsp; {patchCount} patch{patchCount === 1 ? "" : "es"}</div>
         </div>
       </div>
 
@@ -706,10 +801,10 @@ function Overview({ setScreen, tenantUsage }) {
             <div style={{lineHeight: 1.6, marginBottom: 14}}>{D.run.task}</div>
             <hr />
             <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12, fontSize: 11.5}}>
-              <div><div className="muted" style={{fontSize: 10, letterSpacing: "0.14em"}}>RETRIEVED</div><div>7 sources</div></div>
-              <div><div className="muted" style={{fontSize: 10, letterSpacing: "0.14em"}}>VERIFIED</div><div className="text-brick">0 sources</div></div>
-              <div><div className="muted" style={{fontSize: 10, letterSpacing: "0.14em"}}>HANDOFFS</div><div>4</div></div>
-              <div><div className="muted" style={{fontSize: 10, letterSpacing: "0.14em"}}>APPROVAL</div><div className="text-brick">pending</div></div>
+              <div><div className="muted" style={{fontSize: 10, letterSpacing: "0.14em"}}>RETRIEVED</div><div>{retrievedSources} source{retrievedSources === 1 ? "" : "s"}</div></div>
+              <div><div className="muted" style={{fontSize: 10, letterSpacing: "0.14em"}}>VERIFIED</div><div className={Number(verifiedSources) > 0 ? "text-sage" : "text-brick"}>{verifiedSources} source{verifiedSources === 1 ? "" : "s"}</div></div>
+              <div><div className="muted" style={{fontSize: 10, letterSpacing: "0.14em"}}>HANDOFFS</div><div>{handoffCount()}</div></div>
+              <div><div className="muted" style={{fontSize: 10, letterSpacing: "0.14em"}}>APPROVAL</div><div className={approval === "APPROVED" ? "text-sage" : "text-brick"}>{approval}</div></div>
             </div>
           </div>
         </div>
@@ -1068,6 +1163,7 @@ function TraceMiniRail({ focusedStep, setFocusedStep }) {
 
 function Trace() {
   const [focusedStep, setFocusedStep] = useState(null);
+  const toolEventCount = D.trace.filter((event) => String(event.type || "").toLowerCase().includes("tool")).length;
   const renderCtx = (e) => {
     const entries = Object.entries(e.ctx || {});
     return entries.map(([k, v], i) => {
@@ -1084,7 +1180,7 @@ function Trace() {
     <>
       <div className="section-head">
         <h2>Agent Trace &nbsp;//&nbsp; ordered timeline</h2>
-        <div className="right">{D.trace.length} events &nbsp;&middot;&nbsp; 1 tool event &nbsp;&middot;&nbsp; 4 violations</div>
+        <div className="right">{D.trace.length} events &nbsp;&middot;&nbsp; {toolEventCount} tool events &nbsp;&middot;&nbsp; {D.violations.length} violations</div>
       </div>
       <div className="trace-layout">
         <TraceMiniRail focusedStep={focusedStep} setFocusedStep={setFocusedStep} />
@@ -1135,6 +1231,29 @@ function Trace() {
 }
 
 /* ---------------- VIOLATIONS ---------------- */
+function regressionForViolation(violation, patch) {
+  const reportTests = D.report?.regression_tests || [];
+  const byContract = reportTests.find((test) =>
+    String(test.contract_type || "").toUpperCase() === String(violation.type || "").toUpperCase()
+  );
+  const patchNumber = Number(String(patch?.id || "").replace(/\D/g, ""));
+  const assertionId = Number.isFinite(patchNumber) && patchNumber > 0 ? `A${patchNumber}` : "";
+  const assertion = (D.test?.assertions || []).find((item) =>
+    item.violation_id === violation.id ||
+    (patch && item.patch_id === patch.id) ||
+    item.id === assertionId
+  );
+  const status = byContract?.test_status || assertion?.status || D.report?.regression_test_status || "unknown";
+  return {
+    status: String(status).toUpperCase(),
+    label: byContract?.test_name || byContract?.assertion || assertion?.name || "regression pending",
+  };
+}
+
+function regressionPillKind(status) {
+  return statusPillKind(status);
+}
+
 function Violations({ setScreen, setSelectedPatch }) {
   const onClick = (v) => {
     const p = D.patches.find(p => p.violation === v.id);
@@ -1145,7 +1264,7 @@ function Violations({ setScreen, setSelectedPatch }) {
     <>
       <div className="section-head">
         <h2>Contract Violations &nbsp;//&nbsp; {D.violations.length} detected</h2>
-        <div className="right">click row to view repair patch</div>
+        <div className="right">evidence → primitive → patch → regression</div>
       </div>
 
       <div className="viol-list" style={{marginBottom: 14}}>
@@ -1156,10 +1275,11 @@ function Violations({ setScreen, setSelectedPatch }) {
           <div className="muted" style={{letterSpacing: "0.16em", fontSize: 10, textTransform: "uppercase"}}>Title</div>
           <div className="muted" style={{letterSpacing: "0.16em", fontSize: 10, textTransform: "uppercase"}}>Expected / Observed</div>
           <div className="muted" style={{letterSpacing: "0.16em", fontSize: 10, textTransform: "uppercase"}}>Failed Agent · Step</div>
-          <div className="muted" style={{letterSpacing: "0.16em", fontSize: 10, textTransform: "uppercase"}}>Patch</div>
+          <div className="muted" style={{letterSpacing: "0.16em", fontSize: 10, textTransform: "uppercase"}}>Repair Path</div>
         </div>
         {D.violations.map(v => {
           const patch = D.patches.find(p => p.violation === v.id);
+          const regression = regressionForViolation(v, patch);
           return (
             <div key={v.id} className={`viol-row ${v.severity === "MED" ? "med" : ""}`} onClick={() => onClick(v)}>
               <div className="sev-bar"></div>
@@ -1182,9 +1302,37 @@ function Violations({ setScreen, setSelectedPatch }) {
                 <div className="agent">{v.failed_agent}</div>
                 <div className="muted" style={{fontSize: 11, marginTop: 4}}>step <span className="step">{String(v.failed_step).padStart(2,"0")}</span></div>
               </div>
-              <div>
-                <div className="text-gold" style={{letterSpacing: "0.16em", fontSize: 11}}>{patch ? patch.id : "—"}</div>
-                <div className="muted" style={{fontSize: 10.5, marginTop: 4, letterSpacing: "0.1em"}}>{patch ? patch.primitive : ""}</div>
+              <div className="repair-path">
+                <div>
+                  <span className="path-label">Evidence</span>
+                  <span>{v.evidence?.[0] || v.observed}</span>
+                </div>
+                <div>
+                  <span className="path-label">AG2 primitive</span>
+                  <span className="text-gold">{patch ? patch.primitive : "unmapped"}</span>
+                </div>
+                <div>
+                  <span className="path-label">Patch</span>
+                  {patch ? (
+                    <button
+                      type="button"
+                      className="inline-action"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onClick(v);
+                      }}
+                    >
+                      VIEW PATCH {patch.id}
+                    </button>
+                  ) : (
+                    <span>—</span>
+                  )}
+                </div>
+                <div>
+                  <span className="path-label">Regression</span>
+                  <Pill kind={regressionPillKind(regression.status)}>{regression.status}</Pill>
+                  <span className="muted path-test">{regression.label}</span>
+                </div>
               </div>
             </div>
           );
@@ -1410,7 +1558,7 @@ function RepairDAG({ patches, appliedPatches, setAppliedPatches, setScreen }) {
         <div className="rdag-banner">
           <div>
             <div className="head">All patches applied — workflow corrected</div>
-            <div className="sub">4 AG2 primitives inserted · ready for regression</div>
+            <div className="sub">{patches.length} AG2 primitives inserted · ready for regression</div>
           </div>
           <button className="go" onClick={() => setScreen("regression")}>Run regression →</button>
         </div>
@@ -1526,6 +1674,7 @@ function Repair({ selectedPatch, setSelectedPatch, appliedPatches, setAppliedPat
 /* ---------------- REGRESSION ---------------- */
 function Regression() {
   const t = D.test;
+  const stats = testAssertionStats(t);
   return (
     <>
       <div className="section-head">
@@ -1559,33 +1708,44 @@ function Regression() {
           <div className="kv-list">
             <div className="lbl">ID</div><div className="val">{t.sandbox_id}</div>
             <div className="lbl">Image</div><div className="val">{t.image}</div>
-            <div className="lbl">Runner</div><div className="val">pytest 8.2.0</div>
+            <div className="lbl">Runner</div><div className="val">{t.runner || "unknown"}</div>
             <div className="lbl">Duration</div><div className="val">{(t.duration_ms/1000).toFixed(2)}s</div>
-            <div className="lbl">Status</div><div className="val"><Pill kind="pass">ALL PASS</Pill></div>
+            <div className="lbl">Status</div><div className="val"><Pill kind={statusPillKind(stats.status)}>{stats.label}</Pill></div>
           </div>
         </div>
       </div>
 
       <div className="card">
-        <div className="card-head"><span>Assertions</span><span className="right">{t.assertions.length} · {t.assertions.length} passed</span></div>
+        <div className="card-head"><span>Assertions</span><span className="right">{stats.pass} pass · {stats.fail} fail · {stats.error} error</span></div>
         <table className="tbl">
           <thead>
             <tr>
               <th style={{width: 60}}>ID</th>
               <th>Assertion</th>
+              <th style={{width: 220}}>Repair Link</th>
               <th style={{width: 100}}>Time</th>
               <th style={{width: 100}}>Status</th>
             </tr>
           </thead>
           <tbody>
-            {t.assertions.map(a => (
-              <tr key={a.id}>
-                <td className="text-2">{a.id}</td>
-                <td><span className="text-gold">{a.name}</span></td>
-                <td className="num-col">{a.time_ms} ms</td>
-                <td><Pill kind="pass">PASS</Pill></td>
-              </tr>
-            ))}
+            {t.assertions.map((a, index) => {
+              const link = assertionRepairLink(a, index);
+              return (
+                <tr key={a.id}>
+                  <td className="text-2">{a.id}</td>
+                  <td><span className="text-gold">{a.name}</span></td>
+                  <td>
+                    {link.patch && link.violation ? (
+                      <span className="muted">fixes <span className="text-brick">{link.violation.id}</span> · {link.patch.id} · {link.patch.primitive}</span>
+                    ) : (
+                      <span className="muted">unmapped</span>
+                    )}
+                  </td>
+                  <td className="num-col">{a.time_ms} ms</td>
+                  <td><Pill kind={statusPillKind(a.status)}>{normalizedStatus(a.status)}</Pill></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1597,6 +1757,8 @@ function Regression() {
 function Report({ setScreen }) {
   const r = D.report;
   const [exportState, setExportState] = useState("idle");
+  const stats = testAssertionStats(D.test);
+  const appliedPatchIds = new Set((r.patches_applied || []).map((entry) => String(entry).trim().split(/\s+/)[0]));
   async function handleExport() {
     setExportState("exporting");
     try {
@@ -1649,7 +1811,7 @@ function Report({ setScreen }) {
 
       <div className="row" style={{alignItems: "stretch"}}>
         <div className="card grow">
-          <div className="card-head"><span>Patches Applied</span><span className="right">{r.patches_applied.length} primitives</span></div>
+          <div className="card-head"><span>Patches Applied</span><span className="right">{appliedPatchIds.size} / {D.patches.length} primitives</span></div>
           <div className="card-body" style={{padding: 0}}>
             <table className="tbl">
               <thead>
@@ -1661,14 +1823,17 @@ function Report({ setScreen }) {
                 </tr>
               </thead>
               <tbody>
-                {D.patches.map(p => (
-                  <tr key={p.id}>
-                    <td className="text-2">{p.id}</td>
-                    <td className="text-gold" style={{letterSpacing: "0.12em", fontSize: 11.5}}>{p.primitive}</td>
-                    <td>{p.target}</td>
-                    <td><Pill kind="pass">APPLIED</Pill></td>
-                  </tr>
-                ))}
+                {D.patches.map(p => {
+                  const isApplied = appliedPatchIds.has(p.id);
+                  return (
+                    <tr key={p.id}>
+                      <td className="text-2">{p.id}</td>
+                      <td className="text-gold" style={{letterSpacing: "0.12em", fontSize: 11.5}}>{p.primitive}</td>
+                      <td>{p.target}</td>
+                      <td><Pill kind={isApplied ? "pass" : "warn"}>{isApplied ? "APPLIED" : "PENDING"}</Pill></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1678,7 +1843,7 @@ function Report({ setScreen }) {
           <div className="card-head"><span>Verification</span><span className="right">daytona</span></div>
           <div className="kv-list">
             <div className="lbl">Test</div><div className="val">{D.test.name}</div>
-            <div className="lbl">Assertions</div><div className="val">4 / 4 passed</div>
+            <div className="lbl">Assertions</div><div className="val">{stats.pass} / {stats.total} passed</div>
             <div className="lbl">Sandbox</div><div className="val">{D.test.sandbox_id}</div>
             <div className="lbl">Duration</div><div className="val">{(D.test.duration_ms/1000).toFixed(2)}s</div>
           </div>
@@ -1701,7 +1866,7 @@ function Report({ setScreen }) {
       </div>
 
       <div style={{marginTop: 22, color: "var(--text-3)", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", borderTop: "1px solid var(--border)", paddingTop: 14, display: "flex", justifyContent: "space-between"}}>
-        <span>concord-lite &nbsp;&middot;&nbsp; report v1 &nbsp;&middot;&nbsp; {D.run.id}</span>
+        <span>concord &nbsp;&middot;&nbsp; report v1 &nbsp;&middot;&nbsp; {D.run.id}</span>
         <span>workflow under test &nbsp;→&nbsp; contract violation &nbsp;→&nbsp; repair &nbsp;→&nbsp; regression test</span>
       </div>
     </>
@@ -1934,7 +2099,7 @@ function SubmitForm({ onSubmitted, onSwitchToFixture }) {
     <div className="landing">
       <div className="landing-card">
         <header className="landing-head">
-          <h1 className="landing-mark">CONCORD · LITE</h1>
+          <h1 className="landing-mark">CONCORD</h1>
           <p className="landing-sub">
             Submit a research task. Watch the AG2 swarm work it. Concord catches contract violations and proposes repairs in real time.
           </p>

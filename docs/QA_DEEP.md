@@ -1,4 +1,4 @@
-# Concord Lite — Deep Q&A Reference
+# Concord — Deep Q&A Reference
 
 Pairs with [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md). This one is for the harder questions — what's used where, how the integrations actually work, why the architecture is shaped this way.
 

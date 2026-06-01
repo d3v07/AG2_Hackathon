@@ -252,7 +252,7 @@ async def main():
     raw = json.loads(open("/tmp/mock_trace.json").read())
 
     print("=" * 55)
-    print("  CONCORD LITE — Sandbox Run")
+    print("  CONCORD — Sandbox Run")
     print("=" * 55)
 
     # TraceCollector

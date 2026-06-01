@@ -1,11 +1,11 @@
-# Concord Lite
+# Concord
 
 <!-- TODO: capture forensic UI screenshot after Sprint 18 polish lands -->
 <!-- ![CI](https://github.com/d3v07/AG2_Hackathon/actions/workflows/ci.yml/badge.svg) -->
 
 **A contract-to-repair diagnostic layer for AG2 multi-agent workflows.**
 
-Concord Lite monitors a multi-agent workflow run, detects when agents violate their behavioural contracts, attributes the root cause to the responsible agent, proposes a repair targeting the correct AG2 primitive, and validates the fix with a sandboxed regression test — all automatically, end-to-end.
+Concord monitors a multi-agent workflow run, detects when agents violate their behavioural contracts, attributes the root cause to the responsible agent, proposes a repair targeting the correct AG2 primitive, and validates the fix with a sandboxed regression test — all automatically, end-to-end.
 
 **Sprint 17 forensic trace UI:** click any contract violation to jump straight to the offending span; inspect the 16-field shape inline; cross-link from violations → patches → regression.
 
@@ -71,7 +71,7 @@ When no API keys exist, unauthenticated requests use the `local` tenant for demo
 
 Multi-agent systems fail silently. An agent claims it verified sources but sets `verified_sources_count=0`. Another runs a side-effect action without waiting for human approval. A third records no tool call despite claiming it searched. These are contract violations — the gap between what an agent *says* it did and what it *actually* produced in the trace.
 
-Concord Lite is a diagnostic pipeline that sits *outside* the target workflow, reads its execution trace, and systematically detects, attributes, and repairs those gaps.
+Concord is a diagnostic pipeline that sits *outside* the target workflow, reads its execution trace, and systematically detects, attributes, and repairs those gaps.
 
 ```
 Zone A: target workflow (broken by design)
@@ -531,7 +531,7 @@ python zone_a/run.py
 
 ```
 ============================================================
-  CONCORD LITE — Full Pipeline Run
+  CONCORD — Full Pipeline Run
 ============================================================
 
 [Zone A] Skipped — using fixture trace

@@ -1,7 +1,7 @@
 # Lighthouse CI
 
 Automated performance, accessibility, best-practices, and SEO budgets for the
-Concord Lite dashboard (`public/index.html`). Configuration lives in
+Concord dashboard (`public/index.html`). Configuration lives in
 [`lighthouserc.json`](../lighthouserc.json) at the repo root.
 
 ## Run locally
