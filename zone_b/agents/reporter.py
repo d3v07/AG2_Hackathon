@@ -56,6 +56,11 @@ def _regression_tests(regression_out: dict, violations: list[Violation]) -> list
     if isinstance(results, list):
         return results
     status = regression_out.get("test_status", "error")
+    validation_state = _validation_state_from_result(
+        regression_out.get("validation_state") or status,
+        regression_out.get("stdout", ""),
+        regression_out.get("sandbox_id", ""),
+    )
     return [
         {
             "contract_type": v.contract_type,
@@ -66,6 +71,7 @@ def _regression_tests(regression_out: dict, violations: list[Violation]) -> list
             "test_name": regression_out.get("test_name", ""),
             "assertion": "",
             "test_status": status,
+            "validation_state": validation_state,
             "stdout": regression_out.get("stdout", ""),
             "sandbox_id": regression_out.get("sandbox_id", ""),
         }
@@ -81,6 +87,62 @@ def _violation_status_summary(violations: list[dict]) -> dict:
     return summary
 
 
+VALIDATION_STATES = (
+    "passed",
+    "failed",
+    "skipped",
+    "unavailable",
+    "credential_failure",
+    "execution_error",
+)
+
+
+def _validation_state_from_status(status: str) -> str:
+    normalized = str(status or "").strip().lower()
+    if normalized in {"passed", "pass"}:
+        return "passed"
+    if normalized in {"failed", "fail"}:
+        return "failed"
+    if normalized in {"skipped", "unavailable", "credential_failure", "execution_error"}:
+        return normalized
+    if normalized == "error":
+        return "execution_error"
+    return "unavailable"
+
+
+def _validation_state_from_result(
+    status: str,
+    stdout: str = "",
+    sandbox_id: str = "",
+) -> str:
+    state = _validation_state_from_status(status)
+    if state != "execution_error":
+        return state
+    combined = f"{stdout} {sandbox_id}".lower()
+    if any(marker in combined for marker in (
+        "credentials missing",
+        "invalid credentials",
+        "credential fail",
+        "unauthorized",
+    )):
+        return "credential_failure"
+    if "unavailable" in combined or str(sandbox_id or "").strip().lower() in {"", "no-sandbox"}:
+        return "unavailable"
+    return state
+
+
+def _validation_summary(regression_tests: list[dict]) -> dict[str, int]:
+    summary = {state: 0 for state in VALIDATION_STATES}
+    for test in regression_tests:
+        state = _validation_state_from_result(
+            test.get("validation_state") or test.get("test_status"),
+            test.get("stdout", ""),
+            test.get("sandbox_id", ""),
+        )
+        summary[state] += 1
+    return summary
+
+
 def _test_status_by_violation(regression_tests: list[dict]) -> dict[tuple, str]:
     statuses = {}
     for test in regression_tests:
@@ -92,6 +154,23 @@ def _test_status_by_violation(regression_tests: list[dict]) -> dict[tuple, str]:
         if all(part is not None for part in key):
             statuses[key] = test.get("test_status", "error")
     return statuses
+
+
+def _validation_state_by_violation(regression_tests: list[dict]) -> dict[tuple, str]:
+    states = {}
+    for test in regression_tests:
+        key = (
+            test.get("contract_type"),
+            test.get("failed_agent"),
+            test.get("failed_step"),
+        )
+        if all(part is not None for part in key):
+            states[key] = _validation_state_from_result(
+                test.get("validation_state") or test.get("test_status"),
+                test.get("stdout", ""),
+                test.get("sandbox_id", ""),
+            )
+    return states
 
 
 def _ask_llm_for_narrative(report_core: dict) -> str:
@@ -132,6 +211,7 @@ async def run_reporter(
     regression_tests = _regression_tests(regression_out, violations)
     violation_dicts = _violations_to_dicts(violations)
     status_by_violation = _test_status_by_violation(regression_tests)
+    validation_by_violation = _validation_state_by_violation(regression_tests)
     for violation in violation_dicts:
         key = (
             violation.get("contract_type"),
@@ -139,7 +219,16 @@ async def run_reporter(
             violation.get("failed_step"),
         )
         violation["test_status"] = status_by_violation.get(key, "error")
+        violation["validation_state"] = validation_by_violation.get(
+            key,
+            _validation_state_from_status(violation["test_status"]),
+        )
 
+    validation_state = _validation_state_from_result(
+        regression_out.get("validation_state") or regression_out.get("test_status", "error"),
+        regression_out.get("stdout", ""),
+        regression_out.get("sandbox_id", ""),
+    )
     report_core = {
         "run_id": run_trace.run_id,
         "workflow_name": run_trace.workflow_name,
@@ -152,12 +241,20 @@ async def run_reporter(
         "affected_primitive": repair_out.get("affected_primitive", ""),
         "patch_code": repair_out.get("patch_code", ""),
         "regression_test_status": regression_out.get("test_status", "error"),
+        "validation_state": validation_state,
+        "generated_test_status": regression_out.get("generated_test_status", ""),
+        "generated_stdout": regression_out.get("generated_stdout", ""),
+        "generated_sandbox_id": regression_out.get("generated_sandbox_id", ""),
+        "fallback_used": bool(regression_out.get("fallback_used", False)),
+        "fallback_reason": regression_out.get("fallback_reason", ""),
         "repair_confidence": repair_out.get("confidence", 0.0),
         "approval_status": approval_status,
         "violations": violation_dicts,
         "patches": _repair_patches(repair_out),
         "regression_tests": regression_tests,
         "regression_summary": _violation_status_summary(violation_dicts),
+        "validation_summary": regression_out.get("validation_summary")
+        or _validation_summary(regression_tests),
         "iteration_count": int(iteration_count),
         "sandbox_id": regression_out.get("sandbox_id", ""),
         "regression_duration_ms": int(regression_out.get("duration_ms", 0)),

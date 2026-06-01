@@ -467,6 +467,43 @@ def _regression_passed(regression_status: str) -> bool:
     return str(regression_status).lower() in {"pass", "passed"}
 
 
+def _validation_state(value: Any, fallback_status: str = "") -> str:
+    normalized = str(value or fallback_status or "").strip().lower()
+    if normalized in {"pass", "passed"}:
+        return "passed"
+    if normalized in {"fail", "failed"}:
+        return "failed"
+    if normalized in {
+        "skipped",
+        "unavailable",
+        "credential_failure",
+        "execution_error",
+    }:
+        return normalized
+    if normalized == "error":
+        return "execution_error"
+    return "unavailable"
+
+
+def _validation_assertion_status(state: str) -> str:
+    return {
+        "passed": "PASS",
+        "failed": "FAIL",
+        "skipped": "SKIPPED",
+        "unavailable": "UNAVAILABLE",
+        "credential_failure": "CREDENTIAL_FAILURE",
+        "execution_error": "EXECUTION_ERROR",
+    }.get(state, "UNAVAILABLE")
+
+
+def _validation_line_kind(state: str) -> str:
+    if state == "passed":
+        return "pass"
+    if state in {"failed", "credential_failure", "execution_error"}:
+        return "fail"
+    return "info"
+
+
 def _build_cost_block(report: dict[str, Any]) -> dict[str, Any]:
     cost = report.get("regression_cost")
     if not isinstance(cost, dict):
@@ -488,12 +525,30 @@ def _build_test_block(
     violations_block: list[dict],
     *,
     duration_ms: int = 4128,
+    validation_state: str = "",
+    regression_tests: list[dict] | None = None,
 ) -> dict[str, Any]:
-    status = "PASS" if _regression_passed(regression_status) else "FAIL"
-    assertions = [
-        {"id": f"A{i}", "name": f"assert_{v['contract'].lower()}_repair_holds", "time_ms": 200 + 100 * i, "status": status}
-        for i, v in enumerate(violations_block, start=1)
-    ]
+    report_state = _validation_state(validation_state, regression_status)
+    tests = regression_tests if isinstance(regression_tests, list) else []
+    assertions = []
+    for i, violation in enumerate(violations_block, start=1):
+        test = tests[i - 1] if i - 1 < len(tests) and isinstance(tests[i - 1], dict) else {}
+        test_status_state = _validation_state(test.get("test_status"), report_state)
+        fallback_state = (
+            report_state
+            if report_state != "passed" and test_status_state == "passed"
+            else test_status_state
+        )
+        state = _validation_state(test.get("validation_state"), fallback_state)
+        assertions.append({
+            "id": f"A{i}",
+            "name": test.get("test_name") or f"assert_{violation['contract'].lower()}_repair_holds",
+            "time_ms": int(test.get("time_ms", 200 + 100 * i) or 0),
+            "status": _validation_assertion_status(state),
+            "validation_state": state,
+            "stdout": test.get("stdout", ""),
+            "sandbox_id": test.get("sandbox_id", sandbox_id),
+        })
     duration = int(duration_ms or 0) if duration_ms is not None else 4128
     duration_seconds = max(0, duration // 1000)
     duration_stamp = f"00:{duration_seconds:02d}.{duration % 1000:03d}"
@@ -501,6 +556,7 @@ def _build_test_block(
         "name": "test_contract_repair",
         "runner": "Daytona Sandbox",
         "sandbox_id": sandbox_id or "dt-local",
+        "validation_state": report_state,
         "image": "python:3.11-slim",
         "duration_ms": duration,
         "lines": [
@@ -508,7 +564,7 @@ def _build_test_block(
             {"t": "00:00.612", "k": "info", "v": "pip install autogen-ag2 pytest"},
             {"t": "00:02.220", "k": "info", "v": "pytest tests/test_contract_repair.py -v"},
             *[
-                {"t": f"00:0{2 + i}.{500 + i * 100:03d}", "k": "pass" if a["status"] == "PASS" else "fail", "v": f"tests/test_contract_repair.py::{a['name']} {a['status']}"}
+                {"t": f"00:0{2 + i}.{500 + i * 100:03d}", "k": _validation_line_kind(a["validation_state"]), "v": f"tests/test_contract_repair.py::{a['name']} {a['status']}"}
                 for i, a in enumerate(assertions)
             ],
             {"t": duration_stamp, "k": "info", "v": f"daytona stop {sandbox_id or 'dt-local'}"},
@@ -529,6 +585,13 @@ def _build_report_block(
             for p in patches_block
         ],
         "regression_summary": report.get("regression_summary", {}),
+        "validation_state": report.get("validation_state", ""),
+        "validation_summary": report.get("validation_summary", {}),
+        "generated_test_status": report.get("generated_test_status", ""),
+        "generated_stdout": report.get("generated_stdout", ""),
+        "generated_sandbox_id": report.get("generated_sandbox_id", ""),
+        "fallback_used": bool(report.get("fallback_used", False)),
+        "fallback_reason": report.get("fallback_reason", ""),
         "regression_tests": report.get("regression_tests", []),
         "usage_summary": report.get(
             "regression_usage",
@@ -594,10 +657,12 @@ def report_to_concord_data(
         "patches": patches_block,
         "spans": spans_block,
         "test": _build_test_block(
-            report.get("regression_test_status", "passed"),
+            report.get("regression_test_status", "unavailable"),
             report_sandbox_id,
             violations_block,
             duration_ms=duration_ms,
+            validation_state=report.get("validation_state", ""),
+            regression_tests=report.get("regression_tests", []),
         ),
         "cost": cost_block,
         "report": _build_report_block(report, patches_block, cost_block),

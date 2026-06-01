@@ -150,6 +150,48 @@ def _is_infrastructure_error(stdout: str) -> bool:
     )
 
 
+VALIDATION_STATES = (
+    "passed",
+    "failed",
+    "skipped",
+    "unavailable",
+    "credential_failure",
+    "execution_error",
+)
+
+
+def _empty_validation_summary() -> dict[str, int]:
+    return {state: 0 for state in VALIDATION_STATES}
+
+
+def _validation_state_for_result(
+    test_status: str,
+    stdout: str = "",
+    sandbox_id: str = "",
+) -> str:
+    status = (test_status or "").strip().lower()
+    output = (stdout or "").strip().lower()
+    sandbox = (sandbox_id or "").strip().lower()
+    if status in {"pass", "passed"}:
+        return "passed"
+    if status in {"fail", "failed"}:
+        return "failed"
+    if status == "skipped":
+        return "skipped"
+    if (
+        "credentials missing" in output
+        or "invalid credentials" in output
+        or "credential" in output and "fail" in output
+        or "unauthorized" in output
+    ):
+        return "credential_failure"
+    if "unavailable" in output or (sandbox in {"", "no-sandbox"} and not output):
+        return "unavailable"
+    if sandbox in {"", "no-sandbox"} and status == "error":
+        return "unavailable"
+    return "execution_error"
+
+
 def _status_for_violation(stdout: str, overall_status: str, contract_type: str) -> str:
     marker = contract_type.lower()
     lines = [line.strip().lower() for line in (stdout or "").splitlines()]
@@ -195,6 +237,11 @@ def _per_violation_results(
             "test_status": _status_for_violation(
                 stdout, test_status, violation.contract_type
             ),
+            "validation_state": _validation_state_for_result(
+                _status_for_violation(stdout, test_status, violation.contract_type),
+                stdout,
+                sandbox_id,
+            ),
             "stdout": stdout,
             "sandbox_id": sandbox_id,
             "fallback_used": fallback_used,
@@ -213,6 +260,21 @@ def _status_summary(results: list[dict]) -> dict:
     for result in results:
         status = result.get("test_status", "error")
         summary[status if status in summary else "error"] += 1
+    return summary
+
+
+def _validation_summary(
+    results: list[dict],
+    *,
+    fallback_state: str | None = None,
+) -> dict[str, int]:
+    summary = _empty_validation_summary()
+    if not results and fallback_state:
+        summary[fallback_state if fallback_state in summary else "execution_error"] += 1
+        return summary
+    for result in results:
+        state = result.get("validation_state", "execution_error")
+        summary[state if state in summary else "execution_error"] += 1
     return summary
 
 
@@ -353,6 +415,29 @@ async def run_regression_test(
     run_trace: RunTrace,
 ) -> dict:
     """Generate a regression test and run it in Daytona."""
+    if not violations:
+        validation_state = "skipped"
+        return {
+            "test_name": "validation_skipped_no_violations",
+            "test_code": "",
+            "assertions": [],
+            "test_status": "skipped",
+            "stdout": "Validation skipped: no contract violations",
+            "sandbox_id": "",
+            "fallback_used": False,
+            "fallback_reason": "no_violations",
+            "generated_test_status": "",
+            "generated_stdout": "",
+            "generated_sandbox_id": "",
+            "validation_state": validation_state,
+            "per_violation_results": [],
+            "per_violation_summary": {"pass": 0, "fail": 0, "error": 0},
+            "validation_summary": _validation_summary([], fallback_state=validation_state),
+            "duration_ms": 0,
+            "usage": zero_usage(),
+            "cost": zero_cost(),
+        }
+
     fallback_used = False
     fallback_reason = ""
     generated_test_status = ""
@@ -435,12 +520,14 @@ async def run_regression_test(
         sandbox_id,
         fallback_used,
     )
+    validation_state = _validation_state_for_result(test_status, stdout, sandbox_id)
 
     return {
         "test_name": test_name,
         "test_code": test_code,
         "assertions": assertions,
         "test_status": test_status,
+        "validation_state": validation_state,
         "stdout": stdout,
         "sandbox_id": sandbox_id,
         "fallback_used": fallback_used,
@@ -450,6 +537,7 @@ async def run_regression_test(
         "generated_sandbox_id": generated_sandbox_id,
         "per_violation_results": per_violation_results,
         "per_violation_summary": _status_summary(per_violation_results),
+        "validation_summary": _validation_summary(per_violation_results),
         "duration_ms": sum(result.duration_ms for result in execution_results),
         "usage": llm_usage,
         "cost": _aggregate_execution_cost(execution_results, llm_usage, llm_cost_usd),
