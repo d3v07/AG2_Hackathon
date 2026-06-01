@@ -49,6 +49,7 @@ Recovery issue plan:
 - #140 browser QA passed on desktop/mobile `/?fixture=1` report screen: validation label visible, export JSON included `verdicts.validation_state=passed` and `regression.validation_state=passed`, and no console errors.
 - #140 API probe passed on local server: fixture page 200 and `GET /api/workflows` 200.
 - #140 reviewer follow-up found no remaining blockers after fixing partial-report false-pass adapter fallback and legacy reporter stdout/sandbox validation mapping.
+- #140 post-merge seeded API fixture gap was fixed on follow-up branch `codex/issue-140-seeded-validation-state`: `GET /api/runs/RUN-041` now carries `test.validation_state=passed`, per-assertion validation states, and `report.validation_summary`.
 
 ## Historical Sprint Board
 Sprint 3: Foundation

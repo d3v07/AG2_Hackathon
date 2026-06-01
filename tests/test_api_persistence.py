@@ -21,6 +21,8 @@ def test_seeded_run_persists_across_store_reinitialization(tmp_path):
     assert first is not None
     assert first["run"]["id"] == "RUN-041"
     assert first["cost"]["daytona_seconds"] > 0
+    assert first["test"]["validation_state"] == "passed"
+    assert first["report"]["validation_state"] == "passed"
     assert "RUN-041" in list_runs()
 
     configure_database(db_url)
@@ -30,6 +32,8 @@ def test_seeded_run_persists_across_store_reinitialization(tmp_path):
     assert restarted is not None
     assert restarted["run"]["id"] == "RUN-041"
     assert len(restarted["patches"]) == 4
+    assert restarted["test"]["assertions"][0]["validation_state"] == "passed"
+    assert restarted["report"]["validation_summary"]["passed"] == 4
     assert restarted["cost"]["daytona_cost_usd"] > 0
     routing = [
         item
