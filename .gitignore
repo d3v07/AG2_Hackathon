@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .gstack/
+.claude/worktrees/
 *.egg-info/
 .DS_Store
 data/
