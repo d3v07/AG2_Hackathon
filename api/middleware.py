@@ -18,6 +18,8 @@ def _is_public_api_request(request: Request) -> bool:
         return True
     if request.method == "POST" and path == "/api/public/workflows":
         return True
+    if request.method == "GET" and path == "/api/api-keys/status":
+        return True
     if path.startswith("/api/runs/") and path.endswith("/events"):
         return bool(request.query_params.get("stream_token"))
     if path.startswith("/api/runs/") and path.endswith(".js"):
