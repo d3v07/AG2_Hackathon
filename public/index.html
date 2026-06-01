@@ -793,6 +793,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
   color: var(--text-2);
   font-weight: 600;
 }
+.submit-form .form-input,
 .submit-form .form-select,
 .submit-form .form-textarea {
   font: inherit;
@@ -803,6 +804,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
   padding: 10px 12px;
   border-radius: 0;
 }
+.submit-form .form-input:focus,
 .submit-form .form-select:focus,
 .submit-form .form-textarea:focus {
   outline: 2px solid var(--gold);
@@ -810,6 +812,17 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
   border-color: var(--gold);
 }
 .submit-form .form-textarea { resize: vertical; min-height: 60px; }
+.submit-form .workflow-import-spec { min-height: 160px; }
+.workflow-import-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-2);
+  background: var(--surface-2);
+}
+.import-toggle { justify-self: start; margin-top: 4px; }
+.import-actions { display: flex; justify-content: flex-end; }
 .submit-form .form-counter {
   font-size: 10px;
   color: var(--text-3);
@@ -829,6 +842,13 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
   border-left: 3px solid var(--brick);
   padding: 8px 12px;
   background: rgba(184, 92, 74, 0.1);
+}
+.submit-form .form-success {
+  color: var(--green);
+  font-size: 12px;
+  border-left: 3px solid var(--green);
+  padding: 8px 12px;
+  background: rgba(106, 168, 124, 0.1);
 }
 .submit-form .form-actions {
   display: flex;

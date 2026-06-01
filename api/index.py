@@ -27,6 +27,7 @@ if str(_ROOT) not in sys.path:
 
 from api.middleware import ApiAuthMiddleware  # noqa: E402
 from api.routes.api_keys import router as api_keys_router  # noqa: E402
+from api.routes.public_workflows import router as public_workflows_router  # noqa: E402
 from api.routes.public_runs import router as public_runs_router  # noqa: E402
 from api.routes.runs import router as runs_router  # noqa: E402
 from api.routes.usage import router as usage_router  # noqa: E402
@@ -60,6 +61,7 @@ def health() -> dict[str, str]:
 app.include_router(workflows_router)
 app.include_router(runs_router)
 app.include_router(public_runs_router)
+app.include_router(public_workflows_router)
 app.include_router(api_keys_router)
 app.include_router(usage_router)
 

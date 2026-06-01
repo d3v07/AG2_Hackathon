@@ -99,6 +99,8 @@ The dashboard defaults to fixture mode. Do not publish a tenant API key in stati
 
 For hosted live submissions served from the same origin, enable the built-in public run relay with `CONCORD_PUBLIC_RUNS_ENABLED=1` and `CONCORD_PUBLIC_TENANT_ID=<tenant>`. It accepts task submissions only and creates runs under the configured tenant without exposing a browser API key. Keep raw trace submission, tenant usage, workflow writes, and API key management behind authenticated API routes.
 
+If the hosted product should also allow landing-page workflow imports without browser tenant keys, enable `CONCORD_PUBLIC_WORKFLOWS_ENABLED=1`. Leave it disabled for private/operator-only environments.
+
 For private local operator testing only, you can set the run ID and tenant ID in a browser session before switching to LIVE mode:
 
 ```html
