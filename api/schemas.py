@@ -19,7 +19,7 @@ class WorkflowCreate(BaseModel):
 class TaskSpec(BaseModel):
     task: str = Field(..., min_length=1)
     research_question: str = Field(..., min_length=1)
-    mode: Literal["stub", "live"] = "stub"
+    mode: Literal["stub", "live"] = "live"
 
 
 class RunCreate(BaseModel):

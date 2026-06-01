@@ -1,12 +1,7 @@
-"""Sprint 13 #67 — task_spec API wiring tests.
-
-Asserts that POST /api/runs accepts a task_spec, runs Zone A in stub mode,
-and produces a completed run via the same Zone B pipeline that handles
-raw_trace submissions. The legacy raw_trace path stays bit-identical (the
-golden snapshot test #64 is the safety net for that).
-"""
+"""Sprint 13 #67 — task_spec API wiring tests."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -71,11 +66,20 @@ def test_task_spec_stub_mode_completes_run(tmp_path):
     assert data["stats"]["violations"] == 0
 
 
-def test_task_spec_default_mode_is_stub_for_now(tmp_path):
-    """When mode is omitted, Pydantic default is 'stub' so the API stays usable
-    without live LLM credentials configured."""
+def test_task_spec_default_mode_is_live(tmp_path, monkeypatch, clean_trace_raw):
     client = _client(tmp_path)
     workflow_id = _workflow_id(client)
+    seen: dict[str, str] = {}
+
+    async def fake_run_swarm(**kwargs):
+        seen["mode"] = kwargs["mode"]
+        output_path = kwargs["output_path"]
+        payload = dict(clean_trace_raw)
+        payload["run_id"] = kwargs["run_id"]
+        output_path.write_text(json.dumps(payload))
+        return {"trace_path": str(output_path)}
+
+    monkeypatch.setattr("api.background.run_swarm", fake_run_swarm)
 
     submitted = client.post(
         "/api/runs",
@@ -91,6 +95,7 @@ def test_task_spec_default_mode_is_stub_for_now(tmp_path):
     run_id = submitted.json()["run_id"]
     data = client.get(f"/api/runs/{run_id}").json()
     assert data["status"] == "completed"
+    assert seen["mode"] == "live"
 
 
 def test_task_spec_unknown_workflow_returns_404(tmp_path):

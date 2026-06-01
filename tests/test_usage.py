@@ -109,7 +109,12 @@ def test_usage_endpoint_requires_api_key(tmp_path):
 
 
 def test_dashboard_cost_panel_is_wired_to_tenant_usage_endpoint():
-    html = Path("public/index.html").read_text()
+    html = "\n".join(
+        [
+            Path("public/index.html").read_text(),
+            Path("public/app.jsx").read_text(),
+        ]
+    )
 
     assert "/api/tenant/usage" in html
     assert "function CostPanel" in html

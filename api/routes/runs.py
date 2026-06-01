@@ -37,11 +37,10 @@ def list_runs_endpoint(tenant_id: str = Depends(get_tenant_id)) -> dict[str, lis
     return {"run_ids": list_runs(tenant_id=tenant_id)}
 
 
-@router.post("", status_code=202)
-def submit_run_endpoint(
+def submit_run_for_tenant(
     body: RunCreate,
     background_tasks: BackgroundTasks,
-    tenant_id: str = Depends(get_tenant_id),
+    tenant_id: str,
 ) -> dict[str, str]:
     if not workflow_exists(body.workflow_id, tenant_id=tenant_id):
         raise HTTPException(status_code=404, detail=f"workflow {body.workflow_id} not found")
@@ -56,6 +55,15 @@ def submit_run_endpoint(
 
     background_tasks.add_task(process_run, run["run_id"], tenant_id)
     return run
+
+
+@router.post("", status_code=202)
+def submit_run_endpoint(
+    body: RunCreate,
+    background_tasks: BackgroundTasks,
+    tenant_id: str = Depends(get_tenant_id),
+) -> dict[str, str]:
+    return submit_run_for_tenant(body, background_tasks, tenant_id)
 
 
 def _tenant_from_stream_token_or_request(

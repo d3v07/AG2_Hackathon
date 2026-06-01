@@ -31,7 +31,7 @@ Pull this up on a second screen. Every line in **bold quotes** is verbatim — s
 ### Screen 1 — Workflows
 8. **(open Workflows screen)** **"This is the workflow registry. Pick Literature Review Assistant."**
 
-9. **(click Submit Run)** **"The run form pre-fills with the Literature Review task. Mode defaults to stub — deterministic, no LLM credentials needed. Click Submit."**
+9. **(click Submit Run)** **"The run form pre-fills with the Literature Review task. There is no mode picker — product submissions use the live AG2 path. Click Submit."**
 
 10. **"Watch the SSE progress strip: queued → analyzing → completed. That's the full Zone B pipeline running live — TraceCollector, ContractChecker, Attribution, Repair, RegressionTest, Reporter, HumanGate — seven agents in sequence."**
 

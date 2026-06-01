@@ -97,7 +97,7 @@ Daytona credentials are not required for the API to start; missing credentials p
 
 The dashboard defaults to fixture mode. Do not publish a tenant API key in static HTML, checked-in wrappers, or public environment variables. A tenant API key can create more keys and read tenant usage, so it belongs on a server.
 
-For hosted live mode, add a small authenticated backend-for-frontend that keeps the tenant key server-side, calls the Concord API from the server, and returns only the run payload plus a short-lived event stream token to the browser.
+For hosted live submissions served from the same origin, enable the built-in public run relay with `CONCORD_PUBLIC_RUNS_ENABLED=1` and `CONCORD_PUBLIC_TENANT_ID=<tenant>`. It accepts task submissions only and creates runs under the configured tenant without exposing a browser API key. Keep raw trace submission, tenant usage, workflow writes, and API key management behind authenticated API routes.
 
 For private local operator testing only, you can set the run ID and tenant ID in a browser session before switching to LIVE mode:
 
