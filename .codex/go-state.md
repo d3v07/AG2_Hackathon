@@ -4,10 +4,10 @@
 - Project: Concord
 - Mode: safe
 - Phase: Recovery run
-- Branch: `codex/issue-142-docs-consolidation`
-- Current Sprint: Recovery issue #142
-- Current Task: #142 north-star docs consolidated locally; verification and reviewer pass complete
-- Last Checkpoint: Issues #135-#141 are merged to `main`. #142 restores `docs/PLAN_VS_REALITY.md` as the current north-star scorecard and patches stale active docs for five contracts, native `patches[]` passthrough, honest Daytona states, and resolved API key UI.
+- Branch: `codex/issue-143-archive-prototypes`
+- Current Sprint: Recovery issue #143
+- Current Task: #143 orphaned prototype artifacts removed locally; verification and reviewer pass complete
+- Last Checkpoint: Issues #135-#142 are merged to `main`. #143 removes unreferenced prototype dashboard payloads and old worktree gitlinks while preserving canonical Concord v1 docs and current runtime code.
 
 ## Sprint Board
 Recovery issue plan:
@@ -18,8 +18,8 @@ Recovery issue plan:
 - #139 Tighten completed-run coherence and rebrand to Concord — closed on `main`
 - #140 Make Daytona validation states honest — closed on `main`
 - #141 Add in-product API key creation — closed on `main`
-- #142 Consolidate north-star docs — local docs patch in progress on `codex/issue-142-docs-consolidation`
-- #143 Archive orphaned Lite/prototype artifacts
+- #142 Consolidate north-star docs — closed on `main`
+- #143 Archive orphaned Lite/prototype artifacts — local cleanup in progress on `codex/issue-143-archive-prototypes`
 - #144 Final end-to-end Concord demo script
 
 ## Current Verification
@@ -64,6 +64,14 @@ Recovery issue plan:
 - #142 lint/diff gate passed: `.venv/bin/python -m ruff check .` and `git diff --check`.
 - #142 fixture gate passed: `.venv/bin/python run_all.py --fixture` exited 0 and retained the honest `credential_failure` validation state for invalid local sandbox credentials.
 - #142 reviewer pass found no blocking findings.
+- #143 reference checks passed before deletion: no active references to `AG2 continued/`, `AG2-Final/`, `concord-lite.html`, `docs/superpowers/`, or `.claude/worktrees/` outside their own deleted paths.
+- #143 cleanup removed tracked prototype dashboard snapshots (`AG2 continued/`, `AG2-Final/`), old single-file `concord-lite.html`, historical `docs/superpowers/` spec, and stale `.claude/worktrees/*` gitlinks; local worktree directory contents are ignored via `.gitignore`.
+- #143 post-cleanup reference gate passed: `git ls-files` has no entries for those deleted paths, `rg --fixed-strings` found no active references, and `git ls-files` has no tracked `.DS_Store` files.
+- #143 full gate passed: `.venv/bin/python -m pytest -x --tb=short` passed 549 tests, 1 skipped.
+- #143 frontend gate passed: `npm test -- --run` passed 9 tests.
+- #143 lint/diff gate passed: `.venv/bin/python -m ruff check .` and `git diff --check`.
+- #143 fixture gate passed: `.venv/bin/python run_all.py --fixture` exited 0 and retained the honest `credential_failure` validation state for invalid local sandbox credentials.
+- #143 reviewer pass found no blocking findings.
 
 ## Historical Sprint Board
 Sprint 3: Foundation
