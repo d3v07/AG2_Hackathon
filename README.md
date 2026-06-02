@@ -16,6 +16,13 @@ Concord monitors a multi-agent workflow run, detects when agents violate their b
 > **Demo script & cue cards:** [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)
 > **Deep Q&A reference (70 questions):** [`docs/QA_DEEP.md`](docs/QA_DEEP.md)
 
+## Repository Guide
+
+- [Code of conduct](CODE_OF_CONDUCT.md) - expectations for project participation.
+- [Contributing](CONTRIBUTING.md) - local setup, test gates, and contribution rules.
+- [Security](SECURITY.md) - supported branches and vulnerability reporting.
+- [License](LICENSE) - Apache License 2.0.
+
 ## Submitting a run via task_spec
 
 ```bash
