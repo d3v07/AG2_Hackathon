@@ -46,4 +46,3 @@ Maintainers may take action to protect the project and its contributors. Possibl
 - Temporarily or permanently blocking participation.
 
 Enforcement should be proportional, consistent, and focused on keeping the project usable.
-

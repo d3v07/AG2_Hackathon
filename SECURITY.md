@@ -70,4 +70,3 @@ When testing Concord, please:
 - Do not access, modify, or delete data that is not yours.
 - Do not exfiltrate secrets, traces, reports, or credentials.
 - Stop testing and report promptly if you discover sensitive data.
-
